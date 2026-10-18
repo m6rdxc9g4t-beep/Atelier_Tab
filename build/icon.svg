@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4C7BF0"/>
+      <stop offset="1" stop-color="#2346B8"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="125%">
+      <feDropShadow dx="0" dy="14" stdDeviation="16" flood-color="#0B1A4A" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+  <!-- Gabarit macOS : carré arrondi de 824 px centré -->
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)" filter="url(#shadow)"/>
+  <!-- Feuille -->
+  <rect x="232" y="252" width="560" height="520" rx="44" fill="#FFFFFF"/>
+  <!-- En-tête de colonnes et gouttière -->
+  <path d="M232 296 a44 44 0 0 1 44 -44 h472 a44 44 0 0 1 44 44 v40 h-560 z" fill="#E4EBFC"/>
+  <rect x="232" y="336" width="96" height="392" fill="#F1F4FD"/>
+  <path d="M232 728 h96 v44 h-52 a44 44 0 0 1 -44 -44 z" fill="#F1F4FD"/>
+  <!-- Lignes de la grille -->
+  <g stroke="#C9D4F2" stroke-width="6">
+    <line x1="232" y1="336" x2="792" y2="336"/>
+    <line x1="232" y1="440" x2="792" y2="440"/>
+    <line x1="232" y1="544" x2="792" y2="544"/>
+    <line x1="232" y1="648" x2="792" y2="648"/>
+    <line x1="328" y1="252" x2="328" y2="772"/>
+    <line x1="560" y1="252" x2="560" y2="772"/>
+  </g>
+  <!-- Plage référencée (C1:C3), comme dans la grille -->
+  <rect x="560" y="336" width="232" height="312" fill="#3E6BE8" fill-opacity="0.12"/>
+  <rect x="563" y="339" width="226" height="306" fill="none" stroke="#3E6BE8" stroke-width="12" rx="4"/>
+  <!-- Cellule de total -->
+  <path d="M560 648 h232 v80 a44 44 0 0 1 -44 44 h-188 z" fill="#22B07D" fill-opacity="0.16"/>
+  <path d="M566 654 h220 v74 a38 38 0 0 1 -38 38 h-182 z" fill="none" stroke="#1F9E70" stroke-width="12"/>
+  <!-- Contenu évoqué -->
+  <g fill="#9AAEE6">
+    <rect x="364" y="378" width="160" height="22" rx="11"/>
+    <rect x="364" y="482" width="124" height="22" rx="11"/>
+    <rect x="364" y="586" width="144" height="22" rx="11"/>
+  </g>
+  <g fill="#3E6BE8">
+    <rect x="660" y="378" width="96" height="22" rx="11"/>
+    <rect x="644" y="482" width="112" height="22" rx="11"/>
+    <rect x="676" y="586" width="80" height="22" rx="11"/>
+  </g>
+  <rect x="628" y="694" width="128" height="26" rx="13" fill="#1F9E70"/>
+</svg>

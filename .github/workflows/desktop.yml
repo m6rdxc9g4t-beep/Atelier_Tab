@@ -1,0 +1,48 @@
+name: App macOS
+
+on:
+  pull_request:
+    paths:
+      - 'electron/**'
+      - 'scripts/**'
+      - 'build/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/desktop.yml'
+  workflow_dispatch:
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Construire Atelier_Tab.app
+        run: npm run app:build
+      - name: Vérifier la signature ad hoc
+        run: |
+          APP=$(ls -d release/mac*/Atelier_Tab.app | head -1)
+          echo "APP=$APP" >> "$GITHUB_ENV"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          codesign -dv "$APP" 2>&1 | grep -E 'Signature=adhoc|Identifier'
+      - name: Démarrer l'application
+        run: |
+          "$APP/Contents/MacOS/Atelier_Tab" > app.log 2>&1 &
+          PID=$!
+          sleep 15
+          if ! kill -0 "$PID" 2>/dev/null; then
+            echo "L'application s'est arrêtée au démarrage :"; cat app.log; exit 1
+          fi
+          kill "$PID"
+          echo "Démarrage OK"
+      - name: Archiver l'application
+        run: ditto -c -k --keepParent "$APP" Atelier_Tab-macos.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Atelier_Tab-macos
+          path: Atelier_Tab-macos.zip
+          retention-days: 7

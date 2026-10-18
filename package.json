@@ -1,8 +1,15 @@
 {
   "name": "atelier-tab",
+  "productName": "Atelier_Tab",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.5.0",
+  "description": "Tableur + base de données hybride avec export DataFlow vers atelier_projets",
+  "author": "François Pichon",
   "type": "module",
+  "main": "electron/main.cjs",
+  "engines": {
+    "node": ">=20.19"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
@@ -12,7 +19,10 @@
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "app": "npm run build && node scripts/ensure-electron.mjs && electron .",
+    "app:build": "npm run build && electron-builder --mac --dir",
+    "app:install": "npm run app:build && node scripts/install-mac.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -39,6 +49,8 @@
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
     "@vitejs/plugin-react": "^6.1.1",
+    "electron": "^44.9.0",
+    "electron-builder": "^26.15.3",
     "eslint": "^10.10.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.6",
@@ -51,8 +63,37 @@
     "vite": "^8.3.0",
     "vitest": "^5.0.5"
   },
-  "description": "Tableur + base de données hybride avec export DataFlow vers atelier_projets",
-  "engines": {
-    "node": ">=20.19"
+  "build": {
+    "appId": "fr.atelier.tab",
+    "productName": "Atelier_Tab",
+    "copyright": "© 2026 François Pichon",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json",
+      "!node_modules/**/*"
+    ],
+    "asar": true,
+    "afterPack": "scripts/adhoc-sign.cjs",
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": [
+        "dir"
+      ],
+      "identity": null,
+      "icon": "build/icon.png",
+      "darkModeSupport": true
+    },
+    "linux": {
+      "target": [
+        "dir"
+      ],
+      "icon": "build/icon.png",
+      "category": "Office"
+    }
   }
 }

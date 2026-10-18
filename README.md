@@ -30,6 +30,21 @@ npm install
 npm run dev          # http://localhost:5173
 ```
 
+### Application macOS
+
+Atelier_Tab existe aussi en application de bureau, à ouvrir d'un double-clic.
+
+```bash
+npm install
+npm run app:install
+```
+
+La commande construit `Atelier_Tab.app` puis la copie dans **Applications**. Elle est ensuite accessible depuis le Launchpad, Spotlight (⌘ Espace) ou le Dock. Relancer `npm run app:install` après un `git pull` met l'application à jour.
+
+- Les données sont enregistrées dans `~/Library/Application Support/Atelier_Tab`. Elles sont conservées lors des mises à jour et sont distinctes de celles de la version navigateur.
+- L'app est signée localement (« ad hoc »), sans compte développeur Apple. Elle s'ouvre normalement sur le Mac qui l'a construite ; pour la donner à quelqu'un d'autre, une signature Apple sera nécessaire.
+- `npm run app` lance l'application sans l'installer, pour essayer une modification.
+
 ### Scripts
 
 | Commande             | Rôle                                                         |
@@ -46,6 +61,9 @@ npm run dev          # http://localhost:5173
 ## Architecture
 
 ```text
+electron/             Processus principal de l'app de bureau
+scripts/              Construction et installation de l'app macOS
+build/                Icône de l'application
 src/
 ├── app/              Point d'entrée React, coquille de l'application
 ├── types/            Modèle de domaine (Workspace, Project, Table, Field, Record)
@@ -66,7 +84,7 @@ Détails : [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) · Moteur : [`docs/FOR
 
 ### Stack
 
-React 19 · TypeScript (strict) · Vite · Tailwind CSS v4 · Zustand · Zod · Lucide · TanStack Virtual · dnd-kit · cmdk · Vitest · Playwright
+React 19 · TypeScript (strict) · Vite · Electron (app macOS) · Tailwind CSS v4 · Zustand · Zod · Lucide · TanStack Virtual · dnd-kit · cmdk · Vitest · Playwright
 
 ## Feuille de route
 
