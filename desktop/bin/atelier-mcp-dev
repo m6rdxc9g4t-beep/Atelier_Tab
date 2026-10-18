@@ -1,0 +1,4 @@
+#!/bin/sh
+# Serveur MCP en développement (depuis le dépôt) : nécessite `npm run build:desktop`.
+DIR="$(cd "$(dirname "$0")" && pwd)"
+exec node "$DIR/../../dist-desktop/atelier-mcp.mjs" "$@"

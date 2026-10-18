@@ -4,10 +4,36 @@
  */
 import { useStore } from 'zustand'
 import type { CellValue } from '@/engine/formula'
+import { getDesktopApi } from '@/services/desktop'
+import { desktopAdapter } from '@/services/persistence/desktop.adapter'
 import { connectComputed, selectCellValue, type ComputedState } from './computed.store'
-import { createDataStore } from './data.store'
+import { createDataStore, pickData } from './data.store'
+import { useNotices } from './notices.store'
 
-export const useDataStore = createDataStore()
+const desktop = getDesktopApi()
+
+/** App de bureau : données dans ~/Atelier_Tab. Navigateur : IndexedDB. */
+export const useDataStore = createDataStore(desktop ? { adapter: desktopAdapter(desktop) } : {})
+
+if (desktop) {
+  // Fichiers modifiés par un autre programme (Claude Code, un éditeur…) : on recharge.
+  desktop.onExternalChange((data) => {
+    useDataStore.setState(pickData(data))
+    useNotices
+      .getState()
+      .push({ tone: 'info', title: 'Données mises à jour depuis le dossier Atelier_Tab' }, 3000)
+  })
+  desktop.onDataErrors((errors) => {
+    useNotices.getState().push(
+      {
+        tone: 'warning',
+        title: 'Fichier ignoré : contenu invalide',
+        detail: `${errors.join('\n')}\nLa dernière version valide reste affichée.`,
+      },
+      10000,
+    )
+  })
+}
 
 const computed = connectComputed(useDataStore)
 export const computedStore = computed.store
@@ -23,5 +49,6 @@ export function useCellValue(tableId: string, recordId: string, fieldId: string)
 }
 
 export { useUIStore, type CellPosition } from './ui.store'
+export { useNotices } from './notices.store'
 export { createDataStore, type DataState, type DataStore } from './data.store'
 export { connectComputed, type ComputedEngine, type ComputedState } from './computed.store'

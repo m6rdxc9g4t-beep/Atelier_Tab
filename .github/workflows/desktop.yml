@@ -3,7 +3,9 @@ name: App macOS
 on:
   pull_request:
     paths:
-      - 'electron/**'
+      - 'desktop/**'
+      - 'src/ai/**'
+      - 'src/storage/**'
       - 'scripts/**'
       - 'build/**'
       - 'package.json'
@@ -29,6 +31,8 @@ jobs:
           echo "APP=$APP" >> "$GITHUB_ENV"
           codesign --verify --deep --strict --verbose=2 "$APP"
           codesign -dv "$APP" 2>&1 | grep -E 'Signature=adhoc|Identifier'
+      - name: Vérifier le serveur MCP livré dans l'app
+        run: node scripts/check-mcp.mjs "$APP/Contents/Resources/atelier-mcp"
       - name: Démarrer l'application
         run: |
           "$APP/Contents/MacOS/Atelier_Tab" > app.log 2>&1 &

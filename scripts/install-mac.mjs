@@ -1,10 +1,10 @@
 /**
- * Copie Atelier_Tab.app (construite par `npm run app:build`) dans /Applications,
- * en remplaçant une version précédente. Les données ne sont pas touchées : elles sont
- * rangées dans ~/Library/Application Support/Atelier_Tab.
+ * Copie Atelier_Tab.app (construite par `npm run app:build`) dans /Applications, en
+ * remplaçant une version précédente, puis connecte Claude Code si celui-ci est installé.
+ * Les données ne sont pas touchées : elles sont dans ~/Atelier_Tab.
  */
 import { existsSync, readdirSync } from 'node:fs'
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 import path from 'node:path'
 
 if (process.platform !== 'darwin') {
@@ -40,3 +40,26 @@ execFileSync('xattr', ['-cr', target])
 
 console.log(`\n✓ Atelier_Tab est installée dans Applications.`)
 console.log('  Ouvrez-la depuis le Launchpad, Spotlight (⌘ Espace) ou le Finder.\n')
+
+// Claude Code installé : on (ré)enregistre le serveur MCP livré avec l'app.
+const claude = spawnSync('claude', ['--version'], { encoding: 'utf8' })
+if (!claude.error && claude.status === 0) {
+  const launcher = path.join(target, 'Contents', 'Resources', 'atelier-mcp')
+  spawnSync('claude', ['mcp', 'remove', 'atelier-tab', '--scope', 'user'], { stdio: 'ignore' })
+  const add = spawnSync(
+    'claude',
+    ['mcp', 'add', '--scope', 'user', 'atelier-tab', '--', launcher],
+    {
+      encoding: 'utf8',
+    },
+  )
+  if (add.status === 0) {
+    console.log('✓ Claude Code est connecté à Atelier_Tab (serveur MCP « atelier-tab »).')
+    console.log('  Dans une nouvelle session : « Liste mes tables Atelier_Tab ».\n')
+  } else {
+    console.log('! Connexion à Claude Code impossible :', (add.stderr || add.stdout).trim())
+    console.log('  Réessayez avec `npm run ai:connect`.\n')
+  }
+} else {
+  console.log('  Claude Code introuvable : une fois installé, lancez `npm run ai:connect`.\n')
+}

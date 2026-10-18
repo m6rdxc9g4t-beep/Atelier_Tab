@@ -1,0 +1,12 @@
+#!/bin/sh
+# Serveur MCP d'Atelier_Tab, livré dans l'application.
+# Exécute le serveur avec le Node.js embarqué dans l'app : rien d'autre à installer.
+#   macOS : Atelier_Tab.app/Contents/Resources/atelier-mcp
+#   Linux : <dossier de l'app>/resources/atelier-mcp
+DIR="$(cd "$(dirname "$0")" && pwd)"
+if [ -x "$DIR/../MacOS/Atelier_Tab" ]; then
+  BIN="$DIR/../MacOS/Atelier_Tab"
+else
+  BIN="$DIR/../atelier-tab"
+fi
+ELECTRON_RUN_AS_NODE=1 exec "$BIN" "$DIR/atelier-mcp.mjs" "$@"

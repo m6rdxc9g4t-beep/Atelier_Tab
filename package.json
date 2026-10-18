@@ -2,11 +2,11 @@
   "name": "atelier-tab",
   "productName": "Atelier_Tab",
   "private": true,
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Tableur + base de données hybride avec export DataFlow vers atelier_projets",
   "author": "François Pichon",
   "type": "module",
-  "main": "electron/main.cjs",
+  "main": "dist-desktop/main.cjs",
   "engines": {
     "node": ">=20.19"
   },
@@ -20,9 +20,12 @@
     "test:watch": "vitest",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "app": "npm run build && node scripts/ensure-electron.mjs && electron .",
-    "app:build": "npm run build && electron-builder --mac --dir",
-    "app:install": "npm run app:build && node scripts/install-mac.mjs"
+    "app": "npm run build && npm run build:desktop && node scripts/ensure-electron.mjs && electron .",
+    "app:build": "npm run build && npm run build:desktop && electron-builder --mac --dir",
+    "app:install": "npm run app:build && node scripts/install-mac.mjs",
+    "build:desktop": "node scripts/build-desktop.mjs",
+    "ai:connect": "node scripts/connect-claude.mjs",
+    "mcp": "npm run build:desktop && node dist-desktop/atelier-mcp.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -42,6 +45,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@modelcontextprotocol/sdk": "^1.32.1",
     "@playwright/test": "^1.64.1",
     "@tailwindcss/vite": "^4.3.3",
     "@testing-library/react": "^16.3.3",
@@ -73,7 +77,8 @@
     },
     "files": [
       "dist/**/*",
-      "electron/**/*",
+      "dist-desktop/main.cjs",
+      "dist-desktop/preload.cjs",
       "package.json",
       "!node_modules/**/*"
     ],
@@ -86,7 +91,10 @@
       ],
       "identity": null,
       "icon": "build/icon.png",
-      "darkModeSupport": true
+      "darkModeSupport": true,
+      "extendInfo": {
+        "LSApplicationCategoryType": "public.app-category.productivity"
+      }
     },
     "linux": {
       "target": [
@@ -94,6 +102,16 @@
       ],
       "icon": "build/icon.png",
       "category": "Office"
-    }
+    },
+    "extraResources": [
+      {
+        "from": "dist-desktop/atelier-mcp.mjs",
+        "to": "atelier-mcp.mjs"
+      },
+      {
+        "from": "desktop/bin/atelier-mcp",
+        "to": "atelier-mcp"
+      }
+    ]
   }
 }
