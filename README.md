@@ -1,75 +1,86 @@
-# React + TypeScript + Vite
+# Atelier_Tab
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+**Tableur et base de données dans un même espace de travail, avec un export natif vers `atelier_projets`.**
 
-Currently, two official plugins are available:
+Atelier_Tab réunit la liberté de calcul d'Excel (formules, références `A1:C10`, recalcul instantané) et la rigueur d'Airtable (colonnes typées, statuts colorés, vues Kanban, fiches par ligne). Les données restent en local dans le navigateur ; le module **DataFlow** les transforme au format attendu par l'application de gestion de projet `atelier_projets`.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+> Statut : en développement actif. Voir la [feuille de route](#feuille-de-route).
 
-## React Compiler
+---
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Fonctionnalités
 
-## Expanding the ESLint configuration
+| Domaine                | Ce que ça fait                                                                                                                                                                                                                                                     |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Moteur de formules** | `SUM`, `AVG`/`AVERAGE`, `MIN`, `MAX`, `IF`, `COUNT`, `ROUND`, `ABS`, opérateurs `+ - * / ^ &`, comparaisons, références et plages. Recalcul incrémental, détection des cycles, erreurs Excel (`#REF!`, `#DIV/0!`, `#VALUE!`, `#NAME?`, `#CYCLE!`). Aucun `eval()`. |
+| **Colonnes typées**    | Texte, nombre, devise, pourcentage, statut (badge), date, case à cocher, responsable, formule.                                                                                                                                                                     |
+| **Vues**               | Grille hybride, tableur pur, Kanban groupé par statut, fiche détaillée.                                                                                                                                                                                            |
+| **Navigation**         | Espaces de travail › Projets › Tables, recherche rapide `Ctrl/Cmd + K`.                                                                                                                                                                                            |
+| **DataFlow**           | Export JSON normalisé (schéma `atelier_projets` v2.1.0), CSV enrichi, webhook. Validation avant envoi.                                                                                                                                                             |
+| **Persistance**        | IndexedDB par défaut, couche d'adaptateurs prête pour une API REST ou Supabase.                                                                                                                                                                                    |
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## Démarrage
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+Prérequis : **Node.js ≥ 20.19** (ou ≥ 22.12) et npm.
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
+```bash
+git clone https://github.com/m6rdxc9g4t-beep/atelier-tab.git
+cd atelier-tab
+npm install
+npm run dev          # http://localhost:5173
 ```
 
-You can also install [eslint-plugin-react-x](https://npmx.dev/package/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://npmx.dev/package/eslint-plugin-react-dom) for React-specific lint rules:
+### Scripts
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+| Commande             | Rôle                                                         |
+| -------------------- | ------------------------------------------------------------ |
+| `npm run dev`        | Serveur de développement Vite                                |
+| `npm run build`      | Vérification des types puis build de production dans `dist/` |
+| `npm run preview`    | Sert le build de production                                  |
+| `npm test`           | Tests unitaires (Vitest)                                     |
+| `npm run test:watch` | Tests en mode surveillance                                   |
+| `npm run lint`       | ESLint                                                       |
+| `npm run typecheck`  | TypeScript strict, sans émission                             |
+| `npm run format`     | Prettier                                                     |
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Architecture
 
+```text
+src/
+├── app/              Point d'entrée React, coquille de l'application
+├── types/            Modèle de domaine (Workspace, Project, Table, Field, Record)
+├── engine/           ⚙️ Logique pure, sans React
+│   ├── formula/      Tokenizer → parser (AST) → évaluateur, graphe de dépendances
+│   └── field-types/  Conversion et formatage par type de colonne
+├── store/            État global Zustand
+├── services/         Persistance (IndexedDB, localStorage, REST)
+├── dataflow/         Export vers atelier_projets (schéma, mapping, transports)
+├── components/       Interface : layout, sidebar, grid, cells, formula-bar, kanban…
+├── hooks/            Hooks React transverses
+└── lib/              Utilitaires
 ```
+
+Principe directeur : **`engine/` et `dataflow/` sont du TypeScript pur, testés sans navigateur.** React affiche l'état et déclenche des actions ; il ne calcule rien lui-même.
+
+Détails : [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) · Moteur : [`docs/FORMULA_ENGINE.md`](docs/FORMULA_ENGINE.md) · Export : [`docs/DATAFLOW_SPEC.md`](docs/DATAFLOW_SPEC.md)
+
+### Stack
+
+React 19 · TypeScript (strict) · Vite · Tailwind CSS v4 · Zustand · Zod · Lucide · TanStack Virtual · dnd-kit · cmdk · Vitest · Playwright
+
+## Feuille de route
+
+- [x] **Phase 0** — Socle : Tailwind v4, thème clair/sombre, CI
+- [ ] **Phase 1** — Modèle de domaine, store, persistance IndexedDB
+- [ ] **Phase 2** — Moteur de formules
+- [ ] **Phase 3** — Grille hybride et barre de formules
+- [ ] **Phase 4** — Sidebar et navigation clavier
+- [ ] **Phase 5** — DataFlow → `atelier_projets`
+- [ ] **Phase 6** — Kanban, fiche détaillée, filtres
+- [ ] **Phase 7** — Undo/redo, copier-coller, accessibilité, tests e2e
+
+## Contribuer
+
+- Une branche par sujet (`feat/…`, `fix/…`, `chore/…`), PR vers `main`.
+- Messages de commit au format [Conventional Commits](https://www.conventionalcommits.org/fr/) : `feat(engine): …`.
+- La CI (lint, types, tests, build) doit être verte avant fusion.
