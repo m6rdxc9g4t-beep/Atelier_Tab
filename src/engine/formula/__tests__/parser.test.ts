@@ -93,3 +93,33 @@ describe('parser', () => {
     expect(refs.ranges).toHaveLength(1)
   })
 })
+
+describe('formulaReferences', () => {
+  it('liste les zones lues dans l’ordre', async () => {
+    const { formulaReferences } = await import('../parser')
+    expect(formulaReferences('=SUM(C1:C3)*1.2+D1')).toEqual([
+      { c0: 2, c1: 2, r0: 0, r1: 2 },
+      { c0: 3, c1: 3, r0: 0, r1: 0 },
+    ])
+  })
+
+  it('reste utilisable pendant la frappe d’une formule incomplète', async () => {
+    const { formulaReferences } = await import('../parser')
+    expect(formulaReferences('=SUM(C1:C3')).toEqual([{ c0: 2, c1: 2, r0: 0, r1: 2 }])
+    expect(formulaReferences('=SUM(C1:')).toEqual([{ c0: 2, c1: 2, r0: 0, r1: 0 }])
+    expect(formulaReferences('="abc')).toEqual([])
+  })
+
+  it('découpe une formule pour l’affichage coloré', async () => {
+    const { tokenizeForDisplay } = await import('../display')
+    expect(tokenizeForDisplay('=SUM(C1:C3)*1.2+D1')).toEqual([
+      { kind: 'text', text: '=' },
+      { kind: 'function', text: 'SUM' },
+      { kind: 'text', text: '(' },
+      { kind: 'ref', text: 'C1:C3' },
+      { kind: 'text', text: ')*1.2+' },
+      { kind: 'ref', text: 'D1' },
+    ])
+    expect(tokenizeForDisplay('="abc')).toEqual([{ kind: 'text', text: '="abc' }])
+  })
+})

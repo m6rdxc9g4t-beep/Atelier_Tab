@@ -9,6 +9,7 @@
  * - `^` est associatif à gauche : `2^3^2` vaut 64.
  */
 import type { CellRef } from './references'
+import { referenceTokens } from './display'
 import { FormulaSyntaxError, tokenize, type Operator, type Token } from './tokenizer'
 import type { ErrorCode } from './values'
 
@@ -206,4 +207,72 @@ export function collectReferences(node: Node): {
   }
   visit(node)
   return { cells, ranges }
+}
+
+/** Zone lue par une formule, en index 0-based (bornes incluses). */
+export interface ReferencedArea {
+  c0: number
+  c1: number
+  r0: number
+  r1: number
+}
+
+/**
+ * Zones lues par une formule, dans l'ordre d'apparition — pour colorer les
+ * références dans la grille pendant la saisie. Une formule incomplète ou invalide
+ * renvoie une liste vide (jamais d'exception).
+ */
+export function formulaReferences(formula: string): ReferencedArea[] {
+  let ast: Node
+  try {
+    ast = parseFormula(formula)
+  } catch {
+    // Formule en cours de frappe : on se rabat sur les jetons de référence déjà saisis.
+    try {
+      const body = formula.startsWith('=') ? formula.slice(1) : formula
+      return referenceTokens(tokenize(body)).map(({ cells }) => {
+        const cols = cells.map((c) => c.col)
+        const rows = cells.map((c) => c.row)
+        return {
+          c0: Math.min(...cols),
+          c1: Math.max(...cols),
+          r0: Math.min(...rows),
+          r1: Math.max(...rows),
+        }
+      })
+    } catch {
+      return []
+    }
+  }
+  const areas: ReferencedArea[] = []
+  const visit = (n: Node): void => {
+    switch (n.type) {
+      case 'ref':
+        areas.push({ c0: n.ref.col, c1: n.ref.col, r0: n.ref.row, r1: n.ref.row })
+        return
+      case 'range':
+        areas.push({
+          c0: Math.min(n.start.col, n.end.col),
+          c1: Math.max(n.start.col, n.end.col),
+          r0: Math.min(n.start.row, n.end.row),
+          r1: Math.max(n.start.row, n.end.row),
+        })
+        return
+      case 'unary':
+      case 'percent':
+        visit(n.operand)
+        return
+      case 'binary':
+        visit(n.left)
+        visit(n.right)
+        return
+      case 'call':
+        n.args.forEach(visit)
+        return
+      default:
+        return
+    }
+  }
+  visit(ast)
+  return areas
 }

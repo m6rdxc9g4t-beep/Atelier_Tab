@@ -1,6 +1,6 @@
 /**
- * État d'interface : table ouverte, cellule sélectionnée, sidebar.
- * Persisté dans localStorage (léger, synchrone) pour rouvrir l'application là où on l'a laissée.
+ * État d'interface : table ouverte, cellule sélectionnée, édition en cours, sidebar.
+ * Seuls la table ouverte, la sidebar et les projets dépliés sont persistés (localStorage).
  */
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
@@ -11,19 +11,28 @@ export interface CellPosition {
   fieldId: string
 }
 
+export interface EditingState {
+  cell: CellPosition
+  draft: string
+  /** Où se trouve le curseur : dans la cellule ou dans la barre de formules. */
+  origin: 'cell' | 'bar'
+}
+
 export interface UIState {
   activeTableId: string | null
   selection: CellPosition | null
-  /** Cellule en cours d'édition, et texte initial de l'éditeur. */
-  editing: { cell: CellPosition; draft: string } | null
+  editing: EditingState | null
+  /** Message affiché quand une saisie est refusée (« 12abc » dans une colonne Devise…). */
+  inputError: string | null
   sidebarCollapsed: boolean
   expandedProjectIds: string[]
 
   openTable(tableId: string | null): void
   select(cell: CellPosition | null): void
-  startEditing(cell: CellPosition, draft: string): void
+  startEditing(cell: CellPosition, draft: string, origin?: EditingState['origin']): void
   updateDraft(draft: string): void
   stopEditing(): void
+  setInputError(message: string | null): void
   toggleSidebar(): void
   toggleProject(projectId: string, expanded?: boolean): void
 }
@@ -34,14 +43,19 @@ export const useUIStore = create<UIState>()(
       activeTableId: DEMO_DEFAULT_TABLE_ID,
       selection: null,
       editing: null,
+      inputError: null,
       sidebarCollapsed: false,
       expandedProjectIds: ['proj_renovation_2026'],
 
-      openTable: (tableId) => set({ activeTableId: tableId, selection: null, editing: null }),
-      select: (cell) => set({ selection: cell }),
-      startEditing: (cell, draft) => set({ selection: cell, editing: { cell, draft } }),
-      updateDraft: (draft) => set((s) => (s.editing ? { editing: { ...s.editing, draft } } : s)),
+      openTable: (tableId) =>
+        set({ activeTableId: tableId, selection: null, editing: null, inputError: null }),
+      select: (cell) => set({ selection: cell, inputError: null }),
+      startEditing: (cell, draft, origin = 'cell') =>
+        set({ selection: cell, editing: { cell, draft, origin }, inputError: null }),
+      updateDraft: (draft) =>
+        set((s) => (s.editing ? { editing: { ...s.editing, draft }, inputError: null } : s)),
       stopEditing: () => set({ editing: null }),
+      setInputError: (message) => set({ inputError: message }),
       toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
       toggleProject: (projectId, expanded) =>
         set((s) => {

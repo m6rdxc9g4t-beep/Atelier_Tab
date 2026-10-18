@@ -66,6 +66,8 @@ export function formatValue(field: Field, value: CellValue): string {
   if (typeof value === 'number') {
     const decimals = field.options?.decimals
     const kind = field.type === 'formula' ? (field.options?.resultFormat ?? 'number') : field.type
+    // Un nombre calculé dans une colonne texte reste affiché à la française.
+    if (field.type === 'text') return formatNumber(value, decimals)
     switch (kind) {
       case 'currency':
         return formatCurrency(value, field.options?.currency ?? 'EUR', decimals)
