@@ -26,7 +26,7 @@ interface CellEntry {
   value: CellValue
 }
 
-export function isFormula(input: CellInput): input is string {
+export function isFormula(input: CellInput): input is `=${string}` {
   return typeof input === 'string' && input.startsWith('=') && input.length > 1
 }
 

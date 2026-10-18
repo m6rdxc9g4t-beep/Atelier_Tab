@@ -178,6 +178,12 @@ export interface StructuralChange {
   index: number
   /** > 0 : insertion de `count` éléments avant `index`. < 0 : suppression de `|count|` éléments. */
   count: number
+  /**
+   * Insertion uniquement : agrandit aussi les plages qui se terminent juste avant
+   * `index`. Utile pour ajouter une ligne au-dessus d'une ligne de total : `SUM(C1:C3)`
+   * devient `SUM(C1:C4)` au lieu de rester inchangée.
+   */
+  expandAdjacent?: boolean
 }
 
 /**
@@ -217,7 +223,8 @@ export function shiftReferences(formula: string, change: StructuralChange): stri
 
     if (count > 0) {
       newLo = lo[key] >= index ? lo[key] + count : lo[key]
-      newHi = hi[key] >= index ? hi[key] + count : hi[key]
+      const touchesEnd = change.expandAdjacent === true && hi[key] === index - 1
+      newHi = hi[key] >= index || touchesEnd ? hi[key] + count : hi[key]
     } else {
       const loDeleted = lo[key] >= index && lo[key] < deletedEnd
       const hiDeleted = hi[key] >= index && hi[key] < deletedEnd
