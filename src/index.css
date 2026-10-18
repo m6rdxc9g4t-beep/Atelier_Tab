@@ -69,6 +69,88 @@
   --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
 }
 
+/*
+ * Teintes nommées (badges de statut, avatars, références de formule).
+ * Chaque classe fixe une teinte `--h` ; fond et texte en sont dérivés pour chaque thème.
+ */
+@layer components {
+  .tone-gray {
+    --h: 260;
+    --c: 0.015;
+  }
+  .tone-blue {
+    --h: 252;
+    --c: 0.12;
+  }
+  .tone-green {
+    --h: 150;
+    --c: 0.11;
+  }
+  .tone-amber {
+    --h: 70;
+    --c: 0.12;
+  }
+  .tone-red {
+    --h: 25;
+    --c: 0.14;
+  }
+  .tone-violet {
+    --h: 300;
+    --c: 0.12;
+  }
+  .tone-pink {
+    --h: 350;
+    --c: 0.12;
+  }
+  .tone-teal {
+    --h: 190;
+    --c: 0.09;
+  }
+
+  .tone-soft {
+    background-color: oklch(0.95 calc(var(--c) * 0.4) var(--h));
+    color: oklch(0.42 var(--c) var(--h));
+  }
+  .tone-solid {
+    background-color: oklch(0.62 var(--c) var(--h));
+    color: oklch(1 0 0);
+  }
+  .tone-dot {
+    background-color: oklch(0.62 var(--c) var(--h));
+  }
+  .dark .tone-soft {
+    background-color: oklch(0.32 calc(var(--c) * 0.5) var(--h));
+    color: oklch(0.86 calc(var(--c) * 0.8) var(--h));
+  }
+  .dark .tone-solid {
+    background-color: oklch(0.55 var(--c) var(--h));
+  }
+  .dark .tone-dot {
+    background-color: oklch(0.72 var(--c) var(--h));
+  }
+
+  /* Références colorées : contour de la zone lue par la formule active. */
+  .ref-outline {
+    --ref-c: oklch(0.6 0.17 var(--h));
+    box-shadow:
+      inset 0 var(--ref-t, 0) 0 0 var(--ref-c),
+      inset 0 calc(-1 * var(--ref-b, 0px)) 0 0 var(--ref-c),
+      inset var(--ref-l, 0) 0 0 0 var(--ref-c),
+      inset calc(-1 * var(--ref-r, 0px)) 0 0 0 var(--ref-c);
+    background-color: oklch(0.6 0.17 var(--h) / 0.07);
+  }
+  .dark .ref-outline {
+    --ref-c: oklch(0.74 0.15 var(--h));
+    background-color: oklch(0.74 0.15 var(--h) / 0.1);
+  }
+  .ref-text {
+    color: oklch(0.52 0.17 var(--h));
+  }
+  .dark .ref-text {
+    color: oklch(0.78 0.14 var(--h));
+  }
+}
+
 @layer base {
   html {
     color-scheme: light;

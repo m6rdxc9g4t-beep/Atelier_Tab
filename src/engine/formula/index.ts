@@ -1,7 +1,14 @@
 /** API publique du moteur de formules. */
 export { Workbook, isFormula, type CellInput } from './workbook'
-export { parseFormula, collectReferences, type Node } from './parser'
+export {
+  parseFormula,
+  collectReferences,
+  formulaReferences,
+  type Node,
+  type ReferencedArea,
+} from './parser'
 export { FormulaSyntaxError } from './tokenizer'
+export { tokenizeForDisplay, type FormulaSegment } from './display'
 export {
   columnToLetters,
   lettersToColumn,

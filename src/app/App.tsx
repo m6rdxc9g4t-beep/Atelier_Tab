@@ -1,28 +1,62 @@
-import { Table2 } from 'lucide-react'
-import { ThemeToggle } from '@/components/layout/ThemeToggle'
+import { useCallback } from 'react'
+import { Columns3 } from 'lucide-react'
+import { FormulaBar } from '@/components/formula-bar/FormulaBar'
+import { HybridGrid } from '@/components/grid/HybridGrid'
+import { Header } from '@/components/layout/Header'
+import { Sidebar } from '@/components/sidebar/Sidebar'
+import { useDataStore, useUIStore } from '@/store'
 
-/**
- * Coquille provisoire (phase 0). La sidebar, la barre de formules et la grille
- * hybride viendront la remplacer dans les phases 3 et 4.
- */
 export function App() {
+  const sidebarCollapsed = useUIStore((s) => s.sidebarCollapsed)
+  const activeTableId = useUIStore((s) => s.activeTableId)
+  // Repli sur la première table si la table mémorisée n'existe plus.
+  const table = useDataStore((s) =>
+    activeTableId && s.tables[activeTableId] ? s.tables[activeTableId] : Object.values(s.tables)[0],
+  )
+
+  const focusGrid = useCallback(() => {
+    document.querySelector<HTMLElement>('[role="grid"]')?.focus({ preventScroll: true })
+  }, [])
+
+  const mode = table?.views.find((v) => v.id === table.activeViewId)?.mode ?? 'hybrid'
+
   return (
-    <div className="flex h-dvh">
-      <aside className="flex w-60 shrink-0 flex-col border-r border-line bg-surface-sunken">
-        <div className="flex h-11 items-center gap-2 border-b border-line px-3 font-semibold">
-          <Table2 size={16} className="text-accent" />
-          Atelier_Tab
-        </div>
-      </aside>
+    <div className="flex h-dvh overflow-hidden">
+      {!sidebarCollapsed && <Sidebar />}
       <main className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-11 items-center justify-between border-b border-line px-4">
-          <span className="text-muted">Aucun projet ouvert</span>
-          <ThemeToggle />
-        </header>
-        <div className="grid flex-1 place-items-center text-muted">
-          Socle prêt : la grille hybride arrive en phase 3.
-        </div>
+        {table ? (
+          <>
+            <Header table={table} mode={mode} />
+            {mode === 'kanban' ? (
+              <KanbanPlaceholder />
+            ) : (
+              <>
+                <FormulaBar table={table} onCommit={focusGrid} />
+                <HybridGrid key={table.id} table={table} plain={mode === 'sheet'} />
+              </>
+            )}
+          </>
+        ) : (
+          <div className="grid flex-1 place-items-center text-muted">
+            Créez un projet dans le panneau de gauche pour commencer.
+          </div>
+        )}
       </main>
+    </div>
+  )
+}
+
+function KanbanPlaceholder() {
+  return (
+    <div className="grid flex-1 place-items-center">
+      <div className="flex max-w-sm flex-col items-center gap-2 text-center text-muted">
+        <Columns3 size={22} className="text-faint" />
+        <p className="font-medium text-ink">La vue Kanban arrive dans une prochaine version</p>
+        <p>
+          Les lignes y seront regroupées en colonnes selon leur statut, avec les montants calculés
+          sur chaque carte.
+        </p>
+      </div>
     </div>
   )
 }
