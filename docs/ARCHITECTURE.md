@@ -51,7 +51,27 @@ Les opérations structurelles (`engine/table/table-ops.ts`) réécrivent les for
 
 ## Persistance
 
-`StorageAdapter` définit `load()` / `save()` pour l'état complet. IndexedDB (via `idb-keyval`) est l'adaptateur par défaut ; un adaptateur REST/Supabase pourra le remplacer sans toucher au store.
+`StorageAdapter` (getItem / setItem) est branché sur le middleware `persist` de Zustand.
+
+- **App de bureau** : `desktopAdapter` envoie l'état au processus principal, qui l'écrit dans `~/Atelier_Tab` via `desktop/file-store.ts` (un fichier par table, écritures atomiques, seuls les fichiers modifiés). Le dossier est surveillé : une modification faite par Claude Code ou un éditeur est relue et poussée à l'interface (`data:external`). Un fichier invalide est signalé et n'est pas écrasé tant que l'app ne modifie pas cette table.
+- **Navigateur** : IndexedDB (`idb-keyval`).
+- Le format des fichiers est défini et validé dans `src/storage/format.ts` (pur, testé). Le jeton du webhook est rangé à part, hors du dossier partagé.
+
+## IA
+
+`src/ai/tools.ts` définit 14 outils (schémas Zod convertis en JSON Schema) qui agissent sur un `DataStore` à travers ses actions : mêmes conversions de saisie, mêmes réécritures de formules, même moteur que l'interface.
+
+```text
+Claude Code ──stdio──▶ atelier-mcp (desktop/mcp-server.ts)
+                        └─ relit ~/Atelier_Tab ─▶ store + moteur en mémoire ─▶ outils ─▶ écrit les fichiers modifiés
+                                                                                         │
+App (ouverte) ◀──────── surveillance du dossier ◀────────────────────────────────────────┘
+
+Ollama ◀──/api/chat── processus principal ◀──IPC── panneau Assistant
+                                                    └─ boucle d'outils (src/ai/agent.ts) sur le store de l'app
+```
+
+Le serveur MCP est livré dans l'app (`Contents/Resources/atelier-mcp`) et s'exécute avec le Node.js d'Electron (`ELECTRON_RUN_AS_NODE`) : rien à installer. Voir [ADR 0003](adr/0003-acces-ia.md).
 
 ## Décisions
 

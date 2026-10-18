@@ -75,7 +75,8 @@ export type DataStore = ReturnType<typeof createDataStore>
 
 export const DATA_STORAGE_KEY = 'atelier-tab:data'
 
-function pickData(s: AppData): AppData {
+/** Données seules (sans les actions), telles qu'elles sont enregistrées. */
+export function pickData(s: AppData): AppData {
   return {
     schemaVersion: s.schemaVersion,
     workspaceOrder: s.workspaceOrder,

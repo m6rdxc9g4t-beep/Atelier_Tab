@@ -30,6 +30,10 @@ Lancer les quatre vérifications avant tout commit.
 - Jamais d'`eval()` ni de `new Function()` : les formules passent par le parser maison.
 - Les couleurs viennent des tokens de `src/index.css` (`bg-surface`, `text-muted`, `border-line`, `text-accent`…), jamais de couleurs Tailwind brutes. Tout écran doit fonctionner en clair et en sombre.
 
+- **IA** : `src/ai/tools.ts` est la seule définition des outils, partagée par le serveur MCP (`desktop/mcp-server.ts`) et l'assistant Ollama. Un outil passe toujours par les actions du store, jamais par une écriture directe des données. Toute nouvelle fonctionnalité de données doit être accessible par un outil.
+- **Fichiers de données** : le format est défini dans `src/storage/format.ts`. Un changement de format exige une lecture tolérante de l'ancien (les fichiers peuvent être édités à la main ou par une IA) et un test.
+- `desktop/` est du code Node (processus principal Electron, accès disque, serveur MCP), construit par `npm run build:desktop` dans `dist-desktop/`.
+
 ## Conventions
 
 - TypeScript strict avec `noUncheckedIndexedAccess` : gérer explicitement `undefined`.

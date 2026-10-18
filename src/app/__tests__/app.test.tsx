@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { App } from '@/app/App'
 import { useDataStore, useUIStore } from '@/store'
+import { useAssistant } from '@/store/assistant.store'
 
 // jsdom ne calcule pas de mise en page : on donne une taille au conteneur de la grille
 // pour que la virtualisation rende les lignes.
@@ -27,6 +28,7 @@ function typeInCell(recordId: string, fieldId: string, value: string, key = 'Ent
 beforeEach(() => {
   act(() => {
     useDataStore.getState().reset()
+    useAssistant.setState({ open: false, model: null, entries: [], history: [], running: false })
     useUIStore.setState({
       activeTableId: 'tbl_planning_lots',
       selection: null,
@@ -232,5 +234,89 @@ describe('export DataFlow', () => {
     expect(calls[0]?.[0]).toBe('https://atelier.example/api/import')
     expect(within(dialog).getByRole('status').textContent).toMatch(/3 lignes envoyées/)
     expect(screen.getByText(/envoi direct configuré/)).toBeTruthy()
+  })
+})
+
+describe('assistant Ollama', () => {
+  function mockOllama(chatReplies: unknown[]) {
+    const chatBodies: { messages: { role: string; content: string }[] }[] = []
+    globalThis.fetch = (async (url: string, init?: RequestInit) => {
+      const path = new URL(url).pathname
+      const json = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status })
+      if (path === '/api/tags')
+        return json({ models: [{ name: 'qwen3:8b', details: { parameter_size: '8.2B' } }] })
+      if (path === '/api/show') return json({ capabilities: ['completion', 'tools'] })
+      if (path === '/api/chat') {
+        chatBodies.push(JSON.parse(String(init?.body)))
+        return json({ message: chatReplies.shift() })
+      }
+      return json({}, 404)
+    }) as typeof fetch
+    return chatBodies
+  }
+
+  const openAssistant = async () => {
+    fireEvent.click(screen.getByRole('button', { name: /Assistant/ }))
+    // Le panneau est chargé à la demande.
+    const panel = await screen.findByRole('complementary', { name: 'Assistant' })
+    await screen.findByRole('combobox', { name: 'Modèle Ollama' })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0))
+    })
+    return panel
+  }
+
+  it('choisit un modèle compatible et applique les actions dans la grille', async () => {
+    const bodies = mockOllama([
+      {
+        role: 'assistant',
+        content: '',
+        tool_calls: [
+          {
+            function: {
+              name: 'set_cells',
+              arguments: {
+                table: 'tbl_planning_lots',
+                cells: [{ row: 3, column: 'C', value: '20 000' }],
+              },
+            },
+          },
+        ],
+      },
+      { role: 'assistant', content: 'Coût HT de la ligne 3 passé à 20 000 €.' },
+    ])
+    render(<App />)
+    const panel = await openAssistant()
+    expect(
+      (within(panel).getByRole('combobox', { name: 'Modèle Ollama' }) as HTMLSelectElement).value,
+    ).toBe('qwen3:8b')
+
+    fireEvent.mouseDown(cell('rec_02', 'cost_ht'))
+    const input = within(panel).getByRole('textbox', { name: 'Message à l’assistant' })
+    fireEvent.change(input, { target: { value: 'Passe l’isolation à 20 000 €' } })
+    await act(async () => {
+      fireEvent.keyDown(input, { key: 'Enter' })
+      await new Promise((r) => setTimeout(r, 50))
+    })
+
+    expect(await within(panel).findByText('Coût HT de la ligne 3 passé à 20 000 €.')).toBeTruthy()
+    expect(
+      within(panel).getByText('Modification de 1 cellule dans « Planning & Lots »'),
+    ).toBeTruthy()
+    expect(text(cell('rec_total', 'cost_ttc'))).toBe('112 200 €')
+    // Le contexte de l'app (table ouverte, cellule sélectionnée) est donné au modèle.
+    expect(bodies[0]?.messages[0]?.content).toContain(
+      'Cellule sélectionnée : C2 (colonne « Coût HT »)',
+    )
+  })
+
+  it('explique comment lancer Ollama quand il est absent', async () => {
+    globalThis.fetch = (async () => {
+      throw new TypeError('fetch failed')
+    }) as typeof fetch
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: /Assistant/ }))
+    expect(await screen.findByText('Ollama n’est pas lancé')).toBeTruthy()
+    expect(screen.getByText('ollama serve')).toBeTruthy()
   })
 })

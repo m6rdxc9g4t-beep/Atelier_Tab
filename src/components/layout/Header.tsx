@@ -1,5 +1,14 @@
 import { useCallback, useState } from 'react'
-import { ChevronRight, Columns3, Grid3x3, PanelLeftOpen, Send, Table2 } from 'lucide-react'
+import {
+  ChevronRight,
+  Columns3,
+  Grid3x3,
+  PanelLeftOpen,
+  Send,
+  Sparkles,
+  Table2,
+} from 'lucide-react'
+import { useAssistant } from '@/store/assistant.store'
 import { useDataStore, useUIStore } from '@/store'
 import type { Table, ViewMode } from '@/types/domain'
 import { cn } from '@/lib/cn'
@@ -20,9 +29,11 @@ export function Header({ table, mode }: { table: Table; mode: ViewMode }) {
   const setViewMode = useDataStore((s) => s.setViewMode)
   const sidebarCollapsed = useUIStore((s) => s.sidebarCollapsed)
   const toggleSidebar = useUIStore((s) => s.toggleSidebar)
+  const assistantOpen = useAssistant((s) => s.open)
+  const toggleAssistant = useAssistant((s) => s.toggle)
 
   return (
-    <header className="flex h-11 shrink-0 items-center gap-3 border-b border-line px-3">
+    <header className="@container flex h-11 shrink-0 items-center gap-3 border-b border-line px-3">
       {sidebarCollapsed && (
         <button
           type="button"
@@ -64,7 +75,8 @@ export function Header({ table, mode }: { table: Table; mode: ViewMode }) {
             )}
           >
             <Icon size={14} />
-            {label}
+            {/* Fenêtre étroite (assistant ouvert…) : icônes seules. */}
+            <span className="@max-[58rem]:sr-only">{label}</span>
           </button>
         ))}
       </div>
@@ -72,11 +84,28 @@ export function Header({ table, mode }: { table: Table; mode: ViewMode }) {
       <button
         type="button"
         onClick={() => setExportOpen(true)}
+        aria-label="Exporter vers atelier_projets"
         title="Exporter cette table vers atelier_projets (JSON, CSV ou webhook)"
         className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg bg-accent px-3 font-medium text-accent-ink hover:opacity-90"
       >
         <Send size={14} />
-        Exporter vers atelier_projets
+        <span className="@max-[64rem]:hidden">Exporter vers atelier_projets</span>
+        <span className="hidden @max-[64rem]:inline">Exporter</span>
+      </button>
+      <button
+        type="button"
+        onClick={toggleAssistant}
+        aria-pressed={assistantOpen}
+        title="Assistant IA local (⌘J)"
+        className={cn(
+          'flex h-8 shrink-0 items-center gap-1.5 rounded-lg border px-2.5',
+          assistantOpen
+            ? 'border-accent bg-accent-soft text-ink'
+            : 'border-line text-muted hover:bg-surface-hover hover:text-ink',
+        )}
+      >
+        <Sparkles size={14} className={assistantOpen ? 'text-accent' : undefined} />
+        <span className="@max-[48rem]:sr-only">Assistant</span>
       </button>
       <ThemeToggle />
       <ExportDialog table={table} open={exportOpen} onClose={closeExport} />

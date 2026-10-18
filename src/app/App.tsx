@@ -1,10 +1,17 @@
-import { useCallback } from 'react'
+import { lazy, Suspense, useCallback, useEffect } from 'react'
 import { Columns3 } from 'lucide-react'
+import { Toaster } from '@/components/ui/Toaster'
+import { useAssistant } from '@/store/assistant.store'
 import { FormulaBar } from '@/components/formula-bar/FormulaBar'
 import { HybridGrid } from '@/components/grid/HybridGrid'
 import { Header } from '@/components/layout/Header'
 import { Sidebar } from '@/components/sidebar/Sidebar'
 import { useDataStore, useUIStore } from '@/store'
+
+// Chargé à la première ouverture : l'assistant n'alourdit pas le démarrage.
+const AssistantPanel = lazy(() =>
+  import('@/components/assistant/AssistantPanel').then((m) => ({ default: m.AssistantPanel })),
+)
 
 export function App() {
   const sidebarCollapsed = useUIStore((s) => s.sidebarCollapsed)
@@ -19,6 +26,19 @@ export function App() {
   }, [])
 
   const mode = table?.views.find((v) => v.id === table.activeViewId)?.mode ?? 'hybrid'
+  const assistantOpen = useAssistant((s) => s.open)
+
+  // ⌘J / Ctrl+J : afficher ou masquer l'assistant.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'j') {
+        e.preventDefault()
+        useAssistant.getState().toggle()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   return (
     <div className="flex h-dvh overflow-hidden">
@@ -42,6 +62,12 @@ export function App() {
           </div>
         )}
       </main>
+      {assistantOpen && (
+        <Suspense fallback={<div className="w-[380px] shrink-0 border-l border-line" />}>
+          <AssistantPanel />
+        </Suspense>
+      )}
+      <Toaster />
     </div>
   )
 }

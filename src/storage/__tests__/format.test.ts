@@ -1,0 +1,123 @@
+import { describe, expect, it } from 'vitest'
+import { createDemoData } from '@/fixtures/demo'
+import {
+  assembleData,
+  DataFileError,
+  parseIndexFile,
+  parseTableFile,
+  serializeData,
+  tableIdFromPath,
+} from '../format'
+
+function roundTrip() {
+  const data = createDemoData()
+  data.integrations.atelierProjets = { webhookUrl: 'https://a.example/hook', token: 'secret' }
+  const files = serializeData(data)
+  const index = parseIndexFile(files.get('atelier.json')!)
+  const tables = Object.fromEntries(
+    [...files]
+      .filter(([p]) => p.startsWith('tables/'))
+      .map(([p, text]) => [tableIdFromPath(p)!, parseTableFile(p, text)]),
+  )
+  return { data, files, rebuilt: assembleData(index, tables) }
+}
+
+describe('format sur disque', () => {
+  it('écrit un index et un fichier par table', () => {
+    const { files } = roundTrip()
+    expect([...files.keys()].sort()).toEqual([
+      'atelier.json',
+      'tables/tbl_budget_global.json',
+      'tables/tbl_calculs_surfaces.json',
+      'tables/tbl_materiaux.json',
+      'tables/tbl_planning_lots.json',
+    ])
+    expect(files.get('atelier.json')).toContain('"format": "atelier_tab"')
+  })
+
+  it('n’écrit jamais le jeton du webhook', () => {
+    const { files } = roundTrip()
+    expect([...files.values()].join('')).not.toContain('secret')
+    expect(files.get('atelier.json')).toContain('https://a.example/hook')
+  })
+
+  it('relit exactement les mêmes données', () => {
+    const { data, rebuilt } = roundTrip()
+    const { token: _t, ...expected } = data.integrations.atelierProjets
+    void _t
+    expect(rebuilt).toEqual({ ...data, integrations: { atelierProjets: expected } })
+  })
+
+  it('reconnaît les chemins de tables', () => {
+    expect(tableIdFromPath('tables/tbl_x.json')).toBe('tbl_x')
+    expect(tableIdFromPath('tables/.tbl_x.json.123.tmp')).toBeNull()
+    expect(tableIdFromPath('atelier.json')).toBeNull()
+  })
+})
+
+describe('tolérance aux éditions externes', () => {
+  const base = () =>
+    JSON.parse(serializeData(createDemoData()).get('tables/tbl_planning_lots.json')!)
+
+  it('ajoute à la fin une ligne absente de rowOrder et complète les valeurs par défaut', () => {
+    const t = base()
+    t.records.rec_new = { cells: { task_name: 'Ajout IA' } }
+    const table = parseTableFile('tables/tbl_planning_lots.json', JSON.stringify(t))
+    expect(table.rowOrder.at(-1)).toBe('rec_new')
+    expect(table.records.rec_new).toEqual({
+      id: 'rec_new',
+      kind: 'data',
+      cells: { task_name: 'Ajout IA' },
+    })
+  })
+
+  it('ignore les références orphelines et répare la vue active', () => {
+    const t = base()
+    t.rowOrder.push('rec_fantome')
+    t.fieldOrder.push('fld_fantome')
+    t.activeViewId = 'view_inconnue'
+    const table = parseTableFile('tables/tbl_planning_lots.json', JSON.stringify(t))
+    expect(table.rowOrder).not.toContain('rec_fantome')
+    expect(table.fieldOrder).not.toContain('fld_fantome')
+    expect(table.activeViewId).toBe('view_planning_grid')
+  })
+
+  it('crée une vue si la table n’en a pas', () => {
+    const t = base()
+    t.views = []
+    expect(parseTableFile('x', JSON.stringify(t)).views[0]?.mode).toBe('hybrid')
+  })
+
+  it('signale un JSON cassé ou un type inconnu avec le fichier en cause', () => {
+    expect(() => parseTableFile('tables/a.json', '{ "id": ')).toThrow(DataFileError)
+    const t = base()
+    t.fields.status.type = 'statut'
+    expect(() => parseTableFile('tables/a.json', JSON.stringify(t))).toThrow(
+      /tables\/a\.json : fields\.status\.type/,
+    )
+  })
+
+  it('rattache une table nouvelle à son projet', () => {
+    const data = createDemoData()
+    const files = serializeData(data)
+    const index = parseIndexFile(files.get('atelier.json')!)
+    const extra = {
+      ...structuredClone(data.tables.tbl_materiaux!),
+      id: 'tbl_ia',
+      name: 'Créée par IA',
+    }
+    const rebuilt = assembleData(index, { ...data.tables, tbl_ia: extra })
+    expect(rebuilt.projects.proj_chiffrage_materiaux?.tableIds).toEqual(['tbl_materiaux', 'tbl_ia'])
+  })
+
+  it('écarte une table dont le projet n’existe pas', () => {
+    const data = createDemoData()
+    const index = parseIndexFile(serializeData(data).get('atelier.json')!)
+    const orphan = {
+      ...structuredClone(data.tables.tbl_materiaux!),
+      id: 'tbl_o',
+      projectId: 'proj_absent',
+    }
+    expect(assembleData(index, { tbl_o: orphan }).tables.tbl_o).toBeUndefined()
+  })
+})

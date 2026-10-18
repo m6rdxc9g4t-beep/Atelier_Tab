@@ -15,9 +15,9 @@ export default defineConfig({
     // Le moteur et DataFlow sont du TS pur : environnement node par défaut,
     // les tests de composants déclarent `// @vitest-environment jsdom`.
     environment: 'node',
-    include: ['src/**/*.test.{ts,tsx}'],
+    include: ['src/**/*.test.{ts,tsx}', 'desktop/**/*.test.ts'],
     coverage: {
-      include: ['src/engine/**', 'src/dataflow/**', 'src/store/**'],
+      include: ['src/engine/**', 'src/dataflow/**', 'src/store/**', 'src/ai/**', 'src/storage/**', 'desktop/**'],
     },
   },
 })
