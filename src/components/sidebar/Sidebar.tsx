@@ -6,8 +6,10 @@ import {
   PanelLeftClose,
   Plus,
   Table2,
+  PlugZap,
   Unplug,
 } from 'lucide-react'
+import { STATUS_LABELS, useExportStatus } from '@/components/dataflow/useExportStatus'
 import { useDataStore, useUIStore } from '@/store'
 import type { Project } from '@/types/domain'
 import { cn } from '@/lib/cn'
@@ -57,10 +59,7 @@ export function Sidebar() {
         })}
       </nav>
 
-      <div className="flex shrink-0 items-center gap-2 border-t border-line px-3 py-2.5 text-[12px] text-muted">
-        <Unplug size={13} className="shrink-0" />
-        <span className="flex-1">atelier_projets non connecté</span>
-      </div>
+      <PipelineStatus />
     </aside>
   )
 }
@@ -192,7 +191,8 @@ function ProjectItem({ project }: { project: Project }) {
                   )}
                 >
                   <Table2 size={13} className={cn('shrink-0', active && 'text-accent')} />
-                  <span className="truncate">{table.name}</span>
+                  <span className="min-w-0 flex-1 truncate">{table.name}</span>
+                  <ExportStatusDot tableId={tableId} />
                 </button>
               </li>
             )
@@ -209,6 +209,49 @@ function ProjectItem({ project }: { project: Project }) {
         </ul>
       )}
     </li>
+  )
+}
+
+function ExportStatusDot({ tableId }: { tableId: string }) {
+  const status = useExportStatus(tableId)
+  if (!status) return null
+  const tone = status === 'ready' ? 'tone-green' : status === 'warnings' ? 'tone-amber' : 'tone-red'
+  return (
+    <span
+      className={`${tone} tone-dot size-1.5 shrink-0 rounded-full`}
+      title={STATUS_LABELS[status]}
+      aria-label={STATUS_LABELS[status]}
+      role="img"
+    />
+  )
+}
+
+/** Pied de sidebar : état de la connexion à atelier_projets et dernier export. */
+function PipelineStatus() {
+  const integration = useDataStore((s) => s.integrations.atelierProjets)
+  const tables = useDataStore((s) => s.tables)
+  const connected = Boolean(integration.webhookUrl)
+  const last = integration.lastExport
+  const Icon = connected ? PlugZap : Unplug
+
+  return (
+    <div className="shrink-0 border-t border-line px-3 py-2.5 text-[12px] text-muted">
+      <div className="flex items-center gap-2">
+        <Icon size={13} className={cn('shrink-0', connected && 'text-success')} />
+        <span className="flex-1 truncate">
+          {connected
+            ? 'atelier_projets : envoi direct configuré'
+            : 'atelier_projets : export par fichier'}
+        </span>
+      </div>
+      {last && (
+        <p className="mt-1 truncate pl-[21px]" title={last.message}>
+          <span className={last.ok ? 'text-success' : 'text-danger'}>{last.ok ? '✓' : '✕'}</span>{' '}
+          {tables[last.tableId]?.name ?? 'Table supprimée'},{' '}
+          {new Date(last.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+        </p>
+      )}
+    </div>
   )
 }
 

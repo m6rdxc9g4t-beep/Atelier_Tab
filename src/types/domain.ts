@@ -138,6 +138,26 @@ export interface Collaborator {
 }
 
 /** État persistant complet. */
+export type ExportMethod = 'json' | 'csv' | 'webhook'
+
+export interface ExportLogEntry {
+  at: string
+  tableId: string
+  method: ExportMethod
+  rows: number
+  ok: boolean
+  message: string
+}
+
+/** Connexion à l'application cible `atelier_projets`. */
+export interface AtelierIntegration {
+  /** URL de l'API d'import (webhook). Vide : export par fichier uniquement. */
+  webhookUrl?: string
+  /** Jeton d'accès, conservé dans ce navigateur uniquement. */
+  token?: string
+  lastExport?: ExportLogEntry
+}
+
 export interface AppData {
   schemaVersion: 1
   workspaceOrder: string[]
@@ -145,4 +165,5 @@ export interface AppData {
   projects: Record<string, Project>
   tables: Record<string, Table>
   collaborators: Record<string, Collaborator>
+  integrations: { atelierProjets: AtelierIntegration }
 }

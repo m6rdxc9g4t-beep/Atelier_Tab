@@ -1,7 +1,9 @@
+import { useCallback, useState } from 'react'
 import { ChevronRight, Columns3, Grid3x3, PanelLeftOpen, Send, Table2 } from 'lucide-react'
 import { useDataStore, useUIStore } from '@/store'
 import type { Table, ViewMode } from '@/types/domain'
 import { cn } from '@/lib/cn'
+import { ExportDialog } from '@/components/dataflow/ExportDialog'
 import { ThemeToggle } from './ThemeToggle'
 
 const MODES: { mode: ViewMode; label: string; icon: typeof Table2; hint: string }[] = [
@@ -11,6 +13,8 @@ const MODES: { mode: ViewMode; label: string; icon: typeof Table2; hint: string 
 ]
 
 export function Header({ table, mode }: { table: Table; mode: ViewMode }) {
+  const [exportOpen, setExportOpen] = useState(false)
+  const closeExport = useCallback(() => setExportOpen(false), [])
   const project = useDataStore((s) => s.projects[table.projectId])
   const workspace = useDataStore((s) => (project ? s.workspaces[project.workspaceId] : undefined))
   const setViewMode = useDataStore((s) => s.setViewMode)
@@ -67,14 +71,15 @@ export function Header({ table, mode }: { table: Table; mode: ViewMode }) {
 
       <button
         type="button"
-        disabled
-        title="L'export vers atelier_projets arrive avec le module DataFlow"
-        className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg bg-accent px-3 font-medium text-accent-ink opacity-50"
+        onClick={() => setExportOpen(true)}
+        title="Exporter cette table vers atelier_projets (JSON, CSV ou webhook)"
+        className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg bg-accent px-3 font-medium text-accent-ink hover:opacity-90"
       >
         <Send size={14} />
         Exporter vers atelier_projets
       </button>
       <ThemeToggle />
+      <ExportDialog table={table} open={exportOpen} onClose={closeExport} />
     </header>
   )
 }
