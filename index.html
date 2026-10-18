@@ -1,10 +1,24 @@
 <!doctype html>
-<html lang="en">
+<html lang="fr">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>atelier-tab</title>
+    <meta
+      name="description"
+      content="Atelier_Tab — tableur et base de données hybride, avec export DataFlow vers atelier_projets."
+    />
+    <title>Atelier_Tab</title>
+    <script>
+      // Applique le thème avant le premier rendu pour éviter un flash clair → sombre.
+      try {
+        var p = localStorage.getItem('atelier-tab:theme')
+        var dark =
+          p === 'dark' ||
+          ((!p || p === 'system') && matchMedia('(prefers-color-scheme: dark)').matches)
+        if (dark) document.documentElement.classList.add('dark')
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>
