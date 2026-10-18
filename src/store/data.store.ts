@@ -13,7 +13,16 @@ import { insertField, insertRecord, removeField, removeRecords } from '@/engine/
 import { createDemoData } from '@/fixtures/demo'
 import { newId } from '@/lib/ids'
 import { defaultAdapter, type StorageAdapter } from '@/services/persistence'
-import type { AppData, CellInput, Field, Table, TableRecord, ViewMode } from '@/types/domain'
+import type {
+  AppData,
+  AtelierIntegration,
+  CellInput,
+  ExportLogEntry,
+  Field,
+  Table,
+  TableRecord,
+  ViewMode,
+} from '@/types/domain'
 import { createDefaultTable, createField, createRecord, createView } from './factories'
 
 export interface DataActions {
@@ -51,6 +60,11 @@ export interface DataActions {
   setCell(tableId: string, recordId: string, fieldId: string, input: CellInput): void
   setRecordKind(tableId: string, recordId: string, kind: TableRecord['kind']): void
 
+  /** Réglages de la connexion à atelier_projets (URL du webhook, jeton). */
+  setAtelierIntegration(patch: Partial<Omit<AtelierIntegration, 'lastExport'>>): void
+  /** Mémorise le résultat du dernier export (affiché dans la sidebar). */
+  logExport(entry: ExportLogEntry): void
+
   setActiveView(tableId: string, viewId: string): void
   /** Active la première vue du mode demandé, en la créant si besoin. */
   setViewMode(tableId: string, mode: ViewMode): void
@@ -69,6 +83,8 @@ function pickData(s: AppData): AppData {
     projects: s.projects,
     tables: s.tables,
     collaborators: s.collaborators,
+    // Données enregistrées avant l'ajout des intégrations : valeur par défaut.
+    integrations: s.integrations ?? { atelierProjets: {} },
   }
 }
 
@@ -259,6 +275,26 @@ export function createDataStore(options: { adapter?: StorageAdapter; initialData
             if (r) r.kind = kind
           }),
 
+        // ------------------------------------------------------------ intégration
+        setAtelierIntegration: (patch) =>
+          set((s) => {
+            s.integrations ??= { atelierProjets: {} }
+            const target = s.integrations.atelierProjets
+            for (const [key, value] of Object.entries(patch) as [
+              keyof typeof patch,
+              string | undefined,
+            ][]) {
+              if (value === undefined || value === '') delete target[key]
+              else target[key] = value
+            }
+          }),
+
+        logExport: (entry) =>
+          set((s) => {
+            s.integrations ??= { atelierProjets: {} }
+            s.integrations.atelierProjets.lastExport = entry
+          }),
+
         // ------------------------------------------------------------ vues
         setActiveView: (tableId, viewId) =>
           set((s) => {
@@ -287,6 +323,11 @@ export function createDataStore(options: { adapter?: StorageAdapter; initialData
         version: 1,
         storage: createJSONStorage(() => adapter),
         partialize: (s) => pickData(s),
+        // État enregistré par une version antérieure : on complète les champs manquants.
+        merge: (persisted, current) => ({
+          ...current,
+          ...pickData({ ...current, ...(persisted as Partial<AppData>) }),
+        }),
       },
     ),
   )

@@ -236,6 +236,7 @@ export function createDemoData(): AppData {
       [materials.id]: materials,
     }),
     collaborators: Object.fromEntries(collaborators.map((c) => [c.id, c])),
+    integrations: { atelierProjets: {} },
   }
 }
 

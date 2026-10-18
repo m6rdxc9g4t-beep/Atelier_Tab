@@ -166,3 +166,71 @@ describe('modes et navigation', () => {
     expect(screen.getByRole('columnheader', { name: /Nom/ })).toBeTruthy()
   })
 })
+
+describe('export DataFlow', () => {
+  const openExport = () => {
+    fireEvent.click(screen.getByRole('button', { name: /Exporter vers atelier_projets/ }))
+    return screen.getByRole('dialog', { name: 'Exporter vers atelier_projets' })
+  }
+
+  it('montre une table prête et la pastille correspondante', () => {
+    render(<App />)
+    expect(
+      screen.getAllByRole('img', { name: 'Prête pour atelier_projets' }).length,
+    ).toBeGreaterThan(0)
+    const dialog = openExport()
+    expect(within(dialog).getByText(/Tout est conforme au schéma 2.1.0/)).toBeTruthy()
+    expect(within(dialog).getByText(/Toute la table/).textContent).toContain('3 lignes')
+  })
+
+  it('bloque l’export quand plus aucune colonne ne porte le titre', () => {
+    render(<App />)
+    const dialog = openExport()
+    fireEvent.change(within(dialog).getByRole('combobox', { name: /Lot \/ Tâche/ }), {
+      target: { value: 'custom' },
+    })
+    expect(within(dialog).getByText(/Aucune colonne n’est associée au titre/)).toBeTruthy()
+    expect(
+      (within(dialog).getByRole('button', { name: 'Télécharger le JSON' }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true)
+  })
+
+  it('télécharge le JSON et mémorise l’export', async () => {
+    const created: Blob[] = []
+    URL.createObjectURL = (b: Blob) => {
+      created.push(b)
+      return 'blob:test'
+    }
+    URL.revokeObjectURL = () => {}
+    render(<App />)
+    const dialog = openExport()
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Télécharger le JSON' }))
+    })
+    expect(within(dialog).getByRole('status').textContent).toMatch(/3 lignes exportées en JSON/)
+    const json = JSON.parse(await created[0]!.text())
+    expect(json.project.summary_metrics.computed_totals).toEqual({ C: 88500, D: 106200 })
+    expect(useDataStore.getState().integrations.atelierProjets.lastExport?.ok).toBe(true)
+  })
+
+  it('envoie au webhook configuré', async () => {
+    const calls: [string, RequestInit][] = []
+    globalThis.fetch = (async (url: string, init: RequestInit) => {
+      calls.push([url, init])
+      return new Response('{}', { status: 201 })
+    }) as typeof fetch
+    render(<App />)
+    const dialog = openExport()
+    fireEvent.click(within(dialog).getByText('Envoi direct'))
+    const url = within(dialog).getByPlaceholderText(/atelier-projets.example/)
+    fireEvent.change(url, { target: { value: 'https://atelier.example/api/import' } })
+    fireEvent.blur(url)
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Envoyer à atelier_projets' }))
+    })
+    expect(calls[0]?.[0]).toBe('https://atelier.example/api/import')
+    expect(within(dialog).getByRole('status').textContent).toMatch(/3 lignes envoyées/)
+    expect(screen.getByText(/envoi direct configuré/)).toBeTruthy()
+  })
+})
