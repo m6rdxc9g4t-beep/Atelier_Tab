@@ -75,6 +75,13 @@ describe('shiftReferences (insertion / suppression)', () => {
     expect(shiftReferences('=SUM(C1:C3)', { axis: 'row', index: 1, count: 1 })).toBe('=SUM(C1:C4)')
   })
 
+  it('expandAdjacent : une ligne ajoutée au-dessus du total étend la somme', () => {
+    const change = { axis: 'row', index: 3, count: 1 } as const
+    expect(shiftReferences('=SUM(C1:C3)', change)).toBe('=SUM(C1:C3)')
+    expect(shiftReferences('=SUM(C1:C3)', { ...change, expandAdjacent: true })).toBe('=SUM(C1:C4)')
+    expect(shiftReferences('=C3', { ...change, expandAdjacent: true })).toBe('=C3')
+  })
+
   it('suppression d’une ligne référencée : #REF!', () => {
     expect(shiftReferences('=A3*2', { axis: 'row', index: 2, count: -1 })).toBe('=#REF!*2')
   })

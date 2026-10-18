@@ -71,8 +71,8 @@ React 19 · TypeScript (strict) · Vite · Tailwind CSS v4 · Zustand · Zod · 
 ## Feuille de route
 
 - [x] **Phase 0** — Socle : Tailwind v4, thème clair/sombre, CI
-- [ ] **Phase 1** — Modèle de domaine, store, persistance IndexedDB
-- [ ] **Phase 2** — Moteur de formules
+- [x] **Phase 1** — Modèle de domaine, store, persistance IndexedDB
+- [x] **Phase 2** — Moteur de formules
 - [ ] **Phase 3** — Grille hybride et barre de formules
 - [ ] **Phase 4** — Sidebar et navigation clavier
 - [ ] **Phase 5** — DataFlow → `atelier_projets`
