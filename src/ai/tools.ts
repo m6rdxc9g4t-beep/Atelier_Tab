@@ -9,10 +9,18 @@
 import { z } from 'zod'
 import { buildAtelierPayload, sendToWebhook, toEnrichedCsv, validatePayload } from '@/dataflow'
 import { exportFilename } from '@/dataflow/transports/download'
-import { parseUserInput } from '@/engine/field-types'
+import {
+  ATELIER_STATUS_PRESET_NAME,
+  mergeAtelierStatuses,
+  parseUserInput,
+  WORKFLOW_STATUSES,
+  workflowStatus,
+  workflowStatusCode,
+} from '@/engine/field-types'
 import { isError, isFormula, parseFormula, serializeValue, type CellInput } from '@/engine/formula'
 import type { TableSheet } from '@/engine/table'
 import type { DataStore } from '@/store/data.store'
+import { DEFAULT_STATUS_CHOICES } from '@/store/factories'
 import type { AppData, BadgeColor, Field, FieldType, SelectChoice, Table } from '@/types/domain'
 import {
   letterOf,
@@ -103,6 +111,15 @@ const CHOICE_COLORS: BadgeColor[] = [
   'teal',
 ]
 
+const DEFAULT_CHOICE_LABELS = DEFAULT_STATUS_CHOICES.map((c) => c.label)
+
+const statusPreset = z
+  .enum(['atelier'])
+  .optional()
+  .describe(
+    `Pour type=select : "atelier" applique le préréglage « ${ATELIER_STATUS_PRESET_NAME} », les 8 statuts communs de la Suite Atelier (${WORKFLOW_STATUSES.map((s) => s.label).join(', ')}), affichés avec leurs couleurs officielles. Remplace \`choices\`.`,
+  )
+
 function data(host: ToolHost): AppData {
   return host.store.getState()
 }
@@ -166,7 +183,12 @@ function choicesFrom(labels: string[], existing: SelectChoice[] = []): SelectCho
       idCandidate = `${base}_${n}`
     }
     used.add(idCandidate)
-    return { id: idCandidate, label, color: CHOICE_COLORS[i % CHOICE_COLORS.length] as BadgeColor }
+    // Un statut de workflow reconnu prend la teinte de sa couleur officielle.
+    const code = workflowStatusCode(label)
+    const color = code
+      ? workflowStatus(code).color
+      : (CHOICE_COLORS[i % CHOICE_COLORS.length] as BadgeColor)
+    return { id: idCandidate, label, color }
   })
 }
 
@@ -428,6 +450,7 @@ export const TOOLS = [
         .array(z.string())
         .optional()
         .describe('Pour type=select : libellés des statuts, dans l’ordre'),
+      preset: statusPreset,
       position: columnRef
         .optional()
         .describe('Insérer avant cette colonne. Par défaut : à la fin.'),
@@ -443,6 +466,9 @@ export const TOOLS = [
           'Une colonne de type formula a besoin d’une formule pour la ligne 1, ex. "=C1*1.2"',
         )
       }
+      if (args.preset && args.type !== 'select') {
+        throw new ToolError('Le préréglage de statuts ne s’applique qu’aux colonnes de type select')
+      }
       const index = args.position
         ? table.fieldOrder.indexOf(resolveColumn(table, args.position).id)
         : undefined
@@ -456,7 +482,9 @@ export const TOOLS = [
           ...(args.type === 'select'
             ? {
                 options: {
-                  choices: choicesFrom(args.choices ?? ['À faire', 'En cours', 'Validé']),
+                  choices: args.preset
+                    ? mergeAtelierStatuses()
+                    : choicesFrom(args.choices ?? DEFAULT_CHOICE_LABELS),
                 },
               }
             : {}),
@@ -476,13 +504,14 @@ export const TOOLS = [
   tool({
     name: 'update_column',
     description:
-      'Modifie une colonne : libellé, formule de colonne, liste des statuts (les lignes gardent leur statut si son libellé est conservé), format du résultat ou rôle d’export.',
+      'Modifie une colonne : libellé, formule de colonne, liste des statuts (les lignes gardent leur statut si son libellé est conservé) ou préréglage « Statuts Atelier » (les statuts reconnus, ex. « Bloqué », sont convertis ; les autres sont gardés à la fin), format du résultat ou rôle d’export.',
     input: z.object({
       table: tableRef,
       column: columnRef,
       label: z.string().min(1).optional(),
       formula: z.string().optional(),
       choices: z.array(z.string()).optional(),
+      preset: statusPreset,
       format: z.enum(['number', 'currency', 'percent', 'text']).optional(),
       mapping: z.enum(MAPPING_VALUES).optional(),
     }),
@@ -492,20 +521,21 @@ export const TOOLS = [
       if (args.formula !== undefined && field.type !== 'formula') {
         throw new ToolError(`« ${field.label} » n’est pas une colonne de type formula`)
       }
-      if (args.choices && field.type !== 'select') {
+      if ((args.choices || args.preset) && field.type !== 'select') {
         throw new ToolError(`« ${field.label} » n’est pas une colonne de statut`)
       }
       if (args.format && field.type !== 'formula') {
         throw new ToolError('Le format ne s’applique qu’aux colonnes de type formula')
       }
       const options = { ...(field.options ?? {}) }
-      if (args.choices) options.choices = choicesFrom(args.choices, field.options?.choices)
+      if (args.preset) options.choices = mergeAtelierStatuses(field.options?.choices)
+      else if (args.choices) options.choices = choicesFrom(args.choices, field.options?.choices)
       if (args.format) options.resultFormat = args.format
       host.store.getState().updateField(table.id, field.id, {
         ...(args.label ? { label: args.label } : {}),
         ...(args.formula !== undefined ? { columnFormula: checkFormula(args.formula) } : {}),
         ...(args.mapping ? { atelierMapping: args.mapping } : {}),
-        ...(args.choices || args.format ? { options } : {}),
+        ...(args.choices || args.preset || args.format ? { options } : {}),
       })
       const now = freshTable(host, table.id)
       return { updated: columnInfo(now, now.fields[field.id] as Field) }
@@ -554,6 +584,7 @@ export const TOOLS = [
             formula: z.string().optional(),
             format: z.enum(['number', 'currency', 'percent', 'text']).optional(),
             choices: z.array(z.string()).optional(),
+            preset: statusPreset,
             mapping: z.enum(MAPPING_VALUES).optional(),
           }),
         )
@@ -584,7 +615,11 @@ export const TOOLS = [
             ...(mapping ? { atelierMapping: mapping } : {}),
             ...(c.type === 'select'
               ? {
-                  options: { choices: choicesFrom(c.choices ?? ['À faire', 'En cours', 'Validé']) },
+                  options: {
+                    choices: c.preset
+                      ? mergeAtelierStatuses()
+                      : choicesFrom(c.choices ?? DEFAULT_CHOICE_LABELS),
+                  },
                 }
               : {}),
             ...(c.type === 'formula' ? { options: { resultFormat: c.format ?? 'number' } } : {}),

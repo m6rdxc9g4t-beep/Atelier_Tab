@@ -5,7 +5,12 @@
  * Écart volontaire avec la maquette d'origine : le coût TTC est une colonne-formule
  * distincte (D = C × 1,2) et la ligne TOTAL est une ligne de synthèse, exclue des
  * agrégats. Voir docs/DATAFLOW_SPEC.md.
+ *
+ * Les statuts du planning sont les 8 statuts communs de la Suite Atelier (docs/SUITE.md
+ * §1.4) : ils s'affichent avec les couleurs officielles et sont reconnus tels quels par
+ * Atelier Projets à l'import.
  */
+import { mergeAtelierStatuses } from '@/engine/field-types'
 import { buildTable, createView, DEFAULT_STATUS_CHOICES } from '@/store/factories'
 import type { AppData, Collaborator, Field, TableRecord } from '@/types/domain'
 
@@ -40,7 +45,8 @@ const planningFields: Field[] = [
     label: 'Statut',
     type: 'select',
     atelierMapping: 'workflow_state',
-    options: { choices: DEFAULT_STATUS_CHOICES.map((c) => ({ ...c })) },
+    // Ids des statuts par défaut conservés (opt_todo, opt_doing…), libellés officiels.
+    options: { choices: mergeAtelierStatuses(DEFAULT_STATUS_CHOICES) },
   },
   {
     id: 'cost_ht',

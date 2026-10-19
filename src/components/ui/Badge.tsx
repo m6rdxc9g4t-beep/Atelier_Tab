@@ -1,15 +1,23 @@
+import { workflowStatusCode } from '@/engine/field-types'
 import type { BadgeColor, Collaborator } from '@/types/domain'
 import { cn } from '@/lib/cn'
 
+/**
+ * Badge d'un choix de statut. Un libellé reconnu comme statut de workflow de la Suite
+ * Atelier (« En cours », « Terminée »…) prend la couleur officielle du statut via
+ * `data-status` ; sinon la teinte nommée du choix.
+ */
 export function StatusBadge({ label, color }: { label: string; color: BadgeColor }) {
+  const status = workflowStatusCode(label) ?? undefined
   return (
     <span
+      data-status={status}
       className={cn(
         `tone-${color} tone-soft`,
         'inline-flex max-w-full items-center gap-1.5 truncate rounded-full py-0.5 pr-2 pl-1.5 text-[12px] leading-4 font-medium',
       )}
     >
-      <span className={`tone-${color} tone-dot size-1.5 shrink-0 rounded-full`} />
+      <span className="tone-dot size-1.5 shrink-0 rounded-full" />
       <span className="truncate">{label}</span>
     </span>
   )

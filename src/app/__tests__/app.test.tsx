@@ -70,8 +70,8 @@ describe('grille hybride', () => {
     fireEvent.mouseDown(cell('rec_03', 'status'))
     fireEvent.keyDown(grid(), { key: 'Enter' })
     const input = within(cell('rec_03', 'status')).getByRole('textbox')
-    fireEvent.change(input, { target: { value: 'val' } })
-    fireEvent.mouseDown(screen.getByRole('option', { name: 'Validé' }))
+    fireEvent.change(input, { target: { value: 'term' } })
+    fireEvent.mouseDown(screen.getByRole('option', { name: 'Terminée' }))
     return Promise.resolve().then(() => {
       expect(useDataStore.getState().tables.tbl_planning_lots?.records.rec_03?.cells.status).toBe(
         'opt_done',
