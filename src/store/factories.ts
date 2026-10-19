@@ -1,13 +1,23 @@
 /** Fabriques d'objets du domaine, partagées par le store et les données de démonstration. */
+import { atelierStatusChoices } from '@/engine/field-types'
 import { newId } from '@/lib/ids'
 import type { Field, SelectChoice, Table, TableRecord, View, ViewMode } from '@/types/domain'
 
+/**
+ * Statuts d'une nouvelle table : quatre libellés officiels de la Suite Atelier
+ * (docs/SUITE.md §1.4), donc affichés avec leurs couleurs officielles.
+ */
 export const DEFAULT_STATUS_CHOICES: SelectChoice[] = [
   { id: 'opt_todo', label: 'À faire', color: 'gray' },
   { id: 'opt_doing', label: 'En cours', color: 'blue' },
-  { id: 'opt_done', label: 'Validé', color: 'green' },
-  { id: 'opt_blocked', label: 'Bloqué', color: 'red' },
+  { id: 'opt_done', label: 'Terminée', color: 'green' },
+  { id: 'opt_blocked', label: 'Bloquée', color: 'red' },
 ]
+
+/** Préréglage « Statuts Atelier » : les 8 statuts du workflow commun. */
+export function atelierStatusPreset(): SelectChoice[] {
+  return atelierStatusChoices()
+}
 
 export function createView(mode: ViewMode, patch: Partial<View> = {}): View {
   const names: Record<ViewMode, string> = { hybrid: 'Grille', sheet: 'Tableur', kanban: 'Kanban' }

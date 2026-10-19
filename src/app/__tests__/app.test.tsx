@@ -70,8 +70,8 @@ describe('grille hybride', () => {
     fireEvent.mouseDown(cell('rec_03', 'status'))
     fireEvent.keyDown(grid(), { key: 'Enter' })
     const input = within(cell('rec_03', 'status')).getByRole('textbox')
-    fireEvent.change(input, { target: { value: 'val' } })
-    fireEvent.mouseDown(screen.getByRole('option', { name: 'Validé' }))
+    fireEvent.change(input, { target: { value: 'term' } })
+    fireEvent.mouseDown(screen.getByRole('option', { name: 'Terminée' }))
     return Promise.resolve().then(() => {
       expect(useDataStore.getState().tables.tbl_planning_lots?.records.rec_03?.cells.status).toBe(
         'opt_done',
@@ -170,24 +170,25 @@ describe('modes et navigation', () => {
 })
 
 describe('export DataFlow', () => {
-  const openExport = () => {
-    fireEvent.click(screen.getByRole('button', { name: /Exporter vers atelier_projets/ }))
-    return screen.getByRole('dialog', { name: 'Exporter vers atelier_projets' })
+  // Le dialogue est chargé à la demande.
+  const openExport = async () => {
+    fireEvent.click(screen.getByRole('button', { name: /Exporter vers Atelier Projets/ }))
+    return screen.findByRole('dialog', { name: 'Exporter vers Atelier Projets' })
   }
 
-  it('montre une table prête et la pastille correspondante', () => {
+  it('montre une table prête et la pastille correspondante', async () => {
     render(<App />)
     expect(
-      screen.getAllByRole('img', { name: 'Prête pour atelier_projets' }).length,
+      screen.getAllByRole('img', { name: 'Prête pour Atelier Projets' }).length,
     ).toBeGreaterThan(0)
-    const dialog = openExport()
+    const dialog = await openExport()
     expect(within(dialog).getByText(/Tout est conforme au schéma 2.1.0/)).toBeTruthy()
     expect(within(dialog).getByText(/Toute la table/).textContent).toContain('3 lignes')
   })
 
-  it('bloque l’export quand plus aucune colonne ne porte le titre', () => {
+  it('bloque l’export quand plus aucune colonne ne porte le titre', async () => {
     render(<App />)
-    const dialog = openExport()
+    const dialog = await openExport()
     fireEvent.change(within(dialog).getByRole('combobox', { name: /Lot \/ Tâche/ }), {
       target: { value: 'custom' },
     })
@@ -206,7 +207,7 @@ describe('export DataFlow', () => {
     }
     URL.revokeObjectURL = () => {}
     render(<App />)
-    const dialog = openExport()
+    const dialog = await openExport()
     await act(async () => {
       fireEvent.click(within(dialog).getByRole('button', { name: 'Télécharger le JSON' }))
     })
@@ -216,6 +217,50 @@ describe('export DataFlow', () => {
     expect(useDataStore.getState().integrations.atelierProjets.lastExport?.ok).toBe(true)
   })
 
+  it('envoi direct sans adresse : préréglage « Atelier Projets (local) » actif par défaut', async () => {
+    expect(useDataStore.getState().integrations.atelierProjets.webhookUrl).toBeUndefined()
+    render(<App />)
+    const dialog = await openExport()
+    fireEvent.click(within(dialog).getByText('Envoi direct'))
+    const url = within(dialog).getByPlaceholderText(/atelier-projets.example/) as HTMLInputElement
+    expect(url.value).toBe('http://127.0.0.1:3000/api/imports/atelier-tab')
+    expect(
+      within(dialog)
+        .getByRole('button', { name: /Atelier Projets \(local\)/ })
+        .getAttribute('aria-pressed'),
+    ).toBe('true')
+    expect(useDataStore.getState().integrations.atelierProjets.webhookUrl).toBe(
+      'http://127.0.0.1:3000/api/imports/atelier-tab',
+    )
+    expect(
+      (
+        within(dialog).getByRole('button', {
+          name: 'Envoyer à Atelier Projets',
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(false)
+  })
+
+  it('envoi direct : une adresse déjà enregistrée n’est pas remplacée', async () => {
+    act(() => {
+      useDataStore
+        .getState()
+        .setAtelierIntegration({ webhookUrl: 'https://atelier.example/api/import' })
+    })
+    render(<App />)
+    const dialog = await openExport()
+    const url = within(dialog).getByPlaceholderText(/atelier-projets.example/) as HTMLInputElement
+    expect(url.value).toBe('https://atelier.example/api/import')
+    expect(
+      within(dialog)
+        .getByRole('button', { name: /Atelier Projets \(local\)/ })
+        .getAttribute('aria-pressed'),
+    ).toBe('false')
+    expect(useDataStore.getState().integrations.atelierProjets.webhookUrl).toBe(
+      'https://atelier.example/api/import',
+    )
+  })
+
   it('envoie au webhook configuré', async () => {
     const calls: [string, RequestInit][] = []
     globalThis.fetch = (async (url: string, init: RequestInit) => {
@@ -223,13 +268,13 @@ describe('export DataFlow', () => {
       return new Response('{}', { status: 201 })
     }) as typeof fetch
     render(<App />)
-    const dialog = openExport()
+    const dialog = await openExport()
     fireEvent.click(within(dialog).getByText('Envoi direct'))
     const url = within(dialog).getByPlaceholderText(/atelier-projets.example/)
     fireEvent.change(url, { target: { value: 'https://atelier.example/api/import' } })
     fireEvent.blur(url)
     await act(async () => {
-      fireEvent.click(within(dialog).getByRole('button', { name: 'Envoyer à atelier_projets' }))
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Envoyer à Atelier Projets' }))
     })
     expect(calls[0]?.[0]).toBe('https://atelier.example/api/import')
     expect(within(dialog).getByRole('status').textContent).toMatch(/3 lignes envoyées/)

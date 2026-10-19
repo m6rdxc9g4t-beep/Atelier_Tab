@@ -54,12 +54,13 @@ Les opérations structurelles (`engine/table/table-ops.ts`) réécrivent les for
 `StorageAdapter` (getItem / setItem) est branché sur le middleware `persist` de Zustand.
 
 - **App de bureau** : `desktopAdapter` envoie l'état au processus principal, qui l'écrit dans `~/Atelier_Tab` via `desktop/file-store.ts` (un fichier par table, écritures atomiques, seuls les fichiers modifiés). Le dossier est surveillé : une modification faite par Claude Code ou un éditeur est relue et poussée à l'interface (`data:external`). Un fichier invalide est signalé et n'est pas écrasé tant que l'app ne modifie pas cette table.
+- **Instantanés pour Atelier Viz** : après chaque enregistrement, le processus principal recalcule les tables modifiées avec le moteur (`src/dataflow/snapshot.ts`, pur) et écrit `exports/<tableId>.json` (`desktop/snapshots.ts`). Voir [`DATAFLOW_SPEC.md`](DATAFLOW_SPEC.md#instantanés-pour-atelier-viz).
 - **Navigateur** : IndexedDB (`idb-keyval`).
 - Le format des fichiers est défini et validé dans `src/storage/format.ts` (pur, testé). Le jeton du webhook est rangé à part, hors du dossier partagé.
 
 ## IA
 
-`src/ai/tools.ts` définit 14 outils (schémas Zod convertis en JSON Schema) qui agissent sur un `DataStore` à travers ses actions : mêmes conversions de saisie, mêmes réécritures de formules, même moteur que l'interface.
+`src/ai/tools.ts` définit 15 outils (schémas Zod convertis en JSON Schema) qui agissent sur un `DataStore` à travers ses actions : mêmes conversions de saisie, mêmes réécritures de formules, même moteur que l'interface.
 
 ```text
 Claude Code ──stdio──▶ atelier-mcp (desktop/mcp-server.ts)
@@ -72,6 +73,15 @@ Ollama ◀──/api/chat── processus principal ◀──IPC── panneau A
 ```
 
 Le serveur MCP est livré dans l'app (`Contents/Resources/atelier-mcp`) et s'exécute avec le Node.js d'Electron (`ELECTRON_RUN_AS_NODE`) : rien à installer. Voir [ADR 0003](adr/0003-acces-ia.md).
+
+## Suite Atelier
+
+Contrat commun : [`SUITE.md`](SUITE.md). Côté Tab :
+
+- thème : `src/styles/atelier-ds/` (copie verbatim) → jetons dérivés dans `src/index.css` ; `useTheme` pose `class="dark"` et `data-theme` ;
+- sélecteur d'apps : `src/lib/suite.ts` + `components/layout/SuiteSwitcher.tsx` ; dans l'app de bureau, ouverture par `shell.openExternal` via l'IPC `suite:open` (http(s) vers 127.0.0.1 / localhost uniquement) ;
+- envoi à Atelier Projets local depuis l'app de bureau : IPC `suite:post`, requête relayée sans en-tête `Origin` (Projets refuse l'origine `null` et `app://atelier`) ; voir `DATAFLOW_SPEC.md` ;
+- IPC : chaque canal du processus principal n'accepte que les messages de l'interface (`event.senderFrame.url` sous `app://atelier/`, `desktop/ipc-guard.ts`) ; `data:save` revalide l'état reçu (`parseAppState` de `src/storage/format.ts`) et toute écriture disque est confinée à son dossier (`desktop/safe-path.ts`).
 
 ## Décisions
 

@@ -25,6 +25,29 @@ export {
   sendToWebhook,
   isValidWebhookUrl,
   type WebhookConfig,
+  type WebhookDeps,
+  type WebhookFetch,
   type WebhookResult,
 } from './transports/webhook'
+export {
+  PROJETS_LOCAL_IMPORT_URL,
+  PROJETS_PRESET_LABEL,
+  WEBHOOK_PRESETS,
+  defaultWebhookUrl,
+  describeProjetsSummary,
+  isProjetsImportUrl,
+  parseProjetsSummary,
+  withProjetsParams,
+  type ProjetsImportSummary,
+  type WebhookPreset,
+} from './transports/projets'
 export { downloadText, exportFilename, slugify } from './transports/download'
+export {
+  SNAPSHOTS_DIR,
+  buildSnapshotPayload,
+  isSnapshotOf,
+  serializeSnapshot,
+  sheetFor,
+  snapshotFile,
+  snapshotFingerprint,
+} from './snapshot'

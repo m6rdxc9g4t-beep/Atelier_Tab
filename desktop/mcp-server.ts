@@ -1,5 +1,5 @@
 /**
- * Serveur MCP d'Atelier_Tab (stdio), pour Claude Code et tout client MCP.
+ * Serveur MCP d'Atelier Tab (stdio), pour Claude Code et tout client MCP.
  *
  * À chaque appel : relecture du dossier de données, exécution de l'outil avec le même
  * store et le même moteur que l'app, puis écriture des seuls fichiers modifiés. L'app,
@@ -14,18 +14,22 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 import { createHeadlessSession } from '@/ai/headless'
 import { runTool, toolSchemas } from '@/ai/tools'
 import { defaultDataDir, defaultSecretsFile, FileStore } from './file-store'
+import { SnapshotWriter } from './snapshots'
 
 declare const __APP_VERSION__: string
 
 const dataDir = defaultDataDir()
 const store = new FileStore({ dir: dataDir, secretsFile: defaultSecretsFile() })
+const snapshots = new SnapshotWriter({ dir: dataDir })
 
-const INSTRUCTIONS = `Atelier_Tab est un tableur-base de données. Les tables ont des colonnes typées (lettres A, B, C…) et des lignes numérotées à partir de 1, comme dans Excel.
+const INSTRUCTIONS = `Atelier Tab est un tableur-base de données. Les tables ont des colonnes typées (lettres A, B, C…) et des lignes numérotées à partir de 1, comme dans Excel.
 - Commence par list_tables puis read_table pour connaître les colonnes et les lignes.
 - Les valeurs s'écrivent comme dans la grille : "45 000", "30/11/2026", libellé du statut, nom du responsable, formules "=SUM(C1:C3)".
 - Une colonne de type formula a une formule écrite pour la ligne 1, recopiée sur chaque ligne.
 - Les lignes de total (total_row) sont exclues des sommes et de l'export ; add_rows insère avant elles.
 - Pour exporter vers atelier_projets : check_export puis export_table.
+- Une colonne de statut peut recevoir le préréglage « Statuts Atelier » (preset: "atelier") : les 8 statuts communs à la Suite Atelier.
+- Instantanés lus par Atelier Viz : ${path.join(dataDir, 'exports')}/<id de table>.json, mis à jour automatiquement.
 Données : ${dataDir}`
 
 function expandHome(p: string): string {
@@ -66,7 +70,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       content: [
         {
           type: 'text' as const,
-          text: `Aucune donnée dans ${dataDir}. Ouvrez l’application Atelier_Tab une première fois pour créer le dossier (vos données existantes y seront reprises).`,
+          text: `Aucune donnée dans ${dataDir}. Ouvrez l’application Atelier Tab une première fois pour créer le dossier (vos données existantes y seront reprises).`,
         },
       ],
     }
@@ -74,7 +78,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const session = createHeadlessSession(data, saveExport)
   try {
     const result = await runTool(request.params.name, request.params.arguments ?? {}, session.host)
-    if (result.ok) store.save(session.snapshot())
+    if (result.ok) {
+      const next = session.snapshot()
+      if (store.save(next).length > 0) {
+        try {
+          snapshots.update(next)
+        } catch {
+          /* un instantané en échec n'empêche pas la réponse */
+        }
+      }
+    }
     const content = [{ type: 'text' as const, text: result.content }]
     if (errors.length) {
       content.push({

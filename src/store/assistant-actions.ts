@@ -7,13 +7,16 @@ import type { ToolHost } from '@/ai/tools'
 import { downloadText } from '@/dataflow'
 import { getDesktopApi } from '@/services/desktop'
 import { useAssistant } from './assistant.store'
+import { desktopAwareFetch } from './export-actions'
 import { getSheet, useDataStore, useUIStore } from './index'
 
 /** Outils exécutés directement sur le store de l'app : l'interface se met à jour en direct. */
 export function appToolHost(): ToolHost {
+  const webhookFetch = desktopAwareFetch(getDesktopApi())
   return {
     store: useDataStore,
     getSheet,
+    ...(webhookFetch ? { webhookFetch } : {}),
     async saveExport(filename, content, mime) {
       const desktop = getDesktopApi()
       if (desktop) return desktop.saveExport(filename, content)

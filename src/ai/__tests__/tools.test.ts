@@ -38,6 +38,7 @@ describe('définitions', () => {
       'rename',
       'evaluate',
       'check_export',
+      'configure_export',
       'export_table',
     ])
     const setCells = schemas.find((s) => s.name === 'set_cells')!
@@ -129,11 +130,13 @@ describe('modification', () => {
       table: 'tbl_planning_lots',
       cells: [
         { row: 1, column: 'C', value: 1 },
-        { row: 2, column: 'Statut', value: 'Terminé' },
+        { row: 2, column: 'Statut', value: 'Livré' },
       ],
     })
     expect(res.ok).toBe(false)
-    expect(res.content).toContain('Choix possibles : À faire, En cours, Validé, Bloqué')
+    expect(res.content).toContain(
+      'Choix possibles : À faire, En cours, En revue, En attente, Bloquée, Résolue, Terminée, Rejetée',
+    )
     const after = await call('read_table', { table: 'tbl_planning_lots' })
     expect(after.json.rows[0].cells.C).toBe(45000)
   })
@@ -204,11 +207,11 @@ describe('modification', () => {
     await call('update_column', {
       table: 'Planning & Lots',
       column: 'Statut',
-      choices: ['À faire', 'En cours', 'Validé', 'Réceptionné'],
+      choices: ['À faire', 'En cours', 'Terminée', 'Réceptionné'],
     })
     const read = await call('read_table', { table: 'Planning & Lots' })
-    expect(read.json.columns[1].choices).toEqual(['À faire', 'En cours', 'Validé', 'Réceptionné'])
-    expect(read.json.rows[1].cells.B).toBe('Validé')
+    expect(read.json.columns[1].choices).toEqual(['À faire', 'En cours', 'Terminée', 'Réceptionné'])
+    expect(read.json.rows[1].cells.B).toBe('Terminée')
   })
 
   it('crée un projet et une table avec ses colonnes', async () => {
@@ -260,6 +263,96 @@ describe('modification', () => {
   })
 })
 
+describe('statuts de la Suite Atelier', () => {
+  it('ajoute une colonne avec le préréglage « Statuts Atelier »', async () => {
+    open()
+    const { json } = await call('add_column', {
+      table: 'Matériaux',
+      label: 'Avancement',
+      type: 'select',
+      preset: 'atelier',
+    })
+    expect(json.added.choices).toEqual([
+      'À faire',
+      'En cours',
+      'En revue',
+      'En attente',
+      'Bloquée',
+      'Résolue',
+      'Terminée',
+      'Rejetée',
+    ])
+    const set = await call('set_cells', {
+      table: 'Matériaux',
+      cells: [{ row: 1, column: 'Avancement', value: 'Fait' }],
+    })
+    expect(set.json.updated[0].value).toBe('Terminée')
+  })
+
+  it('applique le préréglage à une colonne existante sans perdre les valeurs', async () => {
+    open()
+    await call('update_column', {
+      table: 'Planning & Lots',
+      column: 'Statut',
+      choices: ['À faire', 'En cours', 'Validé', 'Bloqué'],
+    })
+    await call('set_cells', {
+      table: 'Planning & Lots',
+      cells: [
+        { row: 1, column: 'B', value: 'Validé' },
+        { row: 2, column: 'B', value: 'Bloqué' },
+      ],
+    })
+    const { json } = await call('update_column', {
+      table: 'Planning & Lots',
+      column: 'Statut',
+      preset: 'atelier',
+    })
+    expect(json.updated.choices).toEqual([
+      'À faire',
+      'En cours',
+      'En revue',
+      'En attente',
+      'Bloquée',
+      'Résolue',
+      'Terminée',
+      'Rejetée',
+      'Validé',
+    ])
+    const read = await call('read_table', { table: 'Planning & Lots' })
+    expect(read.json.rows.slice(0, 3).map((r: { cells: { B: string } }) => r.cells.B)).toEqual([
+      'Validé',
+      'Bloquée',
+      'À faire',
+    ])
+  })
+
+  it('refuse le préréglage hors colonne de statut', async () => {
+    open()
+    const res = await call('add_column', {
+      table: 'Matériaux',
+      label: 'X',
+      type: 'text',
+      preset: 'atelier',
+    })
+    expect(res.ok).toBe(false)
+    expect(res.content).toMatch(/type select/)
+  })
+
+  it('un libellé de statut reconnu prend la teinte officielle', async () => {
+    open()
+    await call('add_column', {
+      table: 'Matériaux',
+      label: 'Suivi',
+      type: 'select',
+      choices: ['Réceptionné', 'Rejeté', 'En revue'],
+    })
+    const table = session!.snapshot().tables.tbl_materiaux!
+    const field = Object.values(table.fields).find((f) => f.label === 'Suivi')!
+    expect(field.options?.choices?.map((c) => c.color)).toEqual(['gray', 'red', 'violet'])
+  })
+})
+
 describe('export', () => {
   it('vérifie une table', async () => {
     open()
@@ -289,5 +382,47 @@ describe('export', () => {
     const res = await call('export_table', { table: 'Planning & Lots', format: 'webhook' })
     expect(res.ok).toBe(false)
     expect(res.content).toMatch(/Aucun webhook configuré/)
+    expect(res.content).toContain('http://127.0.0.1:3000/api/imports/atelier-tab')
+  })
+
+  it('configure le préréglage Atelier Projets et le projet cible', async () => {
+    open()
+    expect((await call('configure_export')).json).toEqual({
+      webhook_url: null,
+      atelier_projets: false,
+      project_id: null,
+      send_url: null,
+    })
+    const { json } = await call('configure_export', {
+      preset: 'atelier-projets-local',
+      project_id: 3,
+    })
+    expect(json).toEqual({
+      webhook_url: 'http://127.0.0.1:3000/api/imports/atelier-tab',
+      atelier_projets: true,
+      project_id: '3',
+      send_url: 'http://127.0.0.1:3000/api/imports/atelier-tab?projectId=3',
+    })
+    expect((await call('configure_export', { url: 'http://exemple.fr/hook' })).ok).toBe(false)
+    expect((await call('configure_export', { project_id: '' })).json.project_id).toBeNull()
+  })
+
+  it('envoie à Atelier Projets et renvoie son résumé', async () => {
+    open()
+    const sent: string[] = []
+    session!.host.webhookFetch = async (url) => {
+      sent.push(url)
+      return {
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({ projectId: 3, created: 3, updated: 0, skipped: 0, warnings: [] }),
+      }
+    }
+    await call('configure_export', { preset: 'atelier-projets-local', project_id: '3' })
+    const { json } = await call('export_table', { table: 'Planning & Lots', format: 'webhook' })
+    expect(sent).toEqual(['http://127.0.0.1:3000/api/imports/atelier-tab?projectId=3'])
+    expect(json.message).toBe('3 ligne(s) envoyée(s) — Atelier Projets : 3 créés')
+    expect(json.atelier_projets).toMatchObject({ projectId: 3, created: 3, warnings: [] })
   })
 })

@@ -9,9 +9,14 @@ import {
   sendToWebhook,
   toEnrichedCsv,
   validatePayload,
+  withProjetsParams,
   type AtelierPayload,
+  type ProjetsImportSummary,
   type ValidationReport,
+  type WebhookFetch,
 } from '@/dataflow'
+import { isLocalProjetsImportUrl } from '@/lib/local-url'
+import { getDesktopApi, type DesktopApi } from '@/services/desktop'
 import type { ExportMethod } from '@/types/domain'
 import { getSheet, useDataStore } from './index'
 
@@ -32,6 +37,29 @@ export function prepareExport(tableId: string, recordIds?: string[]): PreparedEx
 export interface ExportOutcome {
   ok: boolean
   message: string
+  /** Résumé d'import renvoyé par Atelier Projets (envoi direct). */
+  summary?: ProjetsImportSummary
+}
+
+/**
+ * App de bureau : l'interface a l'origine `app://atelier`, qu'Atelier Projets n'admet pas
+ * (CORS limité à http://127.0.0.1:* et http://localhost:* ; l'origine `null` est refusée,
+ * docs/SUITE.md §4.1). Une requête vers la route d'import d'un Atelier Projets local passe
+ * donc par le processus principal, qui l'envoie sans en-tête Origin, comme un script local.
+ * Toute autre adresse reste un `fetch` normal.
+ */
+export function desktopAwareFetch(desktop: DesktopApi | undefined): WebhookFetch | undefined {
+  if (!desktop) return undefined
+  return async (url, init) => {
+    if (!isLocalProjetsImportUrl(url)) return fetch(url, init)
+    const res = await desktop.postLocal({ url, headers: init.headers, body: init.body })
+    if (res.status === 0) throw new TypeError(res.error ?? 'Serveur injoignable')
+    return {
+      ok: res.status >= 200 && res.status < 300,
+      status: res.status,
+      text: async () => res.body,
+    }
+  }
 }
 
 export async function runExport(
@@ -68,14 +96,20 @@ export async function runExport(
       message: `${rows} ligne${rows > 1 ? 's' : ''} exportée${rows > 1 ? 's' : ''} en CSV`,
     }
   } else {
-    const { webhookUrl, token } = state.integrations.atelierProjets
+    const { webhookUrl, token, projectId } = state.integrations.atelierProjets
     if (!webhookUrl) return { ok: false, message: 'Renseignez l’adresse du webhook' }
-    const res = await sendToWebhook(payload, { url: webhookUrl, token })
+    const fetchVia = desktopAwareFetch(getDesktopApi())
+    const res = await sendToWebhook(
+      payload,
+      { url: withProjetsParams(webhookUrl, { projectId }), token },
+      fetchVia ? { fetch: fetchVia } : {},
+    )
     outcome = {
       ok: res.ok,
       message: res.ok
         ? `${rows} ligne${rows > 1 ? 's' : ''} envoyée${rows > 1 ? 's' : ''} — ${res.message}`
         : res.message,
+      ...(res.summary ? { summary: res.summary } : {}),
     }
   }
 

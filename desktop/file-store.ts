@@ -14,9 +14,11 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import {
+  APP_STATE_SOURCE,
   assembleData,
   DataFileError,
   INDEX_FILE,
+  parseAppState,
   parseIndexFile,
   parseTableFile,
   serializeData,
@@ -25,6 +27,7 @@ import {
   type IndexFile,
 } from '@/storage/format'
 import type { AppData, Table } from '@/types/domain'
+import { resolveInside } from './safe-path'
 
 export interface LoadResult {
   /** null : le dossier ne contient pas encore de données. */
@@ -38,7 +41,7 @@ export interface FileStoreOptions {
   secretsFile?: string
 }
 
-/** Dossier de données par défaut : ~/Atelier_Tab (ou ATELIER_TAB_DATA). */
+/** Dossier de données par défaut : ~/Atelier_Tab (ou ATELIER_TAB_DATA). Nom technique inchangé. */
 export function defaultDataDir(): string {
   return process.env.ATELIER_TAB_DATA || path.join(os.homedir(), 'Atelier_Tab')
 }
@@ -51,6 +54,28 @@ export function defaultSecretsFile(): string {
       ? path.join(os.homedir(), 'Library', 'Application Support')
       : process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config')
   return path.join(base, 'Atelier_Tab', 'secrets.json')
+}
+
+/**
+ * Lit la requête `data:save` de l'interface (JSON du store persisté, `{ state, version }`).
+ * Renvoie null s'il n'y a pas d'état à enregistrer ; lève une erreur si le message ou l'état
+ * est invalide (schémas de `src/storage/format.ts`, ids de table sûrs). Rien ne doit être
+ * écrit dans ce cas.
+ */
+export function parseSaveRequest(json: unknown): AppData | null {
+  if (typeof json !== 'string') throw new DataFileError(APP_STATE_SOURCE, 'message invalide')
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(json)
+  } catch {
+    throw new DataFileError(APP_STATE_SOURCE, 'JSON invalide')
+  }
+  if (typeof parsed !== 'object' || parsed === null) {
+    throw new DataFileError(APP_STATE_SOURCE, 'message invalide')
+  }
+  const state = (parsed as { state?: unknown }).state
+  if (state === undefined || state === null) return null
+  return parseAppState(state)
 }
 
 interface Secrets {
@@ -80,6 +105,22 @@ export class FileStore {
 
   private abs(relative: string): string {
     return path.join(this.dir, relative)
+  }
+
+  /**
+   * Chemin absolu d'un fichier à écrire ou supprimer, vérifié : `atelier.json` à la racine,
+   * une table directement dans `tables/`. Tout autre chemin (id de table `../x`…) est refusé.
+   */
+  private writablePath(relative: string): string {
+    if (relative === INDEX_FILE) return resolveInside(this.dir, INDEX_FILE)
+    const tableId = tableIdFromPath(relative)
+    if (!tableId) throw new DataFileError(relative, 'chemin d’écriture refusé')
+    const tablesDir = this.abs(TABLES_DIR)
+    const target = resolveInside(tablesDir, `${tableId}.json`)
+    if (path.dirname(target) !== path.resolve(tablesDir)) {
+      throw new DataFileError(relative, 'chemin d’écriture refusé')
+    }
+    return target
   }
 
   private read(relative: string): string | null {
@@ -185,7 +226,7 @@ export class FileStore {
       const tid = tableIdFromPath(relative)
       if (!tid) continue
       try {
-        fs.rmSync(this.abs(relative), { force: true })
+        fs.rmSync(this.writablePath(relative), { force: true })
       } catch {
         /* déjà supprimé */
       }
@@ -246,7 +287,7 @@ export class FileStore {
   }
 
   private writeAtomic(relative: string, content: string): void {
-    const target = this.abs(relative)
+    const target = this.writablePath(relative)
     const tmp = path.join(path.dirname(target), `.${path.basename(target)}.${process.pid}.tmp`)
     fs.writeFileSync(tmp, content, 'utf8')
     fs.renameSync(tmp, target)
@@ -272,10 +313,10 @@ export class FileStore {
 }
 
 /** Guide placé à la racine du dossier, lu automatiquement par Claude Code. */
-export const DATA_DIR_GUIDE = `# Données Atelier_Tab
+export const DATA_DIR_GUIDE = `# Données Atelier Tab
 
-Ce dossier contient les données de l'application Atelier_Tab. L'app se met à jour
-automatiquement quand un fichier est modifié.
+Ce dossier contient les données de l'application Atelier Tab (Suite Atelier). L'app se met
+à jour automatiquement quand un fichier est modifié.
 
 ## Méthode recommandée : les outils MCP « atelier-tab »
 
@@ -286,9 +327,10 @@ formules recalculées, lignes de total étendues, validation de l'export).
 - list_tables, read_table : lire
 - set_cells, add_rows, delete_rows : modifier les lignes
 - add_column, update_column, delete_column : modifier les colonnes
+  (preset: "atelier" pour une colonne de statut avec les 8 statuts de la Suite Atelier)
 - create_project, create_table, rename : organiser
 - evaluate : calculer une formule
-- check_export, export_table : exporter vers atelier_projets
+- check_export, export_table : exporter vers Atelier Projets (atelier_projets)
 
 ## Format des fichiers (édition directe)
 
@@ -306,7 +348,20 @@ formules recalculées, lignes de total étendues, validation de l'export).
 - Les valeurs calculées ne sont pas enregistrées : l'app les recalcule.
 - Après avoir inséré ou supprimé une ligne à la main, mets à jour les formules qui
   référencent les lignes suivantes (les outils MCP le font automatiquement).
+
+## Dossier \`exports/\`
+
+- \`exports/<id de table>.json\` : instantané de chaque table, lu par Atelier Viz (connecteur
+  « Atelier Tab »). Enveloppe DataFlow v2.1.0 (\`target_system\`, \`schema_version\`,
+  \`project.columns_schema\`, \`project.records\` avec \`raw\` et \`computed\`), réécrite par l'app
+  après chaque enregistrement et supprimée avec la table. Ne pas modifier : ces fichiers sont
+  régénérés ; modifie la table dans \`tables/\`.
+- \`exports/atelier_projets_<table>_<date>.json|csv\` : exports manuels (dialogue d'export ou
+  outil export_table), jamais modifiés par l'app.
 `
+
+/** Titres des versions de ce guide écrites par l'app (avant et après le renommage affiché). */
+const GUIDE_HEADINGS = ['# Données Atelier Tab', '# Données Atelier_Tab']
 
 /** Écrit le guide du dossier s'il est absent ou s'il s'agit d'une ancienne version du nôtre. */
 export function ensureDataDirGuide(dir: string): void {
@@ -314,7 +369,7 @@ export function ensureDataDirGuide(dir: string): void {
   try {
     const current = fs.readFileSync(file, 'utf8')
     // Un CLAUDE.md écrit par l'utilisateur n'est jamais remplacé.
-    if (current === DATA_DIR_GUIDE || !current.startsWith('# Données Atelier_Tab')) return
+    if (current === DATA_DIR_GUIDE || !GUIDE_HEADINGS.some((h) => current.startsWith(h))) return
   } catch {
     /* absent */
   }

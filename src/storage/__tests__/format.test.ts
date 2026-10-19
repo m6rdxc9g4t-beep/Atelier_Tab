@@ -121,3 +121,33 @@ describe('tolérance aux éditions externes', () => {
     expect(assembleData(index, { tbl_o: orphan }).tables.tbl_o).toBeUndefined()
   })
 })
+
+describe('projet cible Atelier Projets (integrations.atelierProjets.projectId)', () => {
+  const index = (atelierProjets: unknown) =>
+    JSON.stringify({ workspaces: {}, projects: {}, integrations: { atelierProjets } })
+
+  it('est enregistré et relu', () => {
+    const data = createDemoData()
+    data.integrations.atelierProjets = {
+      webhookUrl: 'http://127.0.0.1:3000/api/imports/atelier-tab',
+      projectId: '3',
+    }
+    const text = serializeData(data).get('atelier.json')!
+    expect(JSON.parse(text).integrations.atelierProjets.projectId).toBe('3')
+    const rebuilt = assembleData(parseIndexFile(text), {})
+    expect(rebuilt.integrations.atelierProjets).toEqual(data.integrations.atelierProjets)
+  })
+
+  it('lecture tolérante : ancien fichier, nombre saisi à la main, valeur invalide', () => {
+    const read = (v: unknown) =>
+      assembleData(parseIndexFile(index(v)), {}).integrations.atelierProjets
+    expect(read({ webhookUrl: 'https://a.example' })).toEqual({ webhookUrl: 'https://a.example' })
+    expect(read({ projectId: 7 })).toEqual({ projectId: '7' })
+    expect(read({ projectId: '' })).toEqual({})
+    expect(read({ projectId: { id: 3 } })).toEqual({})
+    // Un journal d'export abîmé n'empêche pas le chargement.
+    expect(read({ webhookUrl: 'https://a.example', lastExport: { at: 1 } })).toEqual({
+      webhookUrl: 'https://a.example',
+    })
+  })
+})

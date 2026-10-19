@@ -21,7 +21,7 @@ const SUGGESTIONS = [
   'Résume cette table et ses totaux',
   'Ajoute une ligne « Menuiseries » à 12 000 € HT',
   'Ajoute une colonne Marge = Coût TTC − Coût HT',
-  'Cette table est-elle prête pour l’export vers atelier_projets ?',
+  'Cette table est-elle prête pour l’export vers Atelier Projets ?',
 ]
 
 /** Panneau latéral de l'assistant, branché sur Ollama (modèles locaux). */
@@ -263,7 +263,7 @@ function EmptyState({ onPick }: { onPick: (s: string) => void }) {
     <div className="flex flex-col gap-3">
       <p className="text-muted">
         L’assistant lit et modifie vos tables avec les mêmes règles que la grille : formules, totaux
-        et export vers atelier_projets.
+        et export vers Atelier Projets.
       </p>
       <ul className="flex flex-col gap-1.5">
         {SUGGESTIONS.map((s) => (

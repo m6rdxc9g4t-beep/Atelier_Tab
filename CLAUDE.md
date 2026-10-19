@@ -1,20 +1,20 @@
-# CLAUDE.md — Atelier_Tab
+# CLAUDE.md — Atelier Tab
 
 Instructions pour les agents qui travaillent sur ce dépôt.
 
 ## Produit
 
-Atelier_Tab combine :
+Atelier Tab (nom technique `Atelier_Tab` / `atelier-tab`) combine :
 
 1. **Un tableur** : grille réactive, barre de formules (`=SUM()`, `=AVG()`, `=MIN()`, `=MAX()`, `=IF()`, références `A1:B10`, arithmétique).
 2. **Une base de données typée** : statut/badge, date, responsable, devise, case à cocher, formule ; vues grille hybride et Kanban ; fiche détaillée par ligne.
 3. **Une navigation par projets** : Espaces de travail › Projets › Tables.
-4. **Le pont DataFlow** : export d'une table ou d'une sélection vers `atelier_projets` (JSON v2.1.0, CSV enrichi, webhook).
+4. **Le pont DataFlow** : export d'une table ou d'une sélection vers Atelier Projets (`atelier_projets` : JSON v2.1.0, CSV enrichi, webhook) et instantanés pour Atelier Viz.
 
 ## Commandes
 
 ```bash
-npm run dev          # serveur local
+npm run dev          # serveur local, http://127.0.0.1:5175 (aperçu : 4175)
 npm test             # Vitest
 npm run lint && npm run typecheck && npm test && npm run build   # ce que fait la CI
 ```
@@ -34,6 +34,15 @@ Lancer les quatre vérifications avant tout commit.
 - **Fichiers de données** : le format est défini dans `src/storage/format.ts`. Un changement de format exige une lecture tolérante de l'ancien (les fichiers peuvent être édités à la main ou par une IA) et un test.
 - `desktop/` est du code Node (processus principal Electron, accès disque, serveur MCP), construit par `npm run build:desktop` dans `dist-desktop/`.
 
+## Suite Atelier
+
+Atelier Tab fait partie de la Suite Atelier (avec Atelier Viz et Atelier Projets). Le contrat commun — design system, statuts, thème, ports, sélecteur d'apps, import Projets, instantanés Viz — est **`docs/SUITE.md`**, identique dans les trois dépôts : ne le modifie pas seul.
+
+- `src/styles/atelier-ds/` : copie verbatim du design system d'Atelier Projets ; ne pas modifier ni reformater (exclue de Prettier). Les jetons de Tab en dérivent dans `src/index.css`, sans couleur littérale.
+- Statuts : `src/engine/field-types/workflow-status.ts` (reconnaissance des libellés, préréglage « Statuts Atelier »).
+- Adresses des apps : `src/lib/suite.ts`. Import Projets : `src/dataflow/transports/projets.ts`. Instantanés : `src/dataflow/snapshot.ts` (pur) et `desktop/snapshots.ts` (disque).
+- Ports fixes : 5175 (dev) et 4175 (aperçu), `strictPort`.
+
 ## Conventions
 
 - TypeScript strict avec `noUncheckedIndexedAccess` : gérer explicitement `undefined`.
@@ -45,5 +54,6 @@ Lancer les quatre vérifications avant tout commit.
 
 - `docs/ARCHITECTURE.md` — flux de données et choix techniques
 - `docs/FORMULA_ENGINE.md` — grammaire, fonctions, erreurs
-- `docs/DATAFLOW_SPEC.md` — contrat d'export `atelier_projets`
+- `docs/DATAFLOW_SPEC.md` — contrat d'export `atelier_projets`, instantanés pour Viz
+- `docs/SUITE.md` — contrat commun de la Suite Atelier
 - `docs/adr/` — décisions d'architecture

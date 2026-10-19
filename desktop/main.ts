@@ -1,10 +1,14 @@
 /**
- * Processus principal de l'application de bureau Atelier_Tab.
+ * Processus principal de l'application de bureau Atelier Tab.
  *
  * - Interface : le build web (dist/) servi par le protocole privé `app://atelier/`.
  * - Données : dossier ~/Atelier_Tab (fichiers JSON), lu et écrit ici, surveillé pour
  *   refléter en direct les modifications faites par Claude Code ou un autre programme.
+ * - Instantanés pour Atelier Viz : ~/Atelier_Tab/exports/<tableId>.json, mis à jour après
+ *   chaque enregistrement (docs/SUITE.md §4.2).
  * - Ollama : les requêtes de l'assistant passent par ici (pas de contrainte CORS).
+ * - Suite Atelier : ouverture des autres applications et envoi vers Atelier Projets local
+ *   (adresses 127.0.0.1 / localhost uniquement).
  */
 import fs from 'node:fs'
 import path from 'node:path'
@@ -20,13 +24,33 @@ import {
   net,
   protocol,
   shell,
+  type IpcMainInvokeEvent,
   type MenuItemConstructorOptions,
 } from 'electron'
-import type { DesktopLoadResult, McpInfo, OllamaRequest, OllamaResponse } from '@/services/desktop'
+import { isLocalHttpUrl } from '@/lib/local-url'
+import type {
+  DesktopLoadResult,
+  LocalPostRequest,
+  LocalPostResponse,
+  McpInfo,
+  OllamaRequest,
+  OllamaResponse,
+} from '@/services/desktop'
 import type { AppData } from '@/types/domain'
-import { defaultDataDir, defaultSecretsFile, ensureDataDirGuide, FileStore } from './file-store'
+import {
+  defaultDataDir,
+  defaultSecretsFile,
+  ensureDataDirGuide,
+  FileStore,
+  parseSaveRequest,
+} from './file-store'
+import { guardSender } from './ipc-guard'
+import { resolveInside } from './safe-path'
+import { SnapshotWriter } from './snapshots'
+import { buildRelayRequest } from './suite-relay'
 
-const APP_NAME = 'Atelier_Tab'
+/** Nom affiché (menus, titre, boîtes de dialogue). Le dossier de données reste ~/Atelier_Tab. */
+const APP_NAME = 'Atelier Tab'
 const SCHEME = 'app'
 const HOST = 'atelier'
 const DIST = path.join(__dirname, '..', 'dist')
@@ -46,7 +70,27 @@ protocol.registerSchemesAsPrivileged([
 
 const dataDir = defaultDataDir()
 const store = new FileStore({ dir: dataDir, secretsFile: defaultSecretsFile() })
+const snapshots = new SnapshotWriter({
+  dir: dataDir,
+  onError: (e) => console.error('Instantané Atelier Viz :', e),
+})
 let stopWatching: (() => void) | null = null
+
+/**
+ * Enregistre un gestionnaire IPC réservé à l'interface de l'app (`app://atelier/…`) :
+ * un message venu d'un autre cadre est refusé sans être traité (M7).
+ */
+function handle<A extends unknown[], R>(
+  channel: string,
+  handler: (event: IpcMainInvokeEvent, ...args: A) => R,
+) {
+  ipcMain.handle(
+    channel,
+    guardSender(channel, handler, (ch, url) =>
+      console.error(`IPC ${ch} refusé : expéditeur ${String(url)}`),
+    ) as (event: IpcMainInvokeEvent, ...args: unknown[]) => R,
+  )
+}
 
 function broadcast(channel: string, payload: unknown) {
   for (const win of BrowserWindow.getAllWindows()) win.webContents.send(channel, payload)
@@ -55,37 +99,90 @@ function broadcast(channel: string, payload: unknown) {
 function startWatching() {
   if (stopWatching) return
   stopWatching = store.watch(
-    (data) => broadcast('data:external', data),
+    (data) => {
+      broadcast('data:external', data)
+      snapshots.schedule(data)
+    },
     (errors) => broadcast('data:errors', errors),
   )
 }
 
-ipcMain.handle('data:load', (): DesktopLoadResult => {
+handle('data:load', (): DesktopLoadResult => {
   fs.mkdirSync(dataDir, { recursive: true })
   ensureDataDirGuide(dataDir)
   const { data, errors } = store.load()
-  if (data) startWatching()
+  if (data) {
+    startWatching()
+    // Publie (ou met à jour) les instantanés au démarrage : tables modifiées app fermée.
+    snapshots.schedule(data)
+  }
   return { data, errors, dir: dataDir }
 })
 
-ipcMain.handle('data:save', (_event, json: string) => {
-  const parsed = JSON.parse(json) as { state?: AppData }
-  if (!parsed.state) return
-  store.save(parsed.state)
+// L'état vient de l'interface, donc d'un processus moins fiable : il est revalidé (schémas
+// de src/storage/format.ts, ids de table utilisables comme noms de fichier) avant toute
+// écriture. Un état invalide est refusé en bloc ; rien n'est écrit.
+handle('data:save', (_event, json: unknown) => {
+  let state: AppData | null
+  try {
+    state = parseSaveRequest(json)
+  } catch (e) {
+    console.error('Enregistrement refusé :', e instanceof Error ? e.message : e)
+    throw e
+  }
+  if (!state) return
+  store.save(state)
+  snapshots.schedule(state)
   startWatching()
 })
 
-ipcMain.handle('data:reveal', async () => {
+handle('data:reveal', async () => {
   await shell.openPath(dataDir)
 })
 
-ipcMain.handle('export:save', (_event, filename: string, content: string) => {
-  const safe = path.basename(filename)
+handle('export:save', (_event, filename: unknown, content: unknown) => {
+  if (typeof filename !== 'string' || typeof content !== 'string') {
+    throw new Error('Export refusé : paramètres invalides')
+  }
   const dir = path.join(dataDir, 'exports')
   fs.mkdirSync(dir, { recursive: true })
-  const target = path.join(dir, safe)
+  const target = resolveInside(dir, path.basename(filename))
   fs.writeFileSync(target, content, 'utf8')
   return target
+})
+
+// ---------------------------------------------------------------------------
+// Suite Atelier
+// ---------------------------------------------------------------------------
+
+// Ouvre une autre application de la suite dans le navigateur par défaut. Surface IPC
+// volontairement étroite : http(s) vers 127.0.0.1 / localhost uniquement.
+handle('suite:open', async (_event, url: unknown) => {
+  if (!isLocalHttpUrl(url)) return false
+  await shell.openExternal(url)
+  return true
+})
+
+// Envoi vers la route d'import d'Atelier Projets local. La page de l'app a l'origine
+// app://atelier, refusée par le CORS de Projets (seules http://127.0.0.1:* et
+// http://localhost:* y sont admises, l'origine `null` est refusée) ; depuis ce processus,
+// la requête part sans en-tête Origin, ce que Projets traite comme un appel local
+// (docs/SUITE.md §4.1).
+handle('suite:post', async (_event, raw: LocalPostRequest): Promise<LocalPostResponse> => {
+  const req = buildRelayRequest(raw)
+  if (!req) return { status: 0, body: '', error: 'Adresse non autorisée' }
+  try {
+    const res = await fetch(req.url, {
+      method: 'POST',
+      headers: req.headers,
+      body: req.body,
+      redirect: 'error',
+      signal: AbortSignal.timeout(60_000),
+    })
+    return { status: res.status, body: await res.text() }
+  } catch (e) {
+    return { status: 0, body: '', error: e instanceof Error ? e.message : String(e) }
+  }
 })
 
 // ---------------------------------------------------------------------------
@@ -102,8 +199,8 @@ function ollamaBase(): string {
   return withScheme.replace('0.0.0.0', '127.0.0.1').replace(/\/$/, '')
 }
 
-ipcMain.handle('ollama:request', async (_event, req: OllamaRequest): Promise<OllamaResponse> => {
-  if (!OLLAMA_PATHS.has(req.path))
+handle('ollama:request', async (_event, req: OllamaRequest): Promise<OllamaResponse> => {
+  if (!req || !OLLAMA_PATHS.has(req.path) || typeof req.id !== 'string')
     return { ok: false, status: 400, data: null, error: 'Requête non autorisée' }
   const controller = new AbortController()
   pendingOllama.set(req.id, controller)
@@ -143,7 +240,7 @@ ipcMain.handle('ollama:request', async (_event, req: OllamaRequest): Promise<Oll
   }
 })
 
-ipcMain.handle('ollama:cancel', (_event, id: string) => {
+handle('ollama:cancel', (_event, id: string) => {
   pendingOllama.get(id)?.abort()
 })
 
@@ -161,14 +258,14 @@ function mcpInfo(): McpInfo {
   }
 }
 
-ipcMain.handle('mcp:info', () => mcpInfo())
+handle('mcp:info', () => mcpInfo())
 
 async function showClaudeConnection(win: BrowserWindow | null) {
   const info = mcpInfo()
   const options = {
     type: 'info' as const,
     title: 'Connecter Claude Code',
-    message: 'Donner à Claude Code l’accès à Atelier_Tab',
+    message: `Donner à Claude Code l’accès à ${APP_NAME}`,
     detail:
       `Lancez cette commande une fois dans le Terminal :\n\n${info.claudeCommand}\n\n` +
       `Ensuite, dans Claude Code, demandez par exemple « Ajoute une ligne Menuiseries à 12 000 € dans Planning & Lots ».\n\n` +
@@ -259,6 +356,14 @@ function buildMenu() {
       label: 'Fichier',
       submenu: [
         { label: 'Ouvrir le dossier des données', click: () => void shell.openPath(dataDir) },
+        {
+          label: 'Ouvrir le dossier des instantanés (Atelier Viz)',
+          click: () => {
+            const dir = path.join(dataDir, 'exports')
+            fs.mkdirSync(dir, { recursive: true })
+            void shell.openPath(dir)
+          },
+        },
         { label: 'Connecter Claude Code…', click: () => void showClaudeConnection(mainWindow) },
         ...(isMac
           ? []
@@ -329,5 +434,8 @@ if (!app.requestSingleInstanceLock()) {
     if (process.platform !== 'darwin') app.quit()
   })
 
-  app.on('will-quit', () => stopWatching?.())
+  app.on('will-quit', () => {
+    snapshots.flush()
+    stopWatching?.()
+  })
 }

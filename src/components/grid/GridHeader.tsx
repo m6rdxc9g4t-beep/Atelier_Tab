@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { ChevronDown, Pencil, Plus, Trash2 } from 'lucide-react'
-import { FIELD_TYPE_LIST } from '@/engine/field-types'
+import { ChevronDown, ListChecks, Pencil, Plus, Trash2 } from 'lucide-react'
+import { ATELIER_STATUS_PRESET_NAME, FIELD_TYPE_LIST } from '@/engine/field-types'
 import { columnToLetters } from '@/engine/formula'
 import { useDataStore } from '@/store'
+import { atelierStatusPreset, DEFAULT_STATUS_CHOICES } from '@/store/factories'
 import type { Field, FieldType, Table } from '@/types/domain'
 import { MenuItem, Popover } from '@/components/ui/Popover'
 import { FIELD_ICONS, fieldWidth } from '@/lib/field-icons'
@@ -161,24 +162,30 @@ function AddColumnButton({ tableId }: { tableId: string }) {
   const [open, setOpen] = useState(false)
   const addField = useDataStore((s) => s.addField)
 
-  const add = (type: FieldType) => {
+  /** `preset` : statut avec les 8 statuts de la Suite Atelier. */
+  const add = (type: FieldType, preset?: 'atelier-statuses') => {
     setOpen(false)
     const table = useDataStore.getState().tables[tableId]
     const taken = new Set(Object.values(table?.fields ?? {}).map((f) => f.label))
     let label = DEFAULT_LABELS[type]
     for (let n = 2; taken.has(label); n++) label = `${DEFAULT_LABELS[type]} ${n}`
+    const hasWorkflow = Object.values(table?.fields ?? {}).some(
+      (f) => f.atelierMapping === 'workflow_state',
+    )
     addField(tableId, {
       label,
       type,
       ...(type === 'select'
         ? {
             options: {
-              choices: [
-                { id: 'opt_todo', label: 'À faire', color: 'gray' as const },
-                { id: 'opt_doing', label: 'En cours', color: 'blue' as const },
-                { id: 'opt_done', label: 'Validé', color: 'green' as const },
-              ],
+              choices:
+                preset === 'atelier-statuses'
+                  ? atelierStatusPreset()
+                  : DEFAULT_STATUS_CHOICES.map((c) => ({ ...c })),
             },
+            ...(preset === 'atelier-statuses' && !hasWorkflow
+              ? { atelierMapping: 'workflow_state' as const }
+              : {}),
           }
         : {}),
       ...(type === 'formula'
@@ -208,6 +215,16 @@ function AddColumnButton({ tableId }: { tableId: string }) {
             </MenuItem>
           )
         })}
+        <div className="my-1 border-t border-line" />
+        <MenuItem
+          icon={<ListChecks size={13} />}
+          onSelect={() => add('select', 'atelier-statuses')}
+        >
+          <span className="flex flex-col">
+            <span>Statut · {ATELIER_STATUS_PRESET_NAME}</span>
+            <span className="text-[11.5px] text-muted">Les 8 statuts de la suite</span>
+          </span>
+        </MenuItem>
       </Popover>
     </div>
   )

@@ -18,7 +18,19 @@ export const DATA_FORMAT_VERSION = 1
 export const INDEX_FILE = 'atelier.json'
 export const TABLES_DIR = 'tables'
 
+/**
+ * Identifiant utilisable comme nom de fichier (tables, instantanés) : lettres ASCII,
+ * chiffres, `_` et `-`. Exclut `/`, `\`, `.` et donc toute traversée de répertoire.
+ */
+export const SAFE_ID = /^[A-Za-z0-9_-]+$/
+
+export function isSafeId(value: unknown): value is string {
+  return typeof value === 'string' && SAFE_ID.test(value)
+}
+
+/** Chemin relatif du fichier d'une table. Refuse un id qui ne serait pas un nom de fichier sûr. */
 export function tableFile(tableId: string): string {
+  if (!isSafeId(tableId)) throw new DataFileError(TABLES_DIR, `id de table refusé : "${tableId}"`)
   return `${TABLES_DIR}/${tableId}.json`
 }
 
@@ -133,6 +145,17 @@ const exportLogSchema = z.object({
   message: z.string(),
 })
 
+const atelierProjetsSchema = z.object({
+  webhookUrl: z.string().optional(),
+  // Ancien fichier : absent. Édité à la main : un nombre est accepté et converti.
+  projectId: z.preprocess(
+    (v) => (typeof v === 'number' ? String(v) : typeof v === 'string' && v ? v : undefined),
+    z.string().optional(),
+  ),
+  // Un journal d'export abîmé ne doit pas empêcher de charger les données.
+  lastExport: exportLogSchema.optional().catch(undefined),
+})
+
 export const indexFileSchema = z.object({
   format: z.literal(DATA_FORMAT).optional(),
   version: z.literal(DATA_FORMAT_VERSION).optional(),
@@ -149,13 +172,20 @@ export const indexFileSchema = z.object({
     .record(z.string(), z.object({ id, name: z.string(), initials: z.string(), color: badgeColor }))
     .default({}),
   integrations: z
+    .object({ atelierProjets: atelierProjetsSchema.default({}) })
+    .default({ atelierProjets: {} }),
+})
+
+/**
+ * État complet envoyé par l'interface au processus principal (`data:save`). Mêmes règles
+ * que les fichiers, plus le jeton (rangé à part par le FileStore) et les tables.
+ */
+const appStateSchema = indexFileSchema.omit({ format: true, version: true }).extend({
+  schemaVersion: z.literal(1).optional(),
+  tables: z.record(z.string(), tableFileSchema),
+  integrations: z
     .object({
-      atelierProjets: z
-        .object({
-          webhookUrl: z.string().optional(),
-          lastExport: exportLogSchema.optional(),
-        })
-        .default({}),
+      atelierProjets: atelierProjetsSchema.extend({ token: z.string().optional() }).default({}),
     })
     .default({ atelierProjets: {} }),
 })
@@ -227,6 +257,33 @@ export function parseIndexFile(text: string): IndexFile {
   const parsed = indexFileSchema.safeParse(parseJson(INDEX_FILE, text))
   if (!parsed.success) throw new DataFileError(INDEX_FILE, describeIssues(parsed.error))
   return parsed.data
+}
+
+/** Nom donné à l'état reçu de l'interface dans les messages d'erreur. */
+export const APP_STATE_SOURCE = 'état reçu de l’interface'
+
+/**
+ * Valide l'état complet reçu d'un processus moins fiable (interface de l'app de bureau)
+ * avant toute écriture : schémas des fichiers, clé de table = id de la table, id utilisable
+ * comme nom de fichier. Lève `DataFileError` sinon. Renvoie l'état normalisé, tel que le
+ * FileStore le relirait.
+ */
+export function parseAppState(value: unknown): AppData {
+  const parsed = appStateSchema.safeParse(value)
+  if (!parsed.success) throw new DataFileError(APP_STATE_SOURCE, describeIssues(parsed.error))
+  const { tables: rawTables, integrations, schemaVersion: _v, ...rest } = parsed.data
+  void _v
+  const tables: Record<string, Table> = {}
+  for (const [key, t] of Object.entries(rawTables)) {
+    if (!isSafeId(key) || t.id !== key) {
+      throw new DataFileError(APP_STATE_SOURCE, `id de table refusé : "${key}"`)
+    }
+    tables[key] = normalizeTable(t)
+  }
+  const { token, ...atelierProjets } = integrations.atelierProjets
+  const data = assembleData({ ...rest, integrations: { atelierProjets } }, tables)
+  if (token) data.integrations.atelierProjets.token = token
+  return data
 }
 
 /** Lit et normalise une table : ordres réparés, vue par défaut créée au besoin. */
@@ -316,6 +373,11 @@ export function assembleData(index: IndexFile, tables: Record<string, Table>): A
     projects,
     tables: kept,
     collaborators: index.collaborators,
-    integrations: { atelierProjets: { ...index.integrations.atelierProjets } },
+    // Clés absentes plutôt que `undefined` (lecture tolérante ci-dessus).
+    integrations: {
+      atelierProjets: Object.fromEntries(
+        Object.entries(index.integrations.atelierProjets).filter(([, v]) => v !== undefined),
+      ),
+    },
   }
 }

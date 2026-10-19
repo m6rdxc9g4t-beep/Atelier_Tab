@@ -7,12 +7,33 @@
  * réécritures de formules à l'insertion d'une ligne, même moteur de calcul.
  */
 import { z } from 'zod'
-import { buildAtelierPayload, sendToWebhook, toEnrichedCsv, validatePayload } from '@/dataflow'
+import {
+  buildAtelierPayload,
+  isProjetsImportUrl,
+  isValidWebhookUrl,
+  PROJETS_LOCAL_IMPORT_URL,
+  PROJETS_PRESET_LABEL,
+  sendToWebhook,
+  toEnrichedCsv,
+  validatePayload,
+  WEBHOOK_PRESETS,
+  withProjetsParams,
+  type ProjetsImportSummary,
+  type WebhookFetch,
+} from '@/dataflow'
 import { exportFilename } from '@/dataflow/transports/download'
-import { parseUserInput } from '@/engine/field-types'
+import {
+  ATELIER_STATUS_PRESET_NAME,
+  mergeAtelierStatuses,
+  parseUserInput,
+  WORKFLOW_STATUSES,
+  workflowStatus,
+  workflowStatusCode,
+} from '@/engine/field-types'
 import { isError, isFormula, parseFormula, serializeValue, type CellInput } from '@/engine/formula'
 import type { TableSheet } from '@/engine/table'
 import type { DataStore } from '@/store/data.store'
+import { DEFAULT_STATUS_CHOICES } from '@/store/factories'
 import type { AppData, BadgeColor, Field, FieldType, SelectChoice, Table } from '@/types/domain'
 import {
   letterOf,
@@ -38,6 +59,8 @@ export interface ToolHost {
     mime: string,
     requestedPath?: string,
   ): Promise<string>
+  /** Transport HTTP du webhook (l'app de bureau relaie les envois vers Atelier Projets local). */
+  webhookFetch?: WebhookFetch
 }
 
 interface ToolDef<S extends z.ZodType = z.ZodType> {
@@ -103,6 +126,15 @@ const CHOICE_COLORS: BadgeColor[] = [
   'teal',
 ]
 
+const DEFAULT_CHOICE_LABELS = DEFAULT_STATUS_CHOICES.map((c) => c.label)
+
+const statusPreset = z
+  .enum(['atelier'])
+  .optional()
+  .describe(
+    `Pour type=select : "atelier" applique le préréglage « ${ATELIER_STATUS_PRESET_NAME} », les 8 statuts communs de la Suite Atelier (${WORKFLOW_STATUSES.map((s) => s.label).join(', ')}), affichés avec leurs couleurs officielles. Remplace \`choices\`.`,
+  )
+
 function data(host: ToolHost): AppData {
   return host.store.getState()
 }
@@ -166,7 +198,12 @@ function choicesFrom(labels: string[], existing: SelectChoice[] = []): SelectCho
       idCandidate = `${base}_${n}`
     }
     used.add(idCandidate)
-    return { id: idCandidate, label, color: CHOICE_COLORS[i % CHOICE_COLORS.length] as BadgeColor }
+    // Un statut de workflow reconnu prend la teinte de sa couleur officielle.
+    const code = workflowStatusCode(label)
+    const color = code
+      ? workflowStatus(code).color
+      : (CHOICE_COLORS[i % CHOICE_COLORS.length] as BadgeColor)
+    return { id: idCandidate, label, color }
   })
 }
 
@@ -428,6 +465,7 @@ export const TOOLS = [
         .array(z.string())
         .optional()
         .describe('Pour type=select : libellés des statuts, dans l’ordre'),
+      preset: statusPreset,
       position: columnRef
         .optional()
         .describe('Insérer avant cette colonne. Par défaut : à la fin.'),
@@ -443,6 +481,9 @@ export const TOOLS = [
           'Une colonne de type formula a besoin d’une formule pour la ligne 1, ex. "=C1*1.2"',
         )
       }
+      if (args.preset && args.type !== 'select') {
+        throw new ToolError('Le préréglage de statuts ne s’applique qu’aux colonnes de type select')
+      }
       const index = args.position
         ? table.fieldOrder.indexOf(resolveColumn(table, args.position).id)
         : undefined
@@ -456,7 +497,9 @@ export const TOOLS = [
           ...(args.type === 'select'
             ? {
                 options: {
-                  choices: choicesFrom(args.choices ?? ['À faire', 'En cours', 'Validé']),
+                  choices: args.preset
+                    ? mergeAtelierStatuses()
+                    : choicesFrom(args.choices ?? DEFAULT_CHOICE_LABELS),
                 },
               }
             : {}),
@@ -476,13 +519,14 @@ export const TOOLS = [
   tool({
     name: 'update_column',
     description:
-      'Modifie une colonne : libellé, formule de colonne, liste des statuts (les lignes gardent leur statut si son libellé est conservé), format du résultat ou rôle d’export.',
+      'Modifie une colonne : libellé, formule de colonne, liste des statuts (les lignes gardent leur statut si son libellé est conservé) ou préréglage « Statuts Atelier » (les statuts reconnus, ex. « Bloqué », sont convertis ; les autres sont gardés à la fin), format du résultat ou rôle d’export.',
     input: z.object({
       table: tableRef,
       column: columnRef,
       label: z.string().min(1).optional(),
       formula: z.string().optional(),
       choices: z.array(z.string()).optional(),
+      preset: statusPreset,
       format: z.enum(['number', 'currency', 'percent', 'text']).optional(),
       mapping: z.enum(MAPPING_VALUES).optional(),
     }),
@@ -492,20 +536,21 @@ export const TOOLS = [
       if (args.formula !== undefined && field.type !== 'formula') {
         throw new ToolError(`« ${field.label} » n’est pas une colonne de type formula`)
       }
-      if (args.choices && field.type !== 'select') {
+      if ((args.choices || args.preset) && field.type !== 'select') {
         throw new ToolError(`« ${field.label} » n’est pas une colonne de statut`)
       }
       if (args.format && field.type !== 'formula') {
         throw new ToolError('Le format ne s’applique qu’aux colonnes de type formula')
       }
       const options = { ...(field.options ?? {}) }
-      if (args.choices) options.choices = choicesFrom(args.choices, field.options?.choices)
+      if (args.preset) options.choices = mergeAtelierStatuses(field.options?.choices)
+      else if (args.choices) options.choices = choicesFrom(args.choices, field.options?.choices)
       if (args.format) options.resultFormat = args.format
       host.store.getState().updateField(table.id, field.id, {
         ...(args.label ? { label: args.label } : {}),
         ...(args.formula !== undefined ? { columnFormula: checkFormula(args.formula) } : {}),
         ...(args.mapping ? { atelierMapping: args.mapping } : {}),
-        ...(args.choices || args.format ? { options } : {}),
+        ...(args.choices || args.preset || args.format ? { options } : {}),
       })
       const now = freshTable(host, table.id)
       return { updated: columnInfo(now, now.fields[field.id] as Field) }
@@ -554,6 +599,7 @@ export const TOOLS = [
             formula: z.string().optional(),
             format: z.enum(['number', 'currency', 'percent', 'text']).optional(),
             choices: z.array(z.string()).optional(),
+            preset: statusPreset,
             mapping: z.enum(MAPPING_VALUES).optional(),
           }),
         )
@@ -584,7 +630,11 @@ export const TOOLS = [
             ...(mapping ? { atelierMapping: mapping } : {}),
             ...(c.type === 'select'
               ? {
-                  options: { choices: choicesFrom(c.choices ?? ['À faire', 'En cours', 'Validé']) },
+                  options: {
+                    choices: c.preset
+                      ? mergeAtelierStatuses()
+                      : choicesFrom(c.choices ?? DEFAULT_CHOICE_LABELS),
+                  },
                 }
               : {}),
             ...(c.type === 'formula' ? { options: { resultFormat: c.format ?? 'number' } } : {}),
@@ -657,9 +707,53 @@ export const TOOLS = [
   }),
 
   tool({
+    name: 'configure_export',
+    description: `Règle l’envoi direct (webhook) : préréglage « ${PROJETS_PRESET_LABEL} » (${PROJETS_LOCAL_IMPORT_URL}), autre adresse https, et projet cible dans Atelier Projets. Sans argument, renvoie la configuration actuelle. Le jeton d’accès ne se règle que dans l’app.`,
+    input: z.object({
+      preset: z
+        .enum(['atelier-projets-local'])
+        .optional()
+        .describe(`"atelier-projets-local" : ${PROJETS_LOCAL_IMPORT_URL}`),
+      url: z
+        .string()
+        .optional()
+        .describe('Adresse de l’API d’import (https, ou http://127.0.0.1 / localhost). "" efface.'),
+      project_id: z
+        .union([z.string(), z.number()])
+        .optional()
+        .describe(
+          'Atelier Projets : id du projet cible. "" : projet du même nom que le projet Atelier Tab.',
+        ),
+    }),
+    run({ preset, url, project_id }, host) {
+      const target = preset
+        ? WEBHOOK_PRESETS.find((p) => p.id === preset)?.url
+        : url !== undefined
+          ? url.trim()
+          : undefined
+      if (target && !isValidWebhookUrl(target)) {
+        throw new ToolError(
+          'Adresse invalide : utilisez https:// (ou http://127.0.0.1 / http://localhost pour cette machine)',
+        )
+      }
+      const patch: { webhookUrl?: string; projectId?: string } = {}
+      if (target !== undefined) patch.webhookUrl = target
+      if (project_id !== undefined) patch.projectId = String(project_id).trim()
+      if (Object.keys(patch).length) host.store.getState().setAtelierIntegration(patch)
+      const { webhookUrl, projectId } = data(host).integrations.atelierProjets
+      return {
+        webhook_url: webhookUrl ?? null,
+        atelier_projets: webhookUrl ? isProjetsImportUrl(webhookUrl) : false,
+        project_id: projectId ?? null,
+        send_url: webhookUrl ? withProjetsParams(webhookUrl, { projectId }) : null,
+      }
+    },
+  }),
+
+  tool({
     name: 'export_table',
     description:
-      'Exporte une table vers atelier_projets : fichier JSON (schéma 2.1.0), CSV enrichi pour Excel, ou envoi direct au webhook configuré dans l’app.',
+      'Exporte une table vers Atelier Projets (atelier_projets) : fichier JSON (schéma 2.1.0), CSV enrichi pour Excel, ou envoi direct au webhook configuré (configure_export). Un envoi à Atelier Projets renvoie son résumé (créés, mis à jour, ignorés, avertissements).',
     input: z.object({
       table: tableRef,
       format: z.enum(['json', 'csv', 'webhook']),
@@ -685,15 +779,21 @@ export const TOOLS = [
       let ok = true
       let message: string
       let location: string | undefined
+      let summary: ProjetsImportSummary | undefined
       if (format === 'webhook') {
-        const { webhookUrl, token } = d.integrations.atelierProjets
+        const { webhookUrl, token, projectId } = d.integrations.atelierProjets
         if (!webhookUrl)
           throw new ToolError(
-            'Aucun webhook configuré : renseignez son adresse dans le dialogue d’export de l’app',
+            `Aucun webhook configuré : renseignez son adresse dans le dialogue d’export de l’app (préréglage « ${PROJETS_PRESET_LABEL} » : ${PROJETS_LOCAL_IMPORT_URL})`,
           )
-        const res = await sendToWebhook(payload, { url: webhookUrl, token })
+        const res = await sendToWebhook(
+          payload,
+          { url: withProjetsParams(webhookUrl, { projectId }), token },
+          host.webhookFetch ? { fetch: host.webhookFetch } : {},
+        )
         ok = res.ok
         message = res.ok ? `${count} ligne(s) envoyée(s) — ${res.message}` : res.message
+        if (res.summary) summary = res.summary
       } else {
         const content =
           format === 'json' ? JSON.stringify(payload, null, 2) : toEnrichedCsv(payload)
@@ -713,6 +813,7 @@ export const TOOLS = [
       return {
         message,
         ...(location ? { file: location } : {}),
+        ...(summary ? { atelier_projets: summary } : {}),
         warnings: report.issues.map((i) => i.message),
       }
     },

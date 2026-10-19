@@ -82,7 +82,7 @@ describe('runAgent', () => {
     }
     expect(second.messages[0]?.role).toBe('system')
     expect(second.messages.at(-1)).toMatchObject({ role: 'tool', tool_name: 'add_rows' })
-    expect(second.tools).toHaveLength(14)
+    expect(second.tools).toHaveLength(15)
     expect(history.map((m) => m.role)).toEqual(['user', 'assistant', 'tool', 'assistant'])
   })
 

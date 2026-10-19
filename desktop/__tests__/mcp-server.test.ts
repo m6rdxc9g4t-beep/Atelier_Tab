@@ -54,11 +54,12 @@ afterAll(async () => {
 })
 
 describe('serveur MCP', () => {
-  it('se présente avec des instructions et 14 outils', async () => {
+  it('se présente avec des instructions et 15 outils', async () => {
     expect(client.getServerVersion()?.name).toBe('atelier-tab')
     expect(client.getInstructions()).toMatch(/list_tables puis read_table/)
+    expect(client.getInstructions()).toMatch(/Instantanés lus par Atelier Viz/)
     const { tools } = await client.listTools()
-    expect(tools).toHaveLength(14)
+    expect(tools).toHaveLength(15)
     expect(tools.find((t) => t.name === 'set_cells')?.inputSchema.required).toEqual([
       'table',
       'cells',
@@ -85,6 +86,16 @@ describe('serveur MCP', () => {
     // Seule la table modifiée a été réécrite.
     const reloaded = new FileStore({ dir }).load().data
     expect(reloaded?.tables.tbl_planning_lots?.rowOrder.at(-2)).toBe(json.added[0].id)
+  })
+
+  it('met à jour l’instantané Atelier Viz de la table modifiée', async () => {
+    const snapshot = JSON.parse(
+      fs.readFileSync(path.join(dir, 'exports/tbl_planning_lots.json'), 'utf8'),
+    )
+    expect(
+      snapshot.project.records.map((r: { values: { A: { raw: string } } }) => r.values.A.raw),
+    ).toContain('Menuiseries')
+    expect(snapshot.project.summary_metrics.computed_totals.C).toBe(100500)
   })
 
   it('voit une modification faite à côté (par l’app) au prochain appel', async () => {

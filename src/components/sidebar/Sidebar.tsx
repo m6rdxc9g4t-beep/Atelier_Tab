@@ -29,10 +29,8 @@ export function Sidebar() {
       className="flex w-60 shrink-0 flex-col border-r border-line bg-surface-sunken"
     >
       <div className="flex h-11 shrink-0 items-center gap-2 border-b border-line px-3">
-        <span className="grid size-6 place-items-center rounded-md bg-accent text-accent-ink">
-          <Table2 size={14} />
-        </span>
-        <span className="flex-1 font-semibold tracking-tight">Atelier_Tab</span>
+        <FolderOpen size={14} className="text-muted" aria-hidden />
+        <span className="flex-1 font-semibold tracking-tight">Projets</span>
         <button
           type="button"
           onClick={toggleSidebar}
@@ -226,7 +224,7 @@ function ExportStatusDot({ tableId }: { tableId: string }) {
   )
 }
 
-/** Pied de sidebar : état de la connexion à atelier_projets et dernier export. */
+/** Pied de sidebar : état de la connexion à Atelier Projets et dernier export. */
 function PipelineStatus() {
   const integration = useDataStore((s) => s.integrations.atelierProjets)
   const tables = useDataStore((s) => s.tables)
@@ -240,8 +238,8 @@ function PipelineStatus() {
         <Icon size={13} className={cn('shrink-0', connected && 'text-success')} />
         <span className="flex-1 truncate">
           {connected
-            ? 'atelier_projets : envoi direct configuré'
-            : 'atelier_projets : export par fichier'}
+            ? 'Atelier Projets : envoi direct configuré'
+            : 'Atelier Projets : export par fichier'}
         </span>
       </div>
       {last && (

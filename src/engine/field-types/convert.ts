@@ -6,6 +6,7 @@
  */
 import { isFormula, type CellInput } from '@/engine/formula'
 import type { Collaborator, Field } from '@/types/domain'
+import { workflowStatusCode } from './workflow-status'
 
 export interface LookupContext {
   collaborators: Record<string, Collaborator>
@@ -98,9 +99,14 @@ export function parseUserInput(field: Field, text: string, ctx: LookupContext): 
     }
 
     case 'select': {
-      const choice = field.options?.choices?.find(
-        (c) => c.label.localeCompare(raw, 'fr', { sensitivity: 'base' }) === 0 || c.id === raw,
-      )
+      const choices = field.options?.choices ?? []
+      // Libellé exact (sans tenir compte de la casse ni des accents) ou id ; à défaut, un
+      // synonyme de statut de workflow (« Terminé », « Fait » → « Terminée », §1.4 SUITE.md).
+      const code = workflowStatusCode(raw)
+      const choice =
+        choices.find(
+          (c) => c.label.localeCompare(raw, 'fr', { sensitivity: 'base' }) === 0 || c.id === raw,
+        ) ?? (code ? choices.find((c) => workflowStatusCode(c.label) === code) : undefined)
       return choice
         ? { ok: true, input: choice.id }
         : { ok: false, reason: `« ${raw} » ne fait pas partie des choix` }

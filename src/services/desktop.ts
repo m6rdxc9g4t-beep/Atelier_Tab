@@ -34,6 +34,20 @@ export interface McpInfo {
   launcher: string
 }
 
+/** Requête POST vers un service local de la suite (Atelier Projets), relayée par l'app. */
+export interface LocalPostRequest {
+  url: string
+  headers: Record<string, string>
+  body: string
+}
+
+export interface LocalPostResponse {
+  /** 0 : serveur injoignable. */
+  status: number
+  body: string
+  error?: string
+}
+
 export interface DesktopApi {
   platform: string
   loadData(): Promise<DesktopLoadResult>
@@ -47,6 +61,18 @@ export interface DesktopApi {
   ollama(request: OllamaRequest): Promise<OllamaResponse>
   ollamaCancel(id: string): Promise<void>
   mcpInfo(): Promise<McpInfo>
+  /**
+   * Ouvre une application de la Suite Atelier dans le navigateur par défaut
+   * (shell.openExternal). Seules les adresses http(s) vers 127.0.0.1 / localhost sont acceptées.
+   */
+  openLocalApp(url: string): Promise<boolean>
+  /**
+   * Envoie un POST JSON à un service local (127.0.0.1 / localhost) depuis le processus
+   * principal : la page de l'app (origine app://atelier) n'est pas une origine admise par
+   * le CORS d'Atelier Projets (ni `null`, refusée), alors qu'une requête sans en-tête
+   * Origin l'est (docs/SUITE.md §4.1).
+   */
+  postLocal(request: LocalPostRequest): Promise<LocalPostResponse>
 }
 
 declare global {

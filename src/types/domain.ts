@@ -155,6 +155,11 @@ export interface AtelierIntegration {
   webhookUrl?: string
   /** Jeton d'accès, conservé dans ce navigateur uniquement. */
   token?: string
+  /**
+   * Atelier Projets : id du projet cible (`?projectId=`). Vide : projet du même nom que le
+   * projet Atelier Tab, créé au besoin (docs/SUITE.md §4.1).
+   */
+  projectId?: string
   lastExport?: ExportLogEntry
 }
 
