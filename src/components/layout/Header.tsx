@@ -53,11 +53,13 @@ export function Header({ table, mode }: { table: Table; mode: ViewMode }) {
 
       <div className="flex shrink-0 items-center gap-1.5">
         <SuiteSwitcher />
-        <span className="flex items-center gap-1.5 font-semibold tracking-tight text-ink">
-          <span className="grid size-5 place-items-center rounded-md bg-accent text-accent-ink">
-            <Table2 size={12} aria-hidden />
+        <span className="atelier-brand text-ink" title="Atelier Tab">
+          <span className="atelier-brand__tile" aria-hidden="true">
+            <Table2 />
           </span>
-          <span className="@max-[52rem]:sr-only">Atelier Tab</span>
+          <span className="atelier-brand__name @max-[52rem]:sr-only">
+            <span className="atelier-brand__prefix">atelier_</span>Tab
+          </span>
         </span>
       </div>
       <span className="h-4 w-px shrink-0 bg-line" aria-hidden />
