@@ -1,8 +1,8 @@
-# Atelier_Tab
+# Atelier Tab
 
-**Tableur et base de données dans un même espace de travail, avec un export natif vers `atelier_projets`.**
+**Tableur et base de données dans un même espace de travail, avec un export natif vers Atelier Projets.** Membre de la [Suite Atelier](#suite-atelier), avec Atelier Viz et Atelier Projets.
 
-Atelier_Tab réunit la liberté de calcul d'Excel (formules, références `A1:C10`, recalcul instantané) et la rigueur d'Airtable (colonnes typées, statuts colorés, vues Kanban, fiches par ligne). Les données restent sur votre ordinateur, dans des fichiers lisibles que Claude Code et un modèle local Ollama peuvent manipuler ; le module **DataFlow** les transforme au format attendu par l'application de gestion de projet `atelier_projets`.
+Atelier Tab réunit la liberté de calcul d'Excel (formules, références `A1:C10`, recalcul instantané) et la rigueur d'Airtable (colonnes typées, statuts colorés, vues Kanban, fiches par ligne). Les données restent sur votre ordinateur, dans des fichiers lisibles que Claude Code et un modèle local Ollama peuvent manipuler ; le module **DataFlow** les transforme au format attendu par l'application de gestion de projet Atelier Projets (`atelier_projets`).
 
 > Statut : en développement actif. Voir la [feuille de route](#feuille-de-route).
 
@@ -13,12 +13,12 @@ Atelier_Tab réunit la liberté de calcul d'Excel (formules, références `A1:C1
 | Domaine                | Ce que ça fait                                                                                                                                                                                                                                                     |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **Moteur de formules** | `SUM`, `AVG`/`AVERAGE`, `MIN`, `MAX`, `IF`, `COUNT`, `ROUND`, `ABS`, opérateurs `+ - * / ^ &`, comparaisons, références et plages. Recalcul incrémental, détection des cycles, erreurs Excel (`#REF!`, `#DIV/0!`, `#VALUE!`, `#NAME?`, `#CYCLE!`). Aucun `eval()`. |
-| **Colonnes typées**    | Texte, nombre, devise, pourcentage, statut (badge), date, case à cocher, responsable, formule.                                                                                                                                                                     |
+| **Colonnes typées**    | Texte, nombre, devise, pourcentage, statut (badge aux couleurs officielles de la suite, préréglage « Statuts Atelier »), date, case à cocher, responsable, formule.                                                                                                |
 | **Vues**               | Grille hybride, tableur pur, Kanban groupé par statut, fiche détaillée.                                                                                                                                                                                            |
 | **Navigation**         | Espaces de travail › Projets › Tables, recherche rapide `Ctrl/Cmd + K`.                                                                                                                                                                                            |
-| **DataFlow**           | Export JSON normalisé (schéma `atelier_projets` v2.1.0), CSV enrichi, webhook. Validation avant envoi.                                                                                                                                                             |
+| **DataFlow**           | Export JSON normalisé (schéma `atelier_projets` v2.1.0), CSV enrichi, envoi direct à Atelier Projets (préréglage local, résumé d'import). Instantanés pour Atelier Viz.                                                                                            |
 | **Persistance**        | App de bureau : fichiers JSON dans `~/Atelier_Tab`, synchronisés en direct. Navigateur : IndexedDB.                                                                                                                                                                |
-| **IA**                 | Serveur MCP pour Claude Code et assistant intégré branché sur Ollama : mêmes 14 outils, mêmes règles que la grille.                                                                                                                                                |
+| **IA**                 | Serveur MCP pour Claude Code et assistant intégré branché sur Ollama : mêmes 15 outils, mêmes règles que la grille.                                                                                                                                                |
 
 ## Démarrage
 
@@ -28,12 +28,14 @@ Prérequis : **Node.js ≥ 20.19** (ou ≥ 22.12) et npm.
 git clone https://github.com/m6rdxc9g4t-beep/atelier-tab.git
 cd atelier-tab
 npm install
-npm run dev          # http://localhost:5173
+npm run dev          # http://127.0.0.1:5175
 ```
+
+Ports fixes de la Suite Atelier (`strictPort` : un port occupé fait échouer le lancement au lieu d'en prendre un autre) : `npm run dev` → **5175**, `npm run preview` → **4175**.
 
 ### Application macOS
 
-Atelier_Tab existe aussi en application de bureau, à ouvrir d'un double-clic.
+Atelier Tab existe aussi en application de bureau, à ouvrir d'un double-clic.
 
 ```bash
 npm install
@@ -43,6 +45,8 @@ npm run app:install
 La commande construit `Atelier_Tab.app` puis la copie dans **Applications**. Elle est ensuite accessible depuis le Launchpad, Spotlight (⌘ Espace) ou le Dock. Relancer `npm run app:install` après un `git pull` met l'application à jour.
 
 - Les données sont dans le dossier **`~/Atelier_Tab`** (menu Fichier › Ouvrir le dossier des données) : un fichier `atelier.json` et un fichier par table dans `tables/`. Au premier lancement, les données d'une version précédente sont reprises automatiquement.
+- `~/Atelier_Tab/exports/` reçoit un instantané par table (`<id de table>.json`), lu par Atelier Viz ; voir [Suite Atelier](#suite-atelier).
+- Le nom affiché est « Atelier Tab » ; les noms techniques restent `Atelier_Tab.app`, `~/Atelier_Tab` et le paquet `atelier-tab`.
 - L'app est signée localement (« ad hoc »), sans compte développeur Apple. Elle s'ouvre normalement sur le Mac qui l'a construite ; pour la donner à quelqu'un d'autre, une signature Apple sera nécessaire.
 - `npm run app` lance l'application sans l'installer, pour essayer une modification.
 
@@ -55,6 +59,7 @@ Claude Code et un modèle local peuvent lire et modifier toutes les données : t
 > « Ajoute une ligne Menuiseries à 12 000 € HT dans Planning & Lots »
 > « Quel est le total TTC du budget ? »
 > « Exporte Planning & Lots en JSON pour atelier_projets »
+> « Ajoute une colonne Avancement avec les statuts Atelier dans Matériaux »
 
 Si l'app est ouverte, elle se met à jour en direct. Le dossier `~/Atelier_Tab` contient aussi un `CLAUDE.md` qui décrit le format des fichiers.
 
@@ -66,22 +71,23 @@ ollama pull qwen3:8b
 
 L'assistant voit la table ouverte et la cellule sélectionnée, et chaque action apparaît dans le panneau. Le modèle tourne sur votre Mac : rien ne sort de l'ordinateur.
 
-| Outil                                          | Rôle                                                   |
-| ---------------------------------------------- | ------------------------------------------------------ |
-| `list_tables`, `read_table`                    | Lire espaces, projets, tables, valeurs calculées       |
-| `set_cells`, `add_rows`, `delete_rows`         | Modifier les lignes (saisie à la française, formules)  |
-| `add_column`, `update_column`, `delete_column` | Modifier les colonnes, y compris les colonnes-formules |
-| `create_project`, `create_table`, `rename`     | Organiser                                              |
-| `evaluate`                                     | Calculer une formule sans rien modifier                |
-| `check_export`, `export_table`                 | Exporter vers `atelier_projets` (JSON, CSV, webhook)   |
+| Outil                                          | Rôle                                                             |
+| ---------------------------------------------- | ---------------------------------------------------------------- |
+| `list_tables`, `read_table`                    | Lire espaces, projets, tables, valeurs calculées                 |
+| `set_cells`, `add_rows`, `delete_rows`         | Modifier les lignes (saisie à la française, formules)            |
+| `add_column`, `update_column`, `delete_column` | Modifier les colonnes (formules, préréglage « Statuts Atelier ») |
+| `create_project`, `create_table`, `rename`     | Organiser                                                        |
+| `evaluate`                                     | Calculer une formule sans rien modifier                          |
+| `configure_export`                             | Régler l'envoi direct (préréglage Atelier Projets, projet cible) |
+| `check_export`, `export_table`                 | Exporter vers Atelier Projets (JSON, CSV, envoi direct)          |
 
 ### Scripts
 
 | Commande             | Rôle                                                         |
 | -------------------- | ------------------------------------------------------------ |
-| `npm run dev`        | Serveur de développement Vite                                |
+| `npm run dev`        | Serveur de développement Vite (http://127.0.0.1:5175)        |
 | `npm run build`      | Vérification des types puis build de production dans `dist/` |
-| `npm run preview`    | Sert le build de production                                  |
+| `npm run preview`    | Sert le build de production (http://127.0.0.1:4175)          |
 | `npm test`           | Tests unitaires (Vitest)                                     |
 | `npm run test:watch` | Tests en mode surveillance                                   |
 | `npm run lint`       | ESLint                                                       |
@@ -89,6 +95,23 @@ L'assistant voit la table ouverte et la cellule sélectionnée, et chaque action
 | `npm run format`     | Prettier                                                     |
 | `npm run ai:connect` | Enregistre le serveur MCP dans Claude Code                   |
 | `npm run mcp`        | Lance le serveur MCP depuis le dépôt (développement)         |
+
+## Suite Atelier
+
+Atelier Tab partage avec **Atelier Viz** (BI) et **Atelier Projets** (gestion de projet) une identité visuelle, des ports fixes et des échanges de données locaux. Le contrat commun est [`docs/SUITE.md`](docs/SUITE.md), identique dans les trois dépôts.
+
+| Application     | Interface (dev)         | Interface (aperçu / app)               | API                         |
+| --------------- | ----------------------- | -------------------------------------- | --------------------------- |
+| Atelier Viz     | `http://127.0.0.1:5173` | `http://127.0.0.1:8000`                | `http://127.0.0.1:8000/api` |
+| Atelier Projets | `http://127.0.0.1:5174` | `http://127.0.0.1:4174`                | `http://127.0.0.1:3000/api` |
+| Atelier Tab     | `http://127.0.0.1:5175` | `http://127.0.0.1:4175` · app Electron | —                           |
+
+- **Design system** : copie verbatim des thèmes et couleurs d'Atelier Projets dans `src/styles/atelier-ds/` (ne pas modifier, ne pas reformater) ; les jetons de Tab (`--surface`, `--ink`, `--line`, `--accent`…) en dérivent dans `src/index.css`. Accent violet EPIC, polices système, rayons 6 / 10 / 16 px.
+- **Thème** : Clair, Sombre ou Système (bouton en haut à droite) ; `<html>` porte la classe `dark` et `data-theme`.
+- **Statuts** : un choix de statut dont le libellé est un statut commun (À faire, En cours, En revue, En attente, Bloquée, Résolue, Terminée, Rejetée, et synonymes : « Fait », « Terminé », « Bloqué »…) s'affiche dans la couleur officielle. Préréglage « Statuts Atelier » dans le menu ➕ d'ajout de colonne.
+- **Sélecteur de suite** : icône grille en haut à gauche ; ouvre les autres apps (navigateur, ou navigateur par défaut depuis l'app de bureau) et indique si Viz et Projets sont en marche. Adresses surchargeables : `VITE_ATELIER_VIZ_URL`, `VITE_ATELIER_TAB_URL`, `VITE_ATELIER_PROJETS_URL`, `VITE_ATELIER_PROJETS_API_URL`.
+- **Tab → Projets** : dialogue d'export › Envoi direct › préréglage **Atelier Projets (local)** (`http://127.0.0.1:3000/api/imports/atelier-tab`), projet cible facultatif. Le résumé renvoyé (créés, mis à jour, ignorés, avertissements) s'affiche dans le dialogue. Un réimport met à jour les éléments déjà importés.
+- **Tab → Viz** : l'app de bureau écrit `~/Atelier_Tab/exports/<id de table>.json` (enveloppe DataFlow, valeurs calculées) après chaque enregistrement, et le supprime avec la table. Le connecteur « Atelier Tab » de Viz lit ce dossier.
 
 ## Architecture
 
@@ -106,10 +129,11 @@ src/
 ├── storage/          Format des fichiers de données (lecture tolérante, validation)
 ├── ai/               Outils partagés par Claude Code (MCP) et Ollama, boucle de l'assistant
 ├── services/         Persistance (fichiers, IndexedDB, REST), pont vers l'app de bureau
-├── dataflow/         Export vers atelier_projets (schéma, mapping, transports)
+├── dataflow/         Export vers Atelier Projets (schéma, mapping, transports), instantanés pour Viz
+├── styles/atelier-ds Copie verbatim du design system de la Suite Atelier
 ├── components/       Interface : layout, sidebar, grid, cells, formula-bar, kanban…
-├── hooks/            Hooks React transverses
-└── lib/              Utilitaires
+├── hooks/            Hooks React transverses (thème)
+└── lib/              Utilitaires, adresses de la Suite Atelier (suite.ts)
 ```
 
 Principe directeur : **`engine/` et `dataflow/` sont du TypeScript pur, testés sans navigateur.** React affiche l'état et déclenche des actions ; il ne calcule rien lui-même.
@@ -123,6 +147,7 @@ React 19 · TypeScript (strict) · Vite · Electron (app macOS) · Tailwind CSS 
 ## Feuille de route
 
 - [x] **Phase 0** — Socle : Tailwind v4, thème clair/sombre, CI
+- [x] **Suite Atelier** — Design system commun, statuts officiels, sélecteur d'apps, import Projets, instantanés Viz
 - [x] **Phase 1** — Modèle de domaine, store, persistance IndexedDB
 - [x] **Phase 2** — Moteur de formules
 - [x] **Phase 3** — Grille hybride et barre de formules
