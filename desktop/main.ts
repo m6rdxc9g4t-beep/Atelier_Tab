@@ -24,9 +24,10 @@ import {
   net,
   protocol,
   shell,
+  type IpcMainInvokeEvent,
   type MenuItemConstructorOptions,
 } from 'electron'
-import { isLocalHttpUrl, isLocalProjetsImportUrl } from '@/lib/local-url'
+import { isLocalHttpUrl } from '@/lib/local-url'
 import type {
   DesktopLoadResult,
   LocalPostRequest,
@@ -36,8 +37,17 @@ import type {
   OllamaResponse,
 } from '@/services/desktop'
 import type { AppData } from '@/types/domain'
-import { defaultDataDir, defaultSecretsFile, ensureDataDirGuide, FileStore } from './file-store'
+import {
+  defaultDataDir,
+  defaultSecretsFile,
+  ensureDataDirGuide,
+  FileStore,
+  parseSaveRequest,
+} from './file-store'
+import { guardSender } from './ipc-guard'
+import { resolveInside } from './safe-path'
 import { SnapshotWriter } from './snapshots'
+import { buildRelayRequest } from './suite-relay'
 
 /** Nom affiché (menus, titre, boîtes de dialogue). Le dossier de données reste ~/Atelier_Tab. */
 const APP_NAME = 'Atelier Tab'
@@ -66,6 +76,22 @@ const snapshots = new SnapshotWriter({
 })
 let stopWatching: (() => void) | null = null
 
+/**
+ * Enregistre un gestionnaire IPC réservé à l'interface de l'app (`app://atelier/…`) :
+ * un message venu d'un autre cadre est refusé sans être traité (M7).
+ */
+function handle<A extends unknown[], R>(
+  channel: string,
+  handler: (event: IpcMainInvokeEvent, ...args: A) => R,
+) {
+  ipcMain.handle(
+    channel,
+    guardSender(channel, handler, (ch, url) =>
+      console.error(`IPC ${ch} refusé : expéditeur ${String(url)}`),
+    ) as (event: IpcMainInvokeEvent, ...args: unknown[]) => R,
+  )
+}
+
 function broadcast(channel: string, payload: unknown) {
   for (const win of BrowserWindow.getAllWindows()) win.webContents.send(channel, payload)
 }
@@ -81,7 +107,7 @@ function startWatching() {
   )
 }
 
-ipcMain.handle('data:load', (): DesktopLoadResult => {
+handle('data:load', (): DesktopLoadResult => {
   fs.mkdirSync(dataDir, { recursive: true })
   ensureDataDirGuide(dataDir)
   const { data, errors } = store.load()
@@ -93,23 +119,34 @@ ipcMain.handle('data:load', (): DesktopLoadResult => {
   return { data, errors, dir: dataDir }
 })
 
-ipcMain.handle('data:save', (_event, json: string) => {
-  const parsed = JSON.parse(json) as { state?: AppData }
-  if (!parsed.state) return
-  store.save(parsed.state)
-  snapshots.schedule(parsed.state)
+// L'état vient de l'interface, donc d'un processus moins fiable : il est revalidé (schémas
+// de src/storage/format.ts, ids de table utilisables comme noms de fichier) avant toute
+// écriture. Un état invalide est refusé en bloc ; rien n'est écrit.
+handle('data:save', (_event, json: unknown) => {
+  let state: AppData | null
+  try {
+    state = parseSaveRequest(json)
+  } catch (e) {
+    console.error('Enregistrement refusé :', e instanceof Error ? e.message : e)
+    throw e
+  }
+  if (!state) return
+  store.save(state)
+  snapshots.schedule(state)
   startWatching()
 })
 
-ipcMain.handle('data:reveal', async () => {
+handle('data:reveal', async () => {
   await shell.openPath(dataDir)
 })
 
-ipcMain.handle('export:save', (_event, filename: string, content: string) => {
-  const safe = path.basename(filename)
+handle('export:save', (_event, filename: unknown, content: unknown) => {
+  if (typeof filename !== 'string' || typeof content !== 'string') {
+    throw new Error('Export refusé : paramètres invalides')
+  }
   const dir = path.join(dataDir, 'exports')
   fs.mkdirSync(dir, { recursive: true })
-  const target = path.join(dir, safe)
+  const target = resolveInside(dir, path.basename(filename))
   fs.writeFileSync(target, content, 'utf8')
   return target
 })
@@ -120,33 +157,24 @@ ipcMain.handle('export:save', (_event, filename: string, content: string) => {
 
 // Ouvre une autre application de la suite dans le navigateur par défaut. Surface IPC
 // volontairement étroite : http(s) vers 127.0.0.1 / localhost uniquement.
-ipcMain.handle('suite:open', async (_event, url: unknown) => {
+handle('suite:open', async (_event, url: unknown) => {
   if (!isLocalHttpUrl(url)) return false
   await shell.openExternal(url)
   return true
 })
 
 // Envoi vers la route d'import d'Atelier Projets local. La page de l'app a l'origine
-// app://atelier, refusée par le CORS de Projets ; depuis ce processus, la requête part
-// sans en-tête Origin, comme celle d'un script local.
-ipcMain.handle('suite:post', async (_event, req: LocalPostRequest): Promise<LocalPostResponse> => {
-  if (!req || !isLocalProjetsImportUrl(req.url) || typeof req.body !== 'string') {
-    return { status: 0, body: '', error: 'Adresse non autorisée' }
-  }
-  const headers: Record<string, string> = {}
-  for (const name of [
-    'Content-Type',
-    'Authorization',
-    'Idempotency-Key',
-    'X-Atelier-Schema-Version',
-  ]) {
-    const value = req.headers?.[name]
-    if (typeof value === 'string') headers[name] = value
-  }
+// app://atelier, refusée par le CORS de Projets (seules http://127.0.0.1:* et
+// http://localhost:* y sont admises, l'origine `null` est refusée) ; depuis ce processus,
+// la requête part sans en-tête Origin, ce que Projets traite comme un appel local
+// (docs/SUITE.md §4.1).
+handle('suite:post', async (_event, raw: LocalPostRequest): Promise<LocalPostResponse> => {
+  const req = buildRelayRequest(raw)
+  if (!req) return { status: 0, body: '', error: 'Adresse non autorisée' }
   try {
     const res = await fetch(req.url, {
       method: 'POST',
-      headers,
+      headers: req.headers,
       body: req.body,
       redirect: 'error',
       signal: AbortSignal.timeout(60_000),
@@ -171,8 +199,8 @@ function ollamaBase(): string {
   return withScheme.replace('0.0.0.0', '127.0.0.1').replace(/\/$/, '')
 }
 
-ipcMain.handle('ollama:request', async (_event, req: OllamaRequest): Promise<OllamaResponse> => {
-  if (!OLLAMA_PATHS.has(req.path))
+handle('ollama:request', async (_event, req: OllamaRequest): Promise<OllamaResponse> => {
+  if (!req || !OLLAMA_PATHS.has(req.path) || typeof req.id !== 'string')
     return { ok: false, status: 400, data: null, error: 'Requête non autorisée' }
   const controller = new AbortController()
   pendingOllama.set(req.id, controller)
@@ -212,7 +240,7 @@ ipcMain.handle('ollama:request', async (_event, req: OllamaRequest): Promise<Oll
   }
 })
 
-ipcMain.handle('ollama:cancel', (_event, id: string) => {
+handle('ollama:cancel', (_event, id: string) => {
   pendingOllama.get(id)?.abort()
 })
 
@@ -230,7 +258,7 @@ function mcpInfo(): McpInfo {
   }
 }
 
-ipcMain.handle('mcp:info', () => mcpInfo())
+handle('mcp:info', () => mcpInfo())
 
 async function showClaudeConnection(win: BrowserWindow | null) {
   const info = mcpInfo()

@@ -23,8 +23,9 @@ import {
   snapshotFile,
   snapshotFingerprint,
 } from '@/dataflow/snapshot'
-import { tableFile } from '@/storage/format'
+import { isSafeId, tableFile } from '@/storage/format'
 import type { AppData } from '@/types/domain'
+import { resolveInside } from './safe-path'
 
 export interface SnapshotWriterOptions {
   /** Dossier de données (~/Atelier_Tab). */
@@ -66,6 +67,14 @@ export class SnapshotWriter {
     return path.join(this.dir, relative)
   }
 
+  /**
+   * Chemin absolu d'un instantané, vérifié : il doit rester dans `exports/`, quel que soit
+   * l'id de table reçu (interface, fichier édité à la main).
+   */
+  private snapshotPath(relative: string): string {
+    return resolveInside(this.abs(SNAPSHOTS_DIR), path.relative(SNAPSHOTS_DIR, relative))
+  }
+
   /** Programme une publication ; seul le dernier état reçu pendant le délai est publié. */
   schedule(data: AppData): void {
     this.pending = data
@@ -105,6 +114,10 @@ export class SnapshotWriter {
     if (!this.scanned) this.scanDisk(data)
 
     for (const tableId of Object.keys(data.tables)) {
+      if (!isSafeId(tableId)) {
+        this.onError(new Error(`Instantané ignoré : id de table refusé "${tableId}"`))
+        continue
+      }
       const input = inputKey(data, tableId)
       if (input === null || this.inputs.get(tableId) === input) continue
       let payload
@@ -135,10 +148,12 @@ export class SnapshotWriter {
   remove(tableId: string): string[] {
     this.inputs.delete(tableId)
     this.published.delete(tableId)
+    if (!isSafeId(tableId)) return []
     const relative = snapshotFile(tableId)
+    const target = this.snapshotPath(relative)
     const text = this.read(relative)
     if (text === null || !isSnapshotOf(text, tableId)) return []
-    fs.rmSync(this.abs(relative), { force: true })
+    fs.rmSync(target, { force: true })
     return [relative]
   }
 
@@ -179,7 +194,7 @@ export class SnapshotWriter {
   }
 
   private writeAtomic(relative: string, content: string): void {
-    const target = this.abs(relative)
+    const target = this.snapshotPath(relative)
     const tmp = path.join(path.dirname(target), `.${path.basename(target)}.${process.pid}.tmp`)
     fs.writeFileSync(tmp, content, 'utf8')
     fs.renameSync(tmp, target)

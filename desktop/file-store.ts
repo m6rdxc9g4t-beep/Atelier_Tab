@@ -14,9 +14,11 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import {
+  APP_STATE_SOURCE,
   assembleData,
   DataFileError,
   INDEX_FILE,
+  parseAppState,
   parseIndexFile,
   parseTableFile,
   serializeData,
@@ -25,6 +27,7 @@ import {
   type IndexFile,
 } from '@/storage/format'
 import type { AppData, Table } from '@/types/domain'
+import { resolveInside } from './safe-path'
 
 export interface LoadResult {
   /** null : le dossier ne contient pas encore de données. */
@@ -51,6 +54,28 @@ export function defaultSecretsFile(): string {
       ? path.join(os.homedir(), 'Library', 'Application Support')
       : process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config')
   return path.join(base, 'Atelier_Tab', 'secrets.json')
+}
+
+/**
+ * Lit la requête `data:save` de l'interface (JSON du store persisté, `{ state, version }`).
+ * Renvoie null s'il n'y a pas d'état à enregistrer ; lève une erreur si le message ou l'état
+ * est invalide (schémas de `src/storage/format.ts`, ids de table sûrs). Rien ne doit être
+ * écrit dans ce cas.
+ */
+export function parseSaveRequest(json: unknown): AppData | null {
+  if (typeof json !== 'string') throw new DataFileError(APP_STATE_SOURCE, 'message invalide')
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(json)
+  } catch {
+    throw new DataFileError(APP_STATE_SOURCE, 'JSON invalide')
+  }
+  if (typeof parsed !== 'object' || parsed === null) {
+    throw new DataFileError(APP_STATE_SOURCE, 'message invalide')
+  }
+  const state = (parsed as { state?: unknown }).state
+  if (state === undefined || state === null) return null
+  return parseAppState(state)
 }
 
 interface Secrets {
@@ -80,6 +105,22 @@ export class FileStore {
 
   private abs(relative: string): string {
     return path.join(this.dir, relative)
+  }
+
+  /**
+   * Chemin absolu d'un fichier à écrire ou supprimer, vérifié : `atelier.json` à la racine,
+   * une table directement dans `tables/`. Tout autre chemin (id de table `../x`…) est refusé.
+   */
+  private writablePath(relative: string): string {
+    if (relative === INDEX_FILE) return resolveInside(this.dir, INDEX_FILE)
+    const tableId = tableIdFromPath(relative)
+    if (!tableId) throw new DataFileError(relative, 'chemin d’écriture refusé')
+    const tablesDir = this.abs(TABLES_DIR)
+    const target = resolveInside(tablesDir, `${tableId}.json`)
+    if (path.dirname(target) !== path.resolve(tablesDir)) {
+      throw new DataFileError(relative, 'chemin d’écriture refusé')
+    }
+    return target
   }
 
   private read(relative: string): string | null {
@@ -185,7 +226,7 @@ export class FileStore {
       const tid = tableIdFromPath(relative)
       if (!tid) continue
       try {
-        fs.rmSync(this.abs(relative), { force: true })
+        fs.rmSync(this.writablePath(relative), { force: true })
       } catch {
         /* déjà supprimé */
       }
@@ -246,7 +287,7 @@ export class FileStore {
   }
 
   private writeAtomic(relative: string, content: string): void {
-    const target = this.abs(relative)
+    const target = this.writablePath(relative)
     const tmp = path.join(path.dirname(target), `.${path.basename(target)}.${process.pid}.tmp`)
     fs.writeFileSync(tmp, content, 'utf8')
     fs.renameSync(tmp, target)

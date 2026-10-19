@@ -19,8 +19,16 @@ import type { AtelierPayload } from './schema/atelier.v2_1'
 /** Dossier des instantanés, relatif au dossier de données (~/Atelier_Tab). */
 export const SNAPSHOTS_DIR = 'exports'
 
-/** Chemin relatif de l'instantané d'une table. */
+/** Id de table utilisable comme nom de fichier d'instantané (pas de `/`, `\\`, `.`). */
+const SNAPSHOT_ID = /^[A-Za-z0-9_-]+$/
+
+/**
+ * Chemin relatif de l'instantané d'une table. Refuse un id qui ne serait pas un nom de
+ * fichier sûr (`../x`, chemin absolu…) : l'id vient de données éditables.
+ */
 export function snapshotFile(tableId: string): string {
+  if (!SNAPSHOT_ID.test(tableId))
+    throw new Error(`Id de table refusé pour un instantané : "${tableId}"`)
   return `${SNAPSHOTS_DIR}/${tableId}.json`
 }
 
