@@ -43,9 +43,10 @@ export interface ExportOutcome {
 
 /**
  * App de bureau : l'interface a l'origine `app://atelier`, qu'Atelier Projets n'admet pas
- * (CORS limité à http://127.0.0.1, http://localhost et `null`). Une requête vers la route
- * d'import d'un Atelier Projets local passe donc par le processus principal, qui l'envoie
- * sans en-tête Origin, comme un script local. Toute autre adresse reste un `fetch` normal.
+ * (CORS limité à http://127.0.0.1:* et http://localhost:* ; l'origine `null` est refusée,
+ * docs/SUITE.md §4.1). Une requête vers la route d'import d'un Atelier Projets local passe
+ * donc par le processus principal, qui l'envoie sans en-tête Origin, comme un script local.
+ * Toute autre adresse reste un `fetch` normal.
  */
 export function desktopAwareFetch(desktop: DesktopApi | undefined): WebhookFetch | undefined {
   if (!desktop) return undefined

@@ -69,7 +69,8 @@ export interface DesktopApi {
   /**
    * Envoie un POST JSON à un service local (127.0.0.1 / localhost) depuis le processus
    * principal : la page de l'app (origine app://atelier) n'est pas une origine admise par
-   * le CORS d'Atelier Projets, alors qu'une requête sans origine l'est.
+   * le CORS d'Atelier Projets (ni `null`, refusée), alors qu'une requête sans en-tête
+   * Origin l'est (docs/SUITE.md §4.1).
    */
   postLocal(request: LocalPostRequest): Promise<LocalPostResponse>
 }

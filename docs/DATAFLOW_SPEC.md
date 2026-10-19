@@ -88,14 +88,15 @@ Deux clés facultatives sont ajoutées, ignorables par la cible :
 
 Atelier Projets importe l'enveloppe telle quelle (contrat complet : `docs/SUITE.md` §4.1).
 
-- **Préréglage « Atelier Projets (local) »** : `http://127.0.0.1:3000/api/imports/atelier-tab` (bouton du dialogue d'export, ou outil IA `configure_export`, `preset: "atelier-projets-local"`).
+- **Préréglage « Atelier Projets (local) »** : `http://127.0.0.1:3000/api/imports/atelier-tab` (bouton du dialogue d'export, ou outil IA `configure_export`, `preset: "atelier-projets-local"`). Proposé par défaut : en mode « Envoi direct », si aucune adresse n'est enregistrée, le dialogue la pré-remplit et l'enregistre (préréglage actif) ; une adresse déjà enregistrée n'est jamais remplacée.
 - **Projet cible** facultatif : ajouté en `?projectId=<id>`. Sans lui, Projets range les éléments dans le projet dont le nom est `project.name` (créé au besoin), sous Phase « Imports Atelier Tab » › Epic `<workspace.name>` › Story `<source_table.name>`.
 - **Correspondance** : `entity_title` → titre (ligne ignorée si vide), `workflow_state` → statut (libellés communs §1.4 de SUITE.md ; inconnu → `OPEN`), `start_date` / `due_date` → dates, `description` → description, autres rôles → tableau Markdown ajouté à la description. Utiliser les libellés « Statuts Atelier » garantit une correspondance exacte des statuts.
 - **Identité** : `externalRef = "atelier-tab:<source_table.id>:<record_id>"` ; un réimport met à jour au lieu de dupliquer. L'en-tête `Idempotency-Key` rend un renvoi sans effet.
 - **Résumé** : la réponse `{ projectId, storyId, created, updated, unchanged, skipped, warnings, items }` est affichée dans le dialogue (compteurs et avertissements) et renvoyée par l'outil `export_table` (`atelier_projets`).
-- **Origine des requêtes** : Projets n'accepte en CORS que `http://127.0.0.1:*`, `http://localhost:*` et `null`.
+- **Origine des requêtes** : Projets n'accepte en CORS que `http://127.0.0.1:*` et `http://localhost:*`, plus les appels sans en-tête `Origin` (relais du processus principal, scripts locaux). L'origine `null` est refusée (n'importe quelle page peut l'envoyer : iframe sandbox, URL `data:`, fichier local) ; aucun chemin de Tab n'en dépend.
   - Navigateur (`npm run dev` / `preview`, origine `http://127.0.0.1:5175` ou `:4175`) : `fetch` direct.
-  - App de bureau : la page a l'origine `app://atelier` (protocole privé), refusée par Projets (403). Une adresse d'import Projets **locale** est donc envoyée par le processus principal (IPC `suite:post`), sans en-tête `Origin`, comme un script local. Le relais n'accepte que `http(s)://127.0.0.1|localhost/api/imports/atelier-tab[/preview]` et ne transmet que les en-têtes du contrat. Toute autre adresse reste un `fetch` de la page.
+  - App de bureau : la page a l'origine `app://atelier` (protocole privé), refusée par Projets (403). Une adresse d'import Projets **locale** est donc envoyée par le processus principal (IPC `suite:post`), sans en-tête `Origin`, comme un script local. Le relais n'accepte que `http(s)://127.0.0.1|localhost/api/imports/atelier-tab[/preview]`, ne transmet que les en-têtes du contrat et ne répond qu'à l'interface de l'app (cadre `app://atelier/…`, contrôlé par `desktop/ipc-guard.ts`). Toute autre adresse reste un `fetch` de la page.
+  - Jeton : si Projets est configuré avec `ATELIER_IMPORT_TOKEN`, un appel relayé (sans `Origin`) est un appel externe et doit porter `Authorization: Bearer <jeton>` (champ « Jeton d'accès » du dialogue).
 
 ## Instantanés pour Atelier Viz
 

@@ -80,7 +80,8 @@ Contrat commun : [`SUITE.md`](SUITE.md). Côté Tab :
 
 - thème : `src/styles/atelier-ds/` (copie verbatim) → jetons dérivés dans `src/index.css` ; `useTheme` pose `class="dark"` et `data-theme` ;
 - sélecteur d'apps : `src/lib/suite.ts` + `components/layout/SuiteSwitcher.tsx` ; dans l'app de bureau, ouverture par `shell.openExternal` via l'IPC `suite:open` (http(s) vers 127.0.0.1 / localhost uniquement) ;
-- envoi à Atelier Projets local depuis l'app de bureau : IPC `suite:post` (voir `DATAFLOW_SPEC.md`).
+- envoi à Atelier Projets local depuis l'app de bureau : IPC `suite:post`, requête relayée sans en-tête `Origin` (Projets refuse l'origine `null` et `app://atelier`) ; voir `DATAFLOW_SPEC.md` ;
+- IPC : chaque canal du processus principal n'accepte que les messages de l'interface (`event.senderFrame.url` sous `app://atelier/`, `desktop/ipc-guard.ts`) ; `data:save` revalide l'état reçu (`parseAppState` de `src/storage/format.ts`) et toute écriture disque est confinée à son dossier (`desktop/safe-path.ts`).
 
 ## Décisions
 
