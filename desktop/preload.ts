@@ -24,6 +24,7 @@ const api: DesktopApi = {
   ollamaCancel: (id) => ipcRenderer.invoke('ollama:cancel', id),
   mcpInfo: () => ipcRenderer.invoke('mcp:info'),
   openLocalApp: (url) => ipcRenderer.invoke('suite:open', url),
+  postLocal: (request) => ipcRenderer.invoke('suite:post', request),
 }
 
 contextBridge.exposeInMainWorld('atelierDesktop', api)

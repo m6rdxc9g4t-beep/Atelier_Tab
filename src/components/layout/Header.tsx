@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { lazy, Suspense, useCallback, useState } from 'react'
 import {
   ChevronRight,
   Columns3,
@@ -12,9 +12,13 @@ import { useAssistant } from '@/store/assistant.store'
 import { useDataStore, useUIStore } from '@/store'
 import type { Table, ViewMode } from '@/types/domain'
 import { cn } from '@/lib/cn'
-import { ExportDialog } from '@/components/dataflow/ExportDialog'
 import { SuiteSwitcher } from './SuiteSwitcher'
 import { ThemeToggle } from './ThemeToggle'
+
+// Chargé à la première ouverture, comme l'assistant : le démarrage reste léger.
+const ExportDialog = lazy(() =>
+  import('@/components/dataflow/ExportDialog').then((m) => ({ default: m.ExportDialog })),
+)
 
 const MODES: { mode: ViewMode; label: string; icon: typeof Table2; hint: string }[] = [
   { mode: 'hybrid', label: 'Grille', icon: Table2, hint: 'Badges, avatars et formules' },
@@ -120,7 +124,11 @@ export function Header({ table, mode }: { table: Table; mode: ViewMode }) {
         <span className="@max-[48rem]:sr-only">Assistant</span>
       </button>
       <ThemeToggle />
-      <ExportDialog table={table} open={exportOpen} onClose={closeExport} />
+      {exportOpen && (
+        <Suspense fallback={null}>
+          <ExportDialog table={table} open onClose={closeExport} />
+        </Suspense>
+      )}
     </header>
   )
 }

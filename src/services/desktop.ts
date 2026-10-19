@@ -34,6 +34,20 @@ export interface McpInfo {
   launcher: string
 }
 
+/** Requête POST vers un service local de la suite (Atelier Projets), relayée par l'app. */
+export interface LocalPostRequest {
+  url: string
+  headers: Record<string, string>
+  body: string
+}
+
+export interface LocalPostResponse {
+  /** 0 : serveur injoignable. */
+  status: number
+  body: string
+  error?: string
+}
+
 export interface DesktopApi {
   platform: string
   loadData(): Promise<DesktopLoadResult>
@@ -52,6 +66,12 @@ export interface DesktopApi {
    * (shell.openExternal). Seules les adresses http(s) vers 127.0.0.1 / localhost sont acceptées.
    */
   openLocalApp(url: string): Promise<boolean>
+  /**
+   * Envoie un POST JSON à un service local (127.0.0.1 / localhost) depuis le processus
+   * principal : la page de l'app (origine app://atelier) n'est pas une origine admise par
+   * le CORS d'Atelier Projets, alors qu'une requête sans origine l'est.
+   */
+  postLocal(request: LocalPostRequest): Promise<LocalPostResponse>
 }
 
 declare global {

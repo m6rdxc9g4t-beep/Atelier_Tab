@@ -25,3 +25,11 @@ export function isLocalHttpUrl(value: unknown): value is string {
     url.password === ''
   )
 }
+
+/** Routes d'import DataFlow d'Atelier Projets (docs/SUITE.md §4.1). */
+const PROJETS_IMPORT_PATH = /^\/api\/imports\/atelier-tab(\/preview)?\/?$/
+
+/** Vrai pour la route d'import (ou d'aperçu) d'une instance locale d'Atelier Projets. */
+export function isLocalProjetsImportUrl(value: unknown): value is string {
+  return isLocalHttpUrl(value) && PROJETS_IMPORT_PATH.test(new URL(value).pathname)
+}

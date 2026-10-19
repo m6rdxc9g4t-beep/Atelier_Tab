@@ -54,11 +54,11 @@ afterAll(async () => {
 })
 
 describe('serveur MCP', () => {
-  it('se présente avec des instructions et 14 outils', async () => {
+  it('se présente avec des instructions et 15 outils', async () => {
     expect(client.getServerVersion()?.name).toBe('atelier-tab')
     expect(client.getInstructions()).toMatch(/list_tables puis read_table/)
     const { tools } = await client.listTools()
-    expect(tools).toHaveLength(14)
+    expect(tools).toHaveLength(15)
     expect(tools.find((t) => t.name === 'set_cells')?.inputSchema.required).toEqual([
       'table',
       'cells',

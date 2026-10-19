@@ -153,7 +153,13 @@ export const indexFileSchema = z.object({
       atelierProjets: z
         .object({
           webhookUrl: z.string().optional(),
-          lastExport: exportLogSchema.optional(),
+          // Ancien fichier : absent. Édité à la main : un nombre est accepté et converti.
+          projectId: z.preprocess(
+            (v) => (typeof v === 'number' ? String(v) : typeof v === 'string' && v ? v : undefined),
+            z.string().optional(),
+          ),
+          // Un journal d'export abîmé ne doit pas empêcher de charger les données.
+          lastExport: exportLogSchema.optional().catch(undefined),
         })
         .default({}),
     })
@@ -316,6 +322,11 @@ export function assembleData(index: IndexFile, tables: Record<string, Table>): A
     projects,
     tables: kept,
     collaborators: index.collaborators,
-    integrations: { atelierProjets: { ...index.integrations.atelierProjets } },
+    // Clés absentes plutôt que `undefined` (lecture tolérante ci-dessus).
+    integrations: {
+      atelierProjets: Object.fromEntries(
+        Object.entries(index.integrations.atelierProjets).filter(([, v]) => v !== undefined),
+      ),
+    },
   }
 }

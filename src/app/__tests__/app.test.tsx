@@ -170,24 +170,25 @@ describe('modes et navigation', () => {
 })
 
 describe('export DataFlow', () => {
-  const openExport = () => {
+  // Le dialogue est chargé à la demande.
+  const openExport = async () => {
     fireEvent.click(screen.getByRole('button', { name: /Exporter vers Atelier Projets/ }))
-    return screen.getByRole('dialog', { name: 'Exporter vers Atelier Projets' })
+    return screen.findByRole('dialog', { name: 'Exporter vers Atelier Projets' })
   }
 
-  it('montre une table prête et la pastille correspondante', () => {
+  it('montre une table prête et la pastille correspondante', async () => {
     render(<App />)
     expect(
       screen.getAllByRole('img', { name: 'Prête pour Atelier Projets' }).length,
     ).toBeGreaterThan(0)
-    const dialog = openExport()
+    const dialog = await openExport()
     expect(within(dialog).getByText(/Tout est conforme au schéma 2.1.0/)).toBeTruthy()
     expect(within(dialog).getByText(/Toute la table/).textContent).toContain('3 lignes')
   })
 
-  it('bloque l’export quand plus aucune colonne ne porte le titre', () => {
+  it('bloque l’export quand plus aucune colonne ne porte le titre', async () => {
     render(<App />)
-    const dialog = openExport()
+    const dialog = await openExport()
     fireEvent.change(within(dialog).getByRole('combobox', { name: /Lot \/ Tâche/ }), {
       target: { value: 'custom' },
     })
@@ -206,7 +207,7 @@ describe('export DataFlow', () => {
     }
     URL.revokeObjectURL = () => {}
     render(<App />)
-    const dialog = openExport()
+    const dialog = await openExport()
     await act(async () => {
       fireEvent.click(within(dialog).getByRole('button', { name: 'Télécharger le JSON' }))
     })
@@ -223,7 +224,7 @@ describe('export DataFlow', () => {
       return new Response('{}', { status: 201 })
     }) as typeof fetch
     render(<App />)
-    const dialog = openExport()
+    const dialog = await openExport()
     fireEvent.click(within(dialog).getByText('Envoi direct'))
     const url = within(dialog).getByPlaceholderText(/atelier-projets.example/)
     fireEvent.change(url, { target: { value: 'https://atelier.example/api/import' } })

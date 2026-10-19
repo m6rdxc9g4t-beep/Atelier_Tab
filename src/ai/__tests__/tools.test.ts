@@ -38,6 +38,7 @@ describe('définitions', () => {
       'rename',
       'evaluate',
       'check_export',
+      'configure_export',
       'export_table',
     ])
     const setCells = schemas.find((s) => s.name === 'set_cells')!
@@ -381,5 +382,47 @@ describe('export', () => {
     const res = await call('export_table', { table: 'Planning & Lots', format: 'webhook' })
     expect(res.ok).toBe(false)
     expect(res.content).toMatch(/Aucun webhook configuré/)
+    expect(res.content).toContain('http://127.0.0.1:3000/api/imports/atelier-tab')
+  })
+
+  it('configure le préréglage Atelier Projets et le projet cible', async () => {
+    open()
+    expect((await call('configure_export')).json).toEqual({
+      webhook_url: null,
+      atelier_projets: false,
+      project_id: null,
+      send_url: null,
+    })
+    const { json } = await call('configure_export', {
+      preset: 'atelier-projets-local',
+      project_id: 3,
+    })
+    expect(json).toEqual({
+      webhook_url: 'http://127.0.0.1:3000/api/imports/atelier-tab',
+      atelier_projets: true,
+      project_id: '3',
+      send_url: 'http://127.0.0.1:3000/api/imports/atelier-tab?projectId=3',
+    })
+    expect((await call('configure_export', { url: 'http://exemple.fr/hook' })).ok).toBe(false)
+    expect((await call('configure_export', { project_id: '' })).json.project_id).toBeNull()
+  })
+
+  it('envoie à Atelier Projets et renvoie son résumé', async () => {
+    open()
+    const sent: string[] = []
+    session!.host.webhookFetch = async (url) => {
+      sent.push(url)
+      return {
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({ projectId: 3, created: 3, updated: 0, skipped: 0, warnings: [] }),
+      }
+    }
+    await call('configure_export', { preset: 'atelier-projets-local', project_id: '3' })
+    const { json } = await call('export_table', { table: 'Planning & Lots', format: 'webhook' })
+    expect(sent).toEqual(['http://127.0.0.1:3000/api/imports/atelier-tab?projectId=3'])
+    expect(json.message).toBe('3 ligne(s) envoyée(s) — Atelier Projets : 3 créés')
+    expect(json.atelier_projets).toMatchObject({ projectId: 3, created: 3, warnings: [] })
   })
 })

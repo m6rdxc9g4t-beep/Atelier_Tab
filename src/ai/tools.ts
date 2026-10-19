@@ -7,7 +7,20 @@
  * réécritures de formules à l'insertion d'une ligne, même moteur de calcul.
  */
 import { z } from 'zod'
-import { buildAtelierPayload, sendToWebhook, toEnrichedCsv, validatePayload } from '@/dataflow'
+import {
+  buildAtelierPayload,
+  isProjetsImportUrl,
+  isValidWebhookUrl,
+  PROJETS_LOCAL_IMPORT_URL,
+  PROJETS_PRESET_LABEL,
+  sendToWebhook,
+  toEnrichedCsv,
+  validatePayload,
+  WEBHOOK_PRESETS,
+  withProjetsParams,
+  type ProjetsImportSummary,
+  type WebhookFetch,
+} from '@/dataflow'
 import { exportFilename } from '@/dataflow/transports/download'
 import {
   ATELIER_STATUS_PRESET_NAME,
@@ -46,6 +59,8 @@ export interface ToolHost {
     mime: string,
     requestedPath?: string,
   ): Promise<string>
+  /** Transport HTTP du webhook (l'app de bureau relaie les envois vers Atelier Projets local). */
+  webhookFetch?: WebhookFetch
 }
 
 interface ToolDef<S extends z.ZodType = z.ZodType> {
@@ -692,9 +707,53 @@ export const TOOLS = [
   }),
 
   tool({
+    name: 'configure_export',
+    description: `Règle l’envoi direct (webhook) : préréglage « ${PROJETS_PRESET_LABEL} » (${PROJETS_LOCAL_IMPORT_URL}), autre adresse https, et projet cible dans Atelier Projets. Sans argument, renvoie la configuration actuelle. Le jeton d’accès ne se règle que dans l’app.`,
+    input: z.object({
+      preset: z
+        .enum(['atelier-projets-local'])
+        .optional()
+        .describe(`"atelier-projets-local" : ${PROJETS_LOCAL_IMPORT_URL}`),
+      url: z
+        .string()
+        .optional()
+        .describe('Adresse de l’API d’import (https, ou http://127.0.0.1 / localhost). "" efface.'),
+      project_id: z
+        .union([z.string(), z.number()])
+        .optional()
+        .describe(
+          'Atelier Projets : id du projet cible. "" : projet du même nom que le projet Atelier Tab.',
+        ),
+    }),
+    run({ preset, url, project_id }, host) {
+      const target = preset
+        ? WEBHOOK_PRESETS.find((p) => p.id === preset)?.url
+        : url !== undefined
+          ? url.trim()
+          : undefined
+      if (target && !isValidWebhookUrl(target)) {
+        throw new ToolError(
+          'Adresse invalide : utilisez https:// (ou http://127.0.0.1 / http://localhost pour cette machine)',
+        )
+      }
+      const patch: { webhookUrl?: string; projectId?: string } = {}
+      if (target !== undefined) patch.webhookUrl = target
+      if (project_id !== undefined) patch.projectId = String(project_id).trim()
+      if (Object.keys(patch).length) host.store.getState().setAtelierIntegration(patch)
+      const { webhookUrl, projectId } = data(host).integrations.atelierProjets
+      return {
+        webhook_url: webhookUrl ?? null,
+        atelier_projets: webhookUrl ? isProjetsImportUrl(webhookUrl) : false,
+        project_id: projectId ?? null,
+        send_url: webhookUrl ? withProjetsParams(webhookUrl, { projectId }) : null,
+      }
+    },
+  }),
+
+  tool({
     name: 'export_table',
     description:
-      'Exporte une table vers atelier_projets : fichier JSON (schéma 2.1.0), CSV enrichi pour Excel, ou envoi direct au webhook configuré dans l’app.',
+      'Exporte une table vers Atelier Projets (atelier_projets) : fichier JSON (schéma 2.1.0), CSV enrichi pour Excel, ou envoi direct au webhook configuré (configure_export). Un envoi à Atelier Projets renvoie son résumé (créés, mis à jour, ignorés, avertissements).',
     input: z.object({
       table: tableRef,
       format: z.enum(['json', 'csv', 'webhook']),
@@ -720,15 +779,21 @@ export const TOOLS = [
       let ok = true
       let message: string
       let location: string | undefined
+      let summary: ProjetsImportSummary | undefined
       if (format === 'webhook') {
-        const { webhookUrl, token } = d.integrations.atelierProjets
+        const { webhookUrl, token, projectId } = d.integrations.atelierProjets
         if (!webhookUrl)
           throw new ToolError(
-            'Aucun webhook configuré : renseignez son adresse dans le dialogue d’export de l’app',
+            `Aucun webhook configuré : renseignez son adresse dans le dialogue d’export de l’app (préréglage « ${PROJETS_PRESET_LABEL} » : ${PROJETS_LOCAL_IMPORT_URL})`,
           )
-        const res = await sendToWebhook(payload, { url: webhookUrl, token })
+        const res = await sendToWebhook(
+          payload,
+          { url: withProjetsParams(webhookUrl, { projectId }), token },
+          host.webhookFetch ? { fetch: host.webhookFetch } : {},
+        )
         ok = res.ok
         message = res.ok ? `${count} ligne(s) envoyée(s) — ${res.message}` : res.message
+        if (res.summary) summary = res.summary
       } else {
         const content =
           format === 'json' ? JSON.stringify(payload, null, 2) : toEnrichedCsv(payload)
@@ -748,6 +813,7 @@ export const TOOLS = [
       return {
         message,
         ...(location ? { file: location } : {}),
+        ...(summary ? { atelier_projets: summary } : {}),
         warnings: report.issues.map((i) => i.message),
       }
     },

@@ -5,7 +5,8 @@
  * - Données : dossier ~/Atelier_Tab (fichiers JSON), lu et écrit ici, surveillé pour
  *   refléter en direct les modifications faites par Claude Code ou un autre programme.
  * - Ollama : les requêtes de l'assistant passent par ici (pas de contrainte CORS).
- * - Suite Atelier : ouverture des autres applications (adresses 127.0.0.1 / localhost).
+ * - Suite Atelier : ouverture des autres applications et envoi vers Atelier Projets local
+ *   (adresses 127.0.0.1 / localhost uniquement).
  */
 import fs from 'node:fs'
 import path from 'node:path'
@@ -23,8 +24,15 @@ import {
   shell,
   type MenuItemConstructorOptions,
 } from 'electron'
-import { isLocalHttpUrl } from '@/lib/local-url'
-import type { DesktopLoadResult, McpInfo, OllamaRequest, OllamaResponse } from '@/services/desktop'
+import { isLocalHttpUrl, isLocalProjetsImportUrl } from '@/lib/local-url'
+import type {
+  DesktopLoadResult,
+  LocalPostRequest,
+  LocalPostResponse,
+  McpInfo,
+  OllamaRequest,
+  OllamaResponse,
+} from '@/services/desktop'
 import type { AppData } from '@/types/domain'
 import { defaultDataDir, defaultSecretsFile, ensureDataDirGuide, FileStore } from './file-store'
 
@@ -101,6 +109,37 @@ ipcMain.handle('suite:open', async (_event, url: unknown) => {
   if (!isLocalHttpUrl(url)) return false
   await shell.openExternal(url)
   return true
+})
+
+// Envoi vers la route d'import d'Atelier Projets local. La page de l'app a l'origine
+// app://atelier, refusée par le CORS de Projets ; depuis ce processus, la requête part
+// sans en-tête Origin, comme celle d'un script local.
+ipcMain.handle('suite:post', async (_event, req: LocalPostRequest): Promise<LocalPostResponse> => {
+  if (!req || !isLocalProjetsImportUrl(req.url) || typeof req.body !== 'string') {
+    return { status: 0, body: '', error: 'Adresse non autorisée' }
+  }
+  const headers: Record<string, string> = {}
+  for (const name of [
+    'Content-Type',
+    'Authorization',
+    'Idempotency-Key',
+    'X-Atelier-Schema-Version',
+  ]) {
+    const value = req.headers?.[name]
+    if (typeof value === 'string') headers[name] = value
+  }
+  try {
+    const res = await fetch(req.url, {
+      method: 'POST',
+      headers,
+      body: req.body,
+      redirect: 'error',
+      signal: AbortSignal.timeout(60_000),
+    })
+    return { status: res.status, body: await res.text() }
+  } catch (e) {
+    return { status: 0, body: '', error: e instanceof Error ? e.message : String(e) }
+  }
 })
 
 // ---------------------------------------------------------------------------
