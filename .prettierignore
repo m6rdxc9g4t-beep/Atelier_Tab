@@ -4,3 +4,8 @@ package-lock.json
 coverage
 release
 dist-desktop
+
+# Contrat commun aux trois dépôts : copie identique, jamais reformatée.
+docs/SUITE.md
+# Copies verbatim du design system d’Atelier Projets.
+src/styles/atelier-ds/
