@@ -41,3 +41,12 @@ export {
   type WebhookPreset,
 } from './transports/projets'
 export { downloadText, exportFilename, slugify } from './transports/download'
+export {
+  SNAPSHOTS_DIR,
+  buildSnapshotPayload,
+  isSnapshotOf,
+  serializeSnapshot,
+  sheetFor,
+  snapshotFile,
+  snapshotFingerprint,
+} from './snapshot'

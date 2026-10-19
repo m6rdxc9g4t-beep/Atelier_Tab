@@ -38,7 +38,7 @@ export interface FileStoreOptions {
   secretsFile?: string
 }
 
-/** Dossier de données par défaut : ~/Atelier_Tab (ou ATELIER_TAB_DATA). */
+/** Dossier de données par défaut : ~/Atelier_Tab (ou ATELIER_TAB_DATA). Nom technique inchangé. */
 export function defaultDataDir(): string {
   return process.env.ATELIER_TAB_DATA || path.join(os.homedir(), 'Atelier_Tab')
 }
@@ -272,10 +272,10 @@ export class FileStore {
 }
 
 /** Guide placé à la racine du dossier, lu automatiquement par Claude Code. */
-export const DATA_DIR_GUIDE = `# Données Atelier_Tab
+export const DATA_DIR_GUIDE = `# Données Atelier Tab
 
-Ce dossier contient les données de l'application Atelier_Tab. L'app se met à jour
-automatiquement quand un fichier est modifié.
+Ce dossier contient les données de l'application Atelier Tab (Suite Atelier). L'app se met
+à jour automatiquement quand un fichier est modifié.
 
 ## Méthode recommandée : les outils MCP « atelier-tab »
 
@@ -286,9 +286,10 @@ formules recalculées, lignes de total étendues, validation de l'export).
 - list_tables, read_table : lire
 - set_cells, add_rows, delete_rows : modifier les lignes
 - add_column, update_column, delete_column : modifier les colonnes
+  (preset: "atelier" pour une colonne de statut avec les 8 statuts de la Suite Atelier)
 - create_project, create_table, rename : organiser
 - evaluate : calculer une formule
-- check_export, export_table : exporter vers atelier_projets
+- check_export, export_table : exporter vers Atelier Projets (atelier_projets)
 
 ## Format des fichiers (édition directe)
 
@@ -306,7 +307,20 @@ formules recalculées, lignes de total étendues, validation de l'export).
 - Les valeurs calculées ne sont pas enregistrées : l'app les recalcule.
 - Après avoir inséré ou supprimé une ligne à la main, mets à jour les formules qui
   référencent les lignes suivantes (les outils MCP le font automatiquement).
+
+## Dossier \`exports/\`
+
+- \`exports/<id de table>.json\` : instantané de chaque table, lu par Atelier Viz (connecteur
+  « Atelier Tab »). Enveloppe DataFlow v2.1.0 (\`target_system\`, \`schema_version\`,
+  \`project.columns_schema\`, \`project.records\` avec \`raw\` et \`computed\`), réécrite par l'app
+  après chaque enregistrement et supprimée avec la table. Ne pas modifier : ces fichiers sont
+  régénérés ; modifie la table dans \`tables/\`.
+- \`exports/atelier_projets_<table>_<date>.json|csv\` : exports manuels (dialogue d'export ou
+  outil export_table), jamais modifiés par l'app.
 `
+
+/** Titres des versions de ce guide écrites par l'app (avant et après le renommage affiché). */
+const GUIDE_HEADINGS = ['# Données Atelier Tab', '# Données Atelier_Tab']
 
 /** Écrit le guide du dossier s'il est absent ou s'il s'agit d'une ancienne version du nôtre. */
 export function ensureDataDirGuide(dir: string): void {
@@ -314,7 +328,7 @@ export function ensureDataDirGuide(dir: string): void {
   try {
     const current = fs.readFileSync(file, 'utf8')
     // Un CLAUDE.md écrit par l'utilisateur n'est jamais remplacé.
-    if (current === DATA_DIR_GUIDE || !current.startsWith('# Données Atelier_Tab')) return
+    if (current === DATA_DIR_GUIDE || !GUIDE_HEADINGS.some((h) => current.startsWith(h))) return
   } catch {
     /* absent */
   }

@@ -4,6 +4,8 @@
  * - Interface : le build web (dist/) servi par le protocole privé `app://atelier/`.
  * - Données : dossier ~/Atelier_Tab (fichiers JSON), lu et écrit ici, surveillé pour
  *   refléter en direct les modifications faites par Claude Code ou un autre programme.
+ * - Instantanés pour Atelier Viz : ~/Atelier_Tab/exports/<tableId>.json, mis à jour après
+ *   chaque enregistrement (docs/SUITE.md §4.2).
  * - Ollama : les requêtes de l'assistant passent par ici (pas de contrainte CORS).
  * - Suite Atelier : ouverture des autres applications et envoi vers Atelier Projets local
  *   (adresses 127.0.0.1 / localhost uniquement).
@@ -35,6 +37,7 @@ import type {
 } from '@/services/desktop'
 import type { AppData } from '@/types/domain'
 import { defaultDataDir, defaultSecretsFile, ensureDataDirGuide, FileStore } from './file-store'
+import { SnapshotWriter } from './snapshots'
 
 /** Nom affiché (menus, titre, boîtes de dialogue). Le dossier de données reste ~/Atelier_Tab. */
 const APP_NAME = 'Atelier Tab'
@@ -57,6 +60,10 @@ protocol.registerSchemesAsPrivileged([
 
 const dataDir = defaultDataDir()
 const store = new FileStore({ dir: dataDir, secretsFile: defaultSecretsFile() })
+const snapshots = new SnapshotWriter({
+  dir: dataDir,
+  onError: (e) => console.error('Instantané Atelier Viz :', e),
+})
 let stopWatching: (() => void) | null = null
 
 function broadcast(channel: string, payload: unknown) {
@@ -66,7 +73,10 @@ function broadcast(channel: string, payload: unknown) {
 function startWatching() {
   if (stopWatching) return
   stopWatching = store.watch(
-    (data) => broadcast('data:external', data),
+    (data) => {
+      broadcast('data:external', data)
+      snapshots.schedule(data)
+    },
     (errors) => broadcast('data:errors', errors),
   )
 }
@@ -75,7 +85,11 @@ ipcMain.handle('data:load', (): DesktopLoadResult => {
   fs.mkdirSync(dataDir, { recursive: true })
   ensureDataDirGuide(dataDir)
   const { data, errors } = store.load()
-  if (data) startWatching()
+  if (data) {
+    startWatching()
+    // Publie (ou met à jour) les instantanés au démarrage : tables modifiées app fermée.
+    snapshots.schedule(data)
+  }
   return { data, errors, dir: dataDir }
 })
 
@@ -83,6 +97,7 @@ ipcMain.handle('data:save', (_event, json: string) => {
   const parsed = JSON.parse(json) as { state?: AppData }
   if (!parsed.state) return
   store.save(parsed.state)
+  snapshots.schedule(parsed.state)
   startWatching()
 })
 
@@ -313,6 +328,14 @@ function buildMenu() {
       label: 'Fichier',
       submenu: [
         { label: 'Ouvrir le dossier des données', click: () => void shell.openPath(dataDir) },
+        {
+          label: 'Ouvrir le dossier des instantanés (Atelier Viz)',
+          click: () => {
+            const dir = path.join(dataDir, 'exports')
+            fs.mkdirSync(dir, { recursive: true })
+            void shell.openPath(dir)
+          },
+        },
         { label: 'Connecter Claude Code…', click: () => void showClaudeConnection(mainWindow) },
         ...(isMac
           ? []
@@ -383,5 +406,8 @@ if (!app.requestSingleInstanceLock()) {
     if (process.platform !== 'darwin') app.quit()
   })
 
-  app.on('will-quit', () => stopWatching?.())
+  app.on('will-quit', () => {
+    snapshots.flush()
+    stopWatching?.()
+  })
 }
