@@ -1,10 +1,11 @@
 /**
- * Processus principal de l'application de bureau Atelier_Tab.
+ * Processus principal de l'application de bureau Atelier Tab.
  *
  * - Interface : le build web (dist/) servi par le protocole privé `app://atelier/`.
  * - Données : dossier ~/Atelier_Tab (fichiers JSON), lu et écrit ici, surveillé pour
  *   refléter en direct les modifications faites par Claude Code ou un autre programme.
  * - Ollama : les requêtes de l'assistant passent par ici (pas de contrainte CORS).
+ * - Suite Atelier : ouverture des autres applications (adresses 127.0.0.1 / localhost).
  */
 import fs from 'node:fs'
 import path from 'node:path'
@@ -22,11 +23,13 @@ import {
   shell,
   type MenuItemConstructorOptions,
 } from 'electron'
+import { isLocalHttpUrl } from '@/lib/local-url'
 import type { DesktopLoadResult, McpInfo, OllamaRequest, OllamaResponse } from '@/services/desktop'
 import type { AppData } from '@/types/domain'
 import { defaultDataDir, defaultSecretsFile, ensureDataDirGuide, FileStore } from './file-store'
 
-const APP_NAME = 'Atelier_Tab'
+/** Nom affiché (menus, titre, boîtes de dialogue). Le dossier de données reste ~/Atelier_Tab. */
+const APP_NAME = 'Atelier Tab'
 const SCHEME = 'app'
 const HOST = 'atelier'
 const DIST = path.join(__dirname, '..', 'dist')
@@ -86,6 +89,18 @@ ipcMain.handle('export:save', (_event, filename: string, content: string) => {
   const target = path.join(dir, safe)
   fs.writeFileSync(target, content, 'utf8')
   return target
+})
+
+// ---------------------------------------------------------------------------
+// Suite Atelier
+// ---------------------------------------------------------------------------
+
+// Ouvre une autre application de la suite dans le navigateur par défaut. Surface IPC
+// volontairement étroite : http(s) vers 127.0.0.1 / localhost uniquement.
+ipcMain.handle('suite:open', async (_event, url: unknown) => {
+  if (!isLocalHttpUrl(url)) return false
+  await shell.openExternal(url)
+  return true
 })
 
 // ---------------------------------------------------------------------------
@@ -168,7 +183,7 @@ async function showClaudeConnection(win: BrowserWindow | null) {
   const options = {
     type: 'info' as const,
     title: 'Connecter Claude Code',
-    message: 'Donner à Claude Code l’accès à Atelier_Tab',
+    message: `Donner à Claude Code l’accès à ${APP_NAME}`,
     detail:
       `Lancez cette commande une fois dans le Terminal :\n\n${info.claudeCommand}\n\n` +
       `Ensuite, dans Claude Code, demandez par exemple « Ajoute une ligne Menuiseries à 12 000 € dans Planning & Lots ».\n\n` +

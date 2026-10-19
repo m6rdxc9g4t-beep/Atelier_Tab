@@ -15,7 +15,7 @@ export function useExportStatus(tableId: string): ExportStatus | null {
 }
 
 export const STATUS_LABELS: Record<ExportStatus, string> = {
-  ready: 'Prête pour atelier_projets',
+  ready: 'Prête pour Atelier Projets',
   warnings: 'Exportable, avec des points à vérifier',
   blocked: 'Pas encore exportable',
 }

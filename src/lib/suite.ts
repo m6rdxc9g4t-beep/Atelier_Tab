@@ -1,0 +1,109 @@
+/**
+ * Suite Atelier (docs/SUITE.md §2 et §3) : adresses des trois applications, état
+ * « en marche / arrêtée » et ouverture d'une application.
+ *
+ * Adresses = colonne « Interface (aperçu / app) » du contrat, surchargeables par variables
+ * Vite : VITE_ATELIER_VIZ_URL, VITE_ATELIER_TAB_URL, VITE_ATELIER_PROJETS_URL (interfaces)
+ * et VITE_ATELIER_PROJETS_API_URL (API d'Atelier Projets, pour l'indicateur).
+ */
+import { getDesktopApi } from '@/services/desktop'
+
+export type SuiteAppId = 'viz' | 'tab' | 'projets'
+
+export interface SuiteApp {
+  id: SuiteAppId
+  name: string
+  description: string
+  /** Adresse ouverte par le sélecteur. */
+  url: string
+  /** Route de santé de l'API (null : application sans API, pas d'indicateur). */
+  healthUrl: string | null
+}
+
+/** Application courante. */
+export const CURRENT_APP: SuiteAppId = 'tab'
+
+/** Délai d'attente de la route de santé (contrat : 1,5 s). */
+export const HEALTH_TIMEOUT_MS = 1500
+
+const env = (import.meta.env ?? {}) as Record<string, string | undefined>
+
+function urlFrom(variable: string, fallback: string): string {
+  const value = env[variable]?.trim()
+  return (value || fallback).replace(/\/+$/, '')
+}
+
+const VIZ_URL = urlFrom('VITE_ATELIER_VIZ_URL', 'http://127.0.0.1:8000')
+const TAB_URL = urlFrom('VITE_ATELIER_TAB_URL', 'http://127.0.0.1:4175')
+const PROJETS_URL = urlFrom('VITE_ATELIER_PROJETS_URL', 'http://127.0.0.1:4174')
+const PROJETS_API_URL = urlFrom('VITE_ATELIER_PROJETS_API_URL', 'http://127.0.0.1:3000')
+
+export const SUITE_APPS: readonly SuiteApp[] = [
+  {
+    id: 'viz',
+    name: 'Atelier Viz',
+    description: 'BI locale : rapports, visuels, IA',
+    url: VIZ_URL,
+    // L'API de Viz est servie par la même adresse que son interface (FastAPI).
+    healthUrl: `${VIZ_URL}/api/health`,
+  },
+  {
+    id: 'tab',
+    name: 'Atelier Tab',
+    description: 'Tableur et base de données typée',
+    url: TAB_URL,
+    healthUrl: null,
+  },
+  {
+    id: 'projets',
+    name: 'Atelier Projets',
+    description: 'Projets agiles, Git, temps passé',
+    url: PROJETS_URL,
+    healthUrl: `${PROJETS_API_URL}/api/health`,
+  },
+]
+
+export type SuiteStatus = 'up' | 'down'
+
+/**
+ * Teste une route de santé sans bloquer : délai de 1,5 s, jamais d'exception.
+ *
+ * Les autres applications sont sur une autre origine et n'autorisent pas forcément CORS :
+ * `mode: 'no-cors'` donne une réponse opaque (statut illisible) dont la simple arrivée
+ * prouve que le serveur écoute (« en marche ») ; une erreur réseau ou le délai dépassé
+ * signifient « arrêtée ». Limite assumée : une API qui répond 500 paraît « en marche ».
+ */
+export async function checkHealth(
+  healthUrl: string,
+  timeoutMs = HEALTH_TIMEOUT_MS,
+  doFetch: typeof fetch = fetch,
+): Promise<SuiteStatus> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    const response = await doFetch(healthUrl, {
+      mode: 'no-cors',
+      cache: 'no-store',
+      credentials: 'omit',
+      signal: controller.signal,
+    })
+    return response.type === 'opaque' || response.ok ? 'up' : 'down'
+  } catch {
+    return 'down'
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/**
+ * Ouvre une application de la suite : navigateur par défaut via `shell.openExternal`
+ * dans l'app de bureau, nouvel onglet dans le navigateur.
+ */
+export function openSuiteApp(app: SuiteApp): void {
+  const desktop = getDesktopApi()
+  if (desktop) {
+    void desktop.openLocalApp(app.url)
+    return
+  }
+  window.open(app.url, '_blank', 'noopener,noreferrer')
+}

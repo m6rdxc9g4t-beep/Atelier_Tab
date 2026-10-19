@@ -47,6 +47,11 @@ export interface DesktopApi {
   ollama(request: OllamaRequest): Promise<OllamaResponse>
   ollamaCancel(id: string): Promise<void>
   mcpInfo(): Promise<McpInfo>
+  /**
+   * Ouvre une application de la Suite Atelier dans le navigateur par défaut
+   * (shell.openExternal). Seules les adresses http(s) vers 127.0.0.1 / localhost sont acceptées.
+   */
+  openLocalApp(url: string): Promise<boolean>
 }
 
 declare global {

@@ -44,7 +44,7 @@ const METHODS: { id: ExportMethod; title: string; detail: string; icon: typeof F
 const ACTION_LABELS: Record<ExportMethod, string> = {
   json: 'Télécharger le JSON',
   csv: 'Télécharger le CSV',
-  webhook: 'Envoyer à atelier_projets',
+  webhook: 'Envoyer à Atelier Projets',
 }
 
 export function ExportDialog({
@@ -100,7 +100,7 @@ function ExportDialogBody({ table, onClose }: { table: Table; onClose: () => voi
     <Dialog
       open
       onClose={onClose}
-      title="Exporter vers atelier_projets"
+      title="Exporter vers Atelier Projets"
       description={
         <>
           Table <span className="font-medium text-ink">{table.name}</span>, schéma{' '}
@@ -339,7 +339,7 @@ function ColumnMapping({ table }: { table: Table }) {
               onChange={(e) =>
                 updateField(table.id, fieldId, { atelierMapping: e.target.value as AtelierMapping })
               }
-              aria-label={`Rôle de la colonne ${field.label} dans atelier_projets`}
+              aria-label={`Rôle de la colonne ${field.label} dans Atelier Projets`}
               className="h-7 w-48 rounded-md border border-line bg-surface px-1.5 outline-none focus:border-accent"
             >
               {Object.entries(MAPPING_LABELS).map(([value, label]) => (

@@ -13,6 +13,7 @@ import { useDataStore, useUIStore } from '@/store'
 import type { Table, ViewMode } from '@/types/domain'
 import { cn } from '@/lib/cn'
 import { ExportDialog } from '@/components/dataflow/ExportDialog'
+import { SuiteSwitcher } from './SuiteSwitcher'
 import { ThemeToggle } from './ThemeToggle'
 
 const MODES: { mode: ViewMode; label: string; icon: typeof Table2; hint: string }[] = [
@@ -45,6 +46,17 @@ export function Header({ table, mode }: { table: Table; mode: ViewMode }) {
           <PanelLeftOpen size={15} />
         </button>
       )}
+
+      <div className="flex shrink-0 items-center gap-1.5">
+        <SuiteSwitcher />
+        <span className="flex items-center gap-1.5 font-semibold tracking-tight text-ink">
+          <span className="grid size-5 place-items-center rounded-md bg-accent text-accent-ink">
+            <Table2 size={12} aria-hidden />
+          </span>
+          <span className="@max-[52rem]:sr-only">Atelier Tab</span>
+        </span>
+      </div>
+      <span className="h-4 w-px shrink-0 bg-line" aria-hidden />
 
       <nav aria-label="Fil d'Ariane" className="flex min-w-0 flex-1 items-center gap-1 text-muted">
         {workspace && <span className="truncate">{workspace.name}</span>}
@@ -84,12 +96,12 @@ export function Header({ table, mode }: { table: Table; mode: ViewMode }) {
       <button
         type="button"
         onClick={() => setExportOpen(true)}
-        aria-label="Exporter vers atelier_projets"
-        title="Exporter cette table vers atelier_projets (JSON, CSV ou webhook)"
+        aria-label="Exporter vers Atelier Projets"
+        title="Exporter cette table vers Atelier Projets (JSON, CSV ou envoi direct)"
         className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg bg-accent px-3 font-medium text-accent-ink hover:opacity-90"
       >
         <Send size={14} />
-        <span className="@max-[64rem]:hidden">Exporter vers atelier_projets</span>
+        <span className="@max-[64rem]:hidden">Exporter vers Atelier Projets</span>
         <span className="hidden @max-[64rem]:inline">Exporter</span>
       </button>
       <button

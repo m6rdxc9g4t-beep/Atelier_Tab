@@ -171,14 +171,14 @@ describe('modes et navigation', () => {
 
 describe('export DataFlow', () => {
   const openExport = () => {
-    fireEvent.click(screen.getByRole('button', { name: /Exporter vers atelier_projets/ }))
-    return screen.getByRole('dialog', { name: 'Exporter vers atelier_projets' })
+    fireEvent.click(screen.getByRole('button', { name: /Exporter vers Atelier Projets/ }))
+    return screen.getByRole('dialog', { name: 'Exporter vers Atelier Projets' })
   }
 
   it('montre une table prête et la pastille correspondante', () => {
     render(<App />)
     expect(
-      screen.getAllByRole('img', { name: 'Prête pour atelier_projets' }).length,
+      screen.getAllByRole('img', { name: 'Prête pour Atelier Projets' }).length,
     ).toBeGreaterThan(0)
     const dialog = openExport()
     expect(within(dialog).getByText(/Tout est conforme au schéma 2.1.0/)).toBeTruthy()
@@ -229,7 +229,7 @@ describe('export DataFlow', () => {
     fireEvent.change(url, { target: { value: 'https://atelier.example/api/import' } })
     fireEvent.blur(url)
     await act(async () => {
-      fireEvent.click(within(dialog).getByRole('button', { name: 'Envoyer à atelier_projets' }))
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Envoyer à Atelier Projets' }))
     })
     expect(calls[0]?.[0]).toBe('https://atelier.example/api/import')
     expect(within(dialog).getByRole('status').textContent).toMatch(/3 lignes envoyées/)
