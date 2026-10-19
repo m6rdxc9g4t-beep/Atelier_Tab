@@ -12,6 +12,7 @@ import { useAssistant } from '@/store/assistant.store'
 import { useDataStore, useUIStore } from '@/store'
 import type { Table, ViewMode } from '@/types/domain'
 import { cn } from '@/lib/cn'
+import { AtelierBrand } from './AtelierBrand'
 import { SuiteSwitcher } from './SuiteSwitcher'
 import { ThemeToggle } from './ThemeToggle'
 
@@ -53,14 +54,7 @@ export function Header({ table, mode }: { table: Table; mode: ViewMode }) {
 
       <div className="flex shrink-0 items-center gap-1.5">
         <SuiteSwitcher />
-        <span className="atelier-brand text-ink" title="Atelier Tab">
-          <span className="atelier-brand__tile" aria-hidden="true">
-            <Table2 />
-          </span>
-          <span className="atelier-brand__name @max-[52rem]:sr-only">
-            <span className="atelier-brand__prefix">atelier_</span>Tab
-          </span>
-        </span>
+        <AtelierBrand nameClassName="text-ink @max-[52rem]:sr-only" />
       </div>
       <span className="h-4 w-px shrink-0 bg-line" aria-hidden />
 
