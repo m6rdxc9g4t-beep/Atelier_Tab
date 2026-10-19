@@ -1,50 +1,76 @@
 @import 'tailwindcss';
 
 /*
- * Thème Atelier_Tab
- * - Clair par défaut, sombre via la classe `.dark` sur <html> (pilotée par useTheme).
- * - Toutes les couleurs passent par des tokens : les composants n'utilisent jamais
- *   de couleurs Tailwind brutes (bg-zinc-…) mais les utilitaires générés ci-dessous
- *   (bg-surface, text-muted, border-line…).
+ * Design system de la Suite Atelier (copie verbatim de Atelier_Projets/design-system,
+ * voir docs/SUITE.md §1.1) : 6 variables de fondation par thème + 15 couleurs officielles.
+ * Ne pas modifier ces fichiers : les recopier depuis la référence.
  */
-@custom-variant dark (&:where(.dark, .dark *));
+@import './styles/atelier-ds/colors.css';
+@import './styles/atelier-ds/light.css';
+@import './styles/atelier-ds/dark.css';
+
+/*
+ * Thème Atelier Tab
+ * - Clair par défaut ; sombre quand <html> porte `class="dark"` et `data-theme="dark"`
+ *   (posés ensemble par useTheme). Le variant `dark:` de Tailwind accepte les deux marqueurs.
+ * - Les jetons de Tab gardent leurs noms (les composants ne changent pas) mais leurs
+ *   valeurs dérivent des variables de fondation (docs/SUITE.md §1.2). Aucun code couleur
+ *   littéral ici : uniquement var() et color-mix(in oklab, …), comme design-system/tokens/ui.css.
+ * - Les composants n'utilisent jamais de couleurs Tailwind brutes (bg-zinc-…) mais les
+ *   utilitaires générés ci-dessous (bg-surface, text-muted, border-line…).
+ */
+@custom-variant dark (&:where(.dark, .dark *, [data-theme='dark'], [data-theme='dark'] *));
 
 :root {
-  --surface: oklch(1 0 0);
-  --surface-sunken: oklch(0.975 0.002 260);
-  --surface-raised: oklch(1 0 0);
-  --surface-hover: oklch(0.955 0.004 260);
-  --line: oklch(0.91 0.004 260);
-  --line-strong: oklch(0.84 0.006 260);
-  --ink: oklch(0.22 0.01 260);
-  --muted: oklch(0.52 0.012 260);
-  --faint: oklch(0.68 0.01 260);
-  --accent: oklch(0.55 0.17 262);
-  --accent-soft: oklch(0.95 0.03 262);
-  --accent-ink: oklch(1 0 0);
-  --selection: oklch(0.55 0.17 262 / 0.12);
-  --danger: oklch(0.58 0.2 25);
-  --warning: oklch(0.72 0.15 75);
-  --success: oklch(0.6 0.14 155);
+  /* Surfaces */
+  --surface: var(--bg-surface);
+  --surface-sunken: var(--bg-main);
+  --surface-raised: var(--bg-surface);
+  --surface-hover: color-mix(in oklab, var(--bg-elevated) 70%, var(--bg-surface));
+
+  /* Traits */
+  --line: var(--border-color);
+  --line-strong: color-mix(in oklab, var(--border-color) 60%, var(--text-muted));
+
+  /* Texte */
+  --ink: var(--text-primary);
+  --muted: var(--text-muted);
+  --faint: color-mix(in oklab, var(--text-muted) 70%, var(--bg-surface));
+
+  /* Accent = couleur du type EPIC */
+  --accent: var(--type-epic);
+  --accent-soft: color-mix(in oklab, var(--type-epic) 14%, var(--bg-surface));
+  /* Texte posé sur l'accent (et sur une teinte pleine) : le blanc du thème clair. */
+  --accent-ink: var(--bg-surface);
+  --selection: color-mix(in oklab, var(--type-epic) 12%, transparent);
+  /* Assombrit une teinte pleine sous un texte clair (avatars). */
+  --tone-shade: var(--text-primary);
+
+  /* États */
+  --success: var(--status-closed);
+  --danger: var(--status-rejected);
+  --warning: var(--status-hold);
+
+  /* Forme et typographie (docs/SUITE.md §1.3) — piles système, aucune police téléchargée */
+  --ds-radius-sm: 6px;
+  --ds-radius-md: 10px;
+  --ds-radius-lg: 16px;
+  --ds-font-sans:
+    ui-sans-serif, system-ui, -apple-system, 'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue',
+    Arial, sans-serif;
+  --ds-font-mono:
+    ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
 }
 
+:root[data-theme='dark'],
+[data-theme='dark'],
 .dark {
-  --surface: oklch(0.19 0.008 260);
-  --surface-sunken: oklch(0.16 0.008 260);
-  --surface-raised: oklch(0.23 0.009 260);
-  --surface-hover: oklch(0.25 0.01 260);
-  --line: oklch(0.29 0.01 260);
-  --line-strong: oklch(0.36 0.012 260);
-  --ink: oklch(0.94 0.004 260);
-  --muted: oklch(0.7 0.01 260);
-  --faint: oklch(0.55 0.01 260);
-  --accent: oklch(0.68 0.15 262);
-  --accent-soft: oklch(0.3 0.06 262);
-  --accent-ink: oklch(0.16 0.01 260);
-  --selection: oklch(0.68 0.15 262 / 0.18);
-  --danger: oklch(0.68 0.19 25);
-  --warning: oklch(0.78 0.14 75);
-  --success: oklch(0.7 0.13 155);
+  /* En sombre, --bg-surface est foncé : le texte sur l'accent reste clair. */
+  --accent-ink: var(--text-primary);
+  --accent-soft: color-mix(in oklab, var(--type-epic) 22%, var(--bg-surface));
+  --selection: color-mix(in oklab, var(--type-epic) 18%, transparent);
+  --faint: color-mix(in oklab, var(--text-muted) 65%, var(--bg-surface));
+  --tone-shade: var(--bg-surface);
 }
 
 @theme inline {
@@ -65,68 +91,84 @@
   --color-warning: var(--warning);
   --color-success: var(--success);
 
-  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  /* rounded-md / -lg / -xl → 6 / 10 / 16 px */
+  --radius-md: var(--ds-radius-sm);
+  --radius-lg: var(--ds-radius-md);
+  --radius-xl: var(--ds-radius-lg);
+
+  --font-sans: var(--ds-font-sans);
+  --font-mono: var(--ds-font-mono);
 }
 
 /*
- * Teintes nommées (badges de statut, avatars, références de formule).
- * Chaque classe fixe une teinte `--h` ; fond et texte en sont dérivés pour chaque thème.
+ * Teintes (badges, avatars, pastilles). Chaque classe fixe une couleur `--tone` prise
+ * dans les couleurs officielles ; fond, texte et pastille en dérivent pour chaque thème.
+ * Un badge de statut de workflow reconnu (docs/SUITE.md §1.4) porte `data-status="CODE"` :
+ * sa couleur officielle l'emporte alors sur la teinte nommée du choix.
  */
 @layer components {
   .tone-gray {
-    --h: 260;
-    --c: 0.015;
+    --tone: var(--status-open);
   }
   .tone-blue {
-    --h: 252;
-    --c: 0.12;
+    --tone: var(--status-progress);
   }
   .tone-green {
-    --h: 150;
-    --c: 0.11;
+    --tone: var(--status-closed);
   }
   .tone-amber {
-    --h: 70;
-    --c: 0.12;
+    --tone: var(--status-hold);
   }
   .tone-red {
-    --h: 25;
-    --c: 0.14;
+    --tone: var(--status-rejected);
   }
   .tone-violet {
-    --h: 300;
-    --c: 0.12;
+    --tone: var(--status-review);
   }
   .tone-pink {
-    --h: 350;
-    --c: 0.12;
+    --tone: color-mix(in oklab, var(--status-rejected) 55%, var(--status-review));
   }
   .tone-teal {
-    --h: 190;
-    --c: 0.09;
+    --tone: var(--status-resolved);
   }
 
-  .tone-soft {
-    background-color: oklch(0.95 calc(var(--c) * 0.4) var(--h));
-    color: oklch(0.42 var(--c) var(--h));
+  [data-status='OPEN'] {
+    --tone: var(--status-open);
   }
+  [data-status='IN_PROGRESS'] {
+    --tone: var(--status-progress);
+  }
+  [data-status='IN_REVIEW'] {
+    --tone: var(--status-review);
+  }
+  [data-status='ON_HOLD'] {
+    --tone: var(--status-hold);
+  }
+  [data-status='BLOCKED'] {
+    --tone: var(--status-blocked);
+  }
+  [data-status='RESOLVED'] {
+    --tone: var(--status-resolved);
+  }
+  [data-status='CLOSED'] {
+    --tone: var(--status-closed);
+  }
+  [data-status='REJECTED'] {
+    --tone: var(--status-rejected);
+  }
+
+  /* Comme --kind-soft / --kind-ink du design system (components/semantic.css). */
+  .tone-soft {
+    background-color: color-mix(in oklab, var(--tone) 16%, var(--bg-surface));
+    color: color-mix(in oklab, var(--tone) 72%, var(--text-primary));
+  }
+  /* Teinte pleine (avatars) : assombrie pour que les initiales restent lisibles. */
   .tone-solid {
-    background-color: oklch(0.62 var(--c) var(--h));
-    color: oklch(1 0 0);
+    background-color: color-mix(in oklab, var(--tone) 78%, var(--tone-shade));
+    color: var(--accent-ink);
   }
   .tone-dot {
-    background-color: oklch(0.62 var(--c) var(--h));
-  }
-  .dark .tone-soft {
-    background-color: oklch(0.32 calc(var(--c) * 0.5) var(--h));
-    color: oklch(0.86 calc(var(--c) * 0.8) var(--h));
-  }
-  .dark .tone-solid {
-    background-color: oklch(0.55 var(--c) var(--h));
-  }
-  .dark .tone-dot {
-    background-color: oklch(0.72 var(--c) var(--h));
+    background-color: var(--tone);
   }
 
   /* Références colorées : contour de la zone lue par la formule active. */
@@ -152,17 +194,9 @@
 }
 
 @layer base {
-  html {
-    color-scheme: light;
-  }
-  html.dark {
-    color-scheme: dark;
-  }
   body {
     @apply bg-surface text-ink font-sans text-[13px] antialiased;
-    font-feature-settings:
-      'tnum' 1,
-      'cv11' 1;
+    font-feature-settings: 'tnum' 1;
   }
   *:focus-visible {
     @apply outline-2 outline-offset-1 outline-accent;

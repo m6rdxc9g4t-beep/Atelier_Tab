@@ -6,18 +6,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="Atelier_Tab — tableur et base de données hybride, avec export DataFlow vers atelier_projets."
+      content="Atelier Tab — tableur et base de données hybride de la Suite Atelier, avec export DataFlow vers Atelier Projets."
     />
-    <title>Atelier_Tab</title>
+    <title>Atelier Tab</title>
     <script>
       // Applique le thème avant le premier rendu pour éviter un flash clair → sombre.
-      try {
-        var p = localStorage.getItem('atelier-tab:theme')
-        var dark =
-          p === 'dark' ||
-          ((!p || p === 'system') && matchMedia('(prefers-color-scheme: dark)').matches)
-        if (dark) document.documentElement.classList.add('dark')
-      } catch (e) {}
+      // Deux marqueurs (docs/SUITE.md §1.5) : classe `dark` et `data-theme`. Voir useTheme.
+      ;(function () {
+        var root = document.documentElement
+        var dark = false
+        try {
+          var p = localStorage.getItem('atelier-tab:theme')
+          dark =
+            p === 'dark' ||
+            ((!p || p === 'system') && matchMedia('(prefers-color-scheme: dark)').matches)
+        } catch (e) {}
+        root.classList.toggle('dark', dark)
+        root.setAttribute('data-theme', dark ? 'dark' : 'light')
+      })()
     </script>
   </head>
   <body>
