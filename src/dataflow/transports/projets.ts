@@ -17,6 +17,15 @@ export const WEBHOOK_PRESETS: readonly WebhookPreset[] = [
   { id: 'atelier-projets-local', label: PROJETS_PRESET_LABEL, url: PROJETS_LOCAL_IMPORT_URL },
 ]
 
+/**
+ * Adresse proposée pour l'envoi direct : celle enregistrée par l'utilisateur, sinon le
+ * préréglage « Atelier Projets (local) » (docs/SUITE.md §4.1 : Tab le propose par défaut).
+ */
+export function defaultWebhookUrl(configured: string | undefined): string {
+  const url = configured?.trim()
+  return url ? url : PROJETS_LOCAL_IMPORT_URL
+}
+
 /** Vrai si l'adresse vise la route d'import d'Atelier Projets (locale ou non). */
 export function isProjetsImportUrl(url: string): boolean {
   try {

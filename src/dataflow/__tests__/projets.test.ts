@@ -4,6 +4,7 @@ import { createDemoData } from '@/fixtures/demo'
 import { isLocalHttpUrl, isLocalProjetsImportUrl } from '@/lib/local-url'
 import {
   buildAtelierPayload,
+  defaultWebhookUrl,
   describeProjetsSummary,
   isProjetsImportUrl,
   isValidWebhookUrl,
@@ -34,6 +35,15 @@ describe('préréglage « Atelier Projets (local) » (SUITE.md §4.1)', () => {
     expect(isValidWebhookUrl(PROJETS_LOCAL_IMPORT_URL)).toBe(true)
     expect(isValidWebhookUrl('http://localhost:3000/api/imports/atelier-tab')).toBe(true)
     expect(isValidWebhookUrl('http://192.168.1.2:3000/api/imports/atelier-tab')).toBe(false)
+  })
+
+  it('est proposé par défaut sans écraser une adresse enregistrée', () => {
+    expect(defaultWebhookUrl(undefined)).toBe(PROJETS_LOCAL_IMPORT_URL)
+    expect(defaultWebhookUrl('')).toBe(PROJETS_LOCAL_IMPORT_URL)
+    expect(defaultWebhookUrl('   ')).toBe(PROJETS_LOCAL_IMPORT_URL)
+    expect(defaultWebhookUrl('https://atelier.example/api/import')).toBe(
+      'https://atelier.example/api/import',
+    )
   })
 
   it('reconnaît une adresse d’import Atelier Projets', () => {

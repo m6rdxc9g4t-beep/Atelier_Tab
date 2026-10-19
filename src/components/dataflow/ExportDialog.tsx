@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import {
   ATELIER_SCHEMA_VERSION,
+  defaultWebhookUrl,
   isProjetsImportUrl,
   isValidWebhookUrl,
   PROJETS_PRESET_LABEL,
@@ -71,6 +72,7 @@ export function ExportDialog({
 function ExportDialogBody({ table, onClose }: { table: Table; onClose: () => void }) {
   const selection = useUIStore((s) => s.selection)
   const integration = useDataStore((s) => s.integrations.atelierProjets)
+  const saveIntegration = useDataStore((s) => s.setAtelierIntegration)
   const revision = useComputed((s) => s.revisions[table.id] ?? 0)
 
   const selectedRow = selection ? table.records[selection.recordId] : undefined
@@ -82,6 +84,15 @@ function ExportDialogBody({ table, onClose }: { table: Table; onClose: () => voi
   const [method, setMethod] = useState<ExportMethod>(integration.webhookUrl ? 'webhook' : 'json')
   const [busy, setBusy] = useState(false)
   const [outcome, setOutcome] = useState<ExportOutcome | null>(null)
+
+  const selectMethod = (id: ExportMethod) => {
+    // Envoi direct sans adresse enregistrée : préréglage « Atelier Projets (local) » proposé
+    // par défaut (SUITE.md §4.1). Une adresse déjà enregistrée n'est jamais remplacée.
+    if (id === 'webhook' && !integration.webhookUrl?.trim()) {
+      saveIntegration({ webhookUrl: defaultWebhookUrl(integration.webhookUrl) })
+    }
+    setMethod(id)
+  }
 
   const recordIds = scope === 'selection' && selection ? [selection.recordId] : undefined
   const prepared = useMemo(() => {
@@ -198,7 +209,7 @@ function ExportDialogBody({ table, onClose }: { table: Table; onClose: () => voi
                   type="radio"
                   name="method"
                   checked={method === id}
-                  onChange={() => setMethod(id)}
+                  onChange={() => selectMethod(id)}
                   className="sr-only"
                 />
                 <Icon
@@ -287,7 +298,7 @@ function Choice({
 function WebhookSettings() {
   const integration = useDataStore((s) => s.integrations.atelierProjets)
   const save = useDataStore((s) => s.setAtelierIntegration)
-  const [url, setUrl] = useState(integration.webhookUrl ?? '')
+  const [url, setUrl] = useState(() => defaultWebhookUrl(integration.webhookUrl))
   const [projectId, setProjectId] = useState(integration.projectId ?? '')
   const invalid = url !== '' && !isValidWebhookUrl(url)
   const projets = isProjetsImportUrl(url)

@@ -217,6 +217,50 @@ describe('export DataFlow', () => {
     expect(useDataStore.getState().integrations.atelierProjets.lastExport?.ok).toBe(true)
   })
 
+  it('envoi direct sans adresse : préréglage « Atelier Projets (local) » actif par défaut', async () => {
+    expect(useDataStore.getState().integrations.atelierProjets.webhookUrl).toBeUndefined()
+    render(<App />)
+    const dialog = await openExport()
+    fireEvent.click(within(dialog).getByText('Envoi direct'))
+    const url = within(dialog).getByPlaceholderText(/atelier-projets.example/) as HTMLInputElement
+    expect(url.value).toBe('http://127.0.0.1:3000/api/imports/atelier-tab')
+    expect(
+      within(dialog)
+        .getByRole('button', { name: /Atelier Projets \(local\)/ })
+        .getAttribute('aria-pressed'),
+    ).toBe('true')
+    expect(useDataStore.getState().integrations.atelierProjets.webhookUrl).toBe(
+      'http://127.0.0.1:3000/api/imports/atelier-tab',
+    )
+    expect(
+      (
+        within(dialog).getByRole('button', {
+          name: 'Envoyer à Atelier Projets',
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(false)
+  })
+
+  it('envoi direct : une adresse déjà enregistrée n’est pas remplacée', async () => {
+    act(() => {
+      useDataStore
+        .getState()
+        .setAtelierIntegration({ webhookUrl: 'https://atelier.example/api/import' })
+    })
+    render(<App />)
+    const dialog = await openExport()
+    const url = within(dialog).getByPlaceholderText(/atelier-projets.example/) as HTMLInputElement
+    expect(url.value).toBe('https://atelier.example/api/import')
+    expect(
+      within(dialog)
+        .getByRole('button', { name: /Atelier Projets \(local\)/ })
+        .getAttribute('aria-pressed'),
+    ).toBe('false')
+    expect(useDataStore.getState().integrations.atelierProjets.webhookUrl).toBe(
+      'https://atelier.example/api/import',
+    )
+  })
+
   it('envoie au webhook configuré', async () => {
     const calls: [string, RequestInit][] = []
     globalThis.fetch = (async (url: string, init: RequestInit) => {
