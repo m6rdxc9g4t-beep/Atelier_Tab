@@ -38,6 +38,23 @@ execFileSync('ditto', [source, target])
 // Une app construite localement n'est pas en quarantaine, mais on s'en assure.
 execFileSync('xattr', ['-cr', target])
 
+// Une seule copie de l'app sur le Mac : la copie de construction (release/…) porte le même identifiant
+// (fr.atelier.tab). macOS pouvait la lancer à la place de /Applications (Dock, Spotlight, menu
+// « Suite Atelier » des autres apps) et afficher une version périmée. On la retire et on la désinscrit.
+const lsregister =
+  '/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister'
+try {
+  execFileSync(lsregister, ['-u', source], { stdio: 'ignore' })
+} catch {
+  /* désinscription facultative */
+}
+execFileSync('rm', ['-rf', source])
+try {
+  execFileSync(lsregister, ['-f', target], { stdio: 'ignore' })
+} catch {
+  /* inscription facultative : macOS la fera au premier lancement */
+}
+
 console.log(`\n✓ Atelier_Tab est installée dans Applications.`)
 console.log('  Ouvrez-la depuis le Launchpad, Spotlight (⌘ Espace) ou le Finder.\n')
 
