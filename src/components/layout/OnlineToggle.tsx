@@ -36,7 +36,7 @@ export function OnlineToggle({ labelClassName }: { labelClassName?: string }) {
       className={cn(
         'flex h-7 shrink-0 items-center gap-1.5 rounded-full border px-2.5 text-[12px] font-medium transition-colors',
         online
-          ? 'border-accent/40 bg-accent-soft text-accent'
+          ? 'border-accent/40 bg-accent-soft text-accent-fg'
           : 'border-line text-muted hover:bg-surface-hover hover:text-ink',
       )}
     >

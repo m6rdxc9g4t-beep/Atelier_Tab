@@ -99,7 +99,7 @@ export function FormulaBar({ table, onCommit }: { table: Table; onCommit: () => 
           aria-label="Barre de formules"
           className={cn(
             'h-7 w-full rounded-md border border-transparent bg-transparent px-2 outline-none placeholder:text-faint',
-            'focus:border-accent focus:bg-surface-raised',
+            'focus:border-focus focus:bg-surface-raised',
             isFormula(shown) ? 'font-mono text-[12.5px] text-transparent caret-ink' : 'text-ink',
             inputError && 'border-danger',
           )}
@@ -166,7 +166,7 @@ function ColoredFormula({ formula }: { formula: string }) {
           )
         }
         return (
-          <span key={i} className={p.kind === 'function' ? 'text-accent' : 'text-ink'}>
+          <span key={i} className={p.kind === 'function' ? 'text-accent-fg' : 'text-ink'}>
             {p.text}
           </span>
         )

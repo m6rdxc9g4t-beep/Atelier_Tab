@@ -9,3 +9,5 @@ dist-desktop
 docs/SUITE.md
 # Copies verbatim du design system d’Atelier Projets.
 src/styles/atelier-ds/
+# Copie verbatim de la marque commune (charte « néon holographique »).
+src/styles/atelier-brand/

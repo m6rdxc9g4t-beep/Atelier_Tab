@@ -114,7 +114,7 @@ export function CellEditor({ field, align, onDone }: CellEditorProps) {
       {listOpen && (
         <ul
           role="listbox"
-          className="absolute top-full left-0 mt-1 min-w-full rounded-lg border border-line bg-surface-raised p-1 shadow-lg shadow-black/10 dark:shadow-black/40"
+          className="absolute top-full left-0 mt-1 min-w-full rounded-lg border border-line bg-surface-raised p-1 shadow-lg shadow-black/10 dark:shadow-glow-strong"
         >
           {options.map((o, i) => (
             <li

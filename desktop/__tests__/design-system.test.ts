@@ -115,7 +115,8 @@ describe('jetons d’Atelier Tab (src/index.css)', () => {
     expect(tokens.get('--ink')).toBe('var(--text-primary)')
     expect(tokens.get('--muted')).toBe('var(--text-muted)')
     expect(tokens.get('--line')).toBe('var(--border-color)')
-    expect(tokens.get('--accent')).toBe('var(--type-epic)')
+    // Accent = couleur signature de Tab (§1.7), posée par data-atelier-app="tab".
+    expect(tokens.get('--accent')).toBe('var(--atelier-signature)')
     expect(tokens.get('--success')).toBe('var(--status-closed)')
     expect(tokens.get('--danger')).toBe('var(--status-rejected)')
     expect(tokens.get('--warning')).toBe('var(--status-hold)')

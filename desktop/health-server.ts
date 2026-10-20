@@ -60,8 +60,8 @@ export const OPEN_PAGE = `<!doctype html>
   :root { color-scheme: light dark; --bg-main: #F8FAFC; --bg-surface: #FFFFFF; --text-primary: #0F172A;
     --text-muted: #64748B; --border-color: #E2E8F0; --tile-from: #38bdf8; --tile-to: #0369a1; }
   @media (prefers-color-scheme: dark) {
-    :root { --bg-main: #0B0F19; --bg-surface: #111827; --text-primary: #F8FAFC; --text-muted: #94A3B8;
-      --border-color: #1E293B; }
+    :root { --bg-main: #06111F; --bg-surface: #0A1B2E; --text-primary: #E6F7FF; --text-muted: #8DB4CC;
+      --border-color: #17405C; }
   }
   body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: var(--bg-main);
     color: var(--text-primary); font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }

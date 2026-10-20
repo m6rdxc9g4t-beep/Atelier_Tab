@@ -40,7 +40,7 @@ export function Popover({ open, onClose, children, className, align = 'start' }:
     <div
       ref={ref}
       className={cn(
-        'absolute top-full z-30 mt-1 min-w-44 rounded-lg border border-line bg-surface-raised p-1 shadow-lg shadow-black/10 dark:shadow-black/40',
+        'absolute top-full z-30 mt-1 min-w-44 rounded-lg border border-line bg-surface-raised p-1 shadow-lg shadow-black/10 dark:shadow-glow-strong',
         align === 'end' ? 'right-0' : 'left-0',
         className,
       )}

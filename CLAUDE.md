@@ -28,7 +28,7 @@ Lancer les quatre vérifications avant tout commit.
 - **Identifiants stables, coordonnées dérivées.** Les champs et enregistrements ont des `id` permanents ; la lettre de colonne et le numéro de ligne se déduisent de `fieldOrder` / `rowOrder`. Toute insertion, suppression ou déplacement passe par `engine/formula/references.ts` pour réécrire les formules concernées.
 - Les lignes `kind: 'summary'` (totaux) sont exclues des agrégats de pied de page et de `computed_totals` à l'export, pour éviter le double comptage.
 - Jamais d'`eval()` ni de `new Function()` : les formules passent par le parser maison.
-- Les couleurs viennent des tokens de `src/index.css` (`bg-surface`, `text-muted`, `border-line`, `text-accent`…), jamais de couleurs Tailwind brutes. Tout écran doit fonctionner en clair et en sombre.
+- Les couleurs viennent des tokens de `src/index.css` (`bg-surface`, `text-muted`, `border-line`, `bg-accent`, `text-accent-fg`…), jamais de couleurs Tailwind brutes. Tout écran doit fonctionner en clair et en sombre.
 
 - **IA** : `src/ai/tools.ts` est la seule définition des outils, partagée par le serveur MCP (`desktop/mcp-server.ts`) et l'assistant intégré (Ollama ou Claude). Un outil passe toujours par les actions du store, jamais par une écriture directe des données. Toute nouvelle fonctionnalité de données doit être accessible par un outil.
 - **Fichiers de données** : le format est défini dans `src/storage/format.ts`. Un changement de format exige une lecture tolérante de l'ancien (les fichiers peuvent être édités à la main ou par une IA) et un test.
@@ -44,6 +44,7 @@ Lancer les quatre vérifications avant tout commit.
 Atelier Tab fait partie de la Suite Atelier (avec Atelier Viz et Atelier Projets). Le contrat commun — design system, statuts, thème, ports, sélecteur d'apps, import Projets, instantanés Viz — est **`docs/SUITE.md`**, identique dans les trois dépôts : ne le modifie pas seul.
 
 - `src/styles/atelier-ds/` : copie verbatim du design system d'Atelier Projets ; ne pas modifier ni reformater (exclue de Prettier). Les jetons de Tab en dérivent dans `src/index.css`, sans couleur littérale.
+- Charte « néon holographique » (docs/SUITE.md §1.7) : `src/styles/atelier-brand/atelier-brand.css` est une copie verbatim (ne pas modifier) ; `<html data-atelier-app="tab">` pose la couleur signature (vert #21A366). `--accent` = `var(--atelier-signature)` ; texte ou icône en signature : `text-accent-fg` (mélangé au texte en clair) ; texte sur teinte pleine (avatars, danger) : `text-solid-ink` ; anneau de focus cyan : `outline-focus` / `border-focus`. Halos néon (`atelier-glass`, `dark:shadow-glow-strong`, `shadow-signature`) : nuls en clair. Les couleurs de statut, de type et de succès / danger / attention ne changent pas.
 - Statuts : `src/engine/field-types/workflow-status.ts` (reconnaissance des libellés, préréglage « Statuts Atelier »).
 - Adresses des apps : `src/lib/suite.ts`. Import Projets : `src/dataflow/transports/projets.ts`. Instantanés : `src/dataflow/snapshot.ts` (pur) et `desktop/snapshots.ts` (disque).
 - Ports fixes : 5175 (dev) et 4175 (aperçu), `strictPort`.

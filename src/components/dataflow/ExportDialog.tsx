@@ -157,7 +157,7 @@ function ExportDialogBody({ table, onClose }: { table: Table; onClose: () => voi
             type="button"
             onClick={run}
             disabled={blocked || !webhookReady || busy}
-            className="flex h-8 items-center gap-1.5 rounded-lg bg-accent px-3 font-medium text-accent-ink disabled:opacity-50"
+            className="flex h-8 items-center gap-1.5 rounded-lg bg-accent px-3 font-medium text-accent-ink enabled:hover:shadow-signature focus-visible:shadow-signature disabled:opacity-50"
           >
             {busy ? (
               <Loader2 size={14} className="animate-spin" />
@@ -215,7 +215,7 @@ function ExportDialogBody({ table, onClose }: { table: Table; onClose: () => voi
                 />
                 <Icon
                   size={16}
-                  className={cn('mt-0.5 shrink-0', method === id ? 'text-accent' : 'text-muted')}
+                  className={cn('mt-0.5 shrink-0', method === id ? 'text-accent-fg' : 'text-muted')}
                 />
                 <span>
                   <span className="block font-medium">{title}</span>
@@ -332,7 +332,7 @@ function WebhookSettings() {
                   : 'border-line text-muted hover:border-line-strong hover:text-ink',
               )}
             >
-              <KanbanSquare size={13} className={active ? 'text-accent' : undefined} />
+              <KanbanSquare size={13} className={active ? 'text-accent-fg' : undefined} />
               {preset.label}
             </button>
           )
@@ -349,7 +349,7 @@ function WebhookSettings() {
             onBlur={() => save({ webhookUrl: url.trim() })}
             aria-invalid={invalid}
             className={cn(
-              'h-8 rounded-md border bg-surface px-2 outline-none focus:border-accent',
+              'h-8 rounded-md border bg-surface px-2 outline-none focus:border-focus',
               invalid ? 'border-danger' : 'border-line',
             )}
           />
@@ -372,7 +372,7 @@ function WebhookSettings() {
             defaultValue={integration.token ?? ''}
             onBlur={(e) => save({ token: e.target.value.trim() })}
             autoComplete="off"
-            className="h-8 rounded-md border border-line bg-surface px-2 outline-none focus:border-accent"
+            className="h-8 rounded-md border border-line bg-surface px-2 outline-none focus:border-focus"
           />
           <span className="text-[12px] text-muted">
             Conservé sur cet ordinateur ; envoyé seulement à Atelier Projets sur cet ordinateur
@@ -391,7 +391,7 @@ function WebhookSettings() {
             placeholder="Identifiant du projet, ex. 3"
             onChange={(e) => setProjectId(e.target.value)}
             onBlur={() => save({ projectId: projectId.trim() })}
-            className="h-8 rounded-md border border-line bg-surface px-2 outline-none placeholder:text-faint focus:border-accent"
+            className="h-8 rounded-md border border-line bg-surface px-2 outline-none placeholder:text-faint focus:border-focus"
           />
           <span className="text-[12px] text-muted">
             Vide : projet du même nom que ce projet Atelier Tab, créé au besoin. Réimporter met à
@@ -417,7 +417,7 @@ function ImportSummary({ summary }: { summary: ProjetsImportSummary }) {
       className="rounded-lg border border-line bg-surface-sunken p-3"
     >
       <h3 className="mb-2 flex items-center gap-2 font-semibold">
-        <KanbanSquare size={15} className="text-accent" />
+        <KanbanSquare size={15} className="text-accent-fg" />
         Import dans Atelier Projets
         {summary.projectId !== null && (
           <span className="font-normal text-muted">· projet {summary.projectId}</span>
@@ -469,7 +469,7 @@ function ColumnMapping({ table }: { table: Table }) {
                 updateField(table.id, fieldId, { atelierMapping: e.target.value as AtelierMapping })
               }
               aria-label={`Rôle de la colonne ${field.label} dans Atelier Projets`}
-              className="h-7 w-48 rounded-md border border-line bg-surface px-1.5 outline-none focus:border-accent"
+              className="h-7 w-48 rounded-md border border-line bg-surface px-1.5 outline-none focus:border-focus"
             >
               {Object.entries(MAPPING_LABELS).map(([value, label]) => (
                 <option key={value} value={value}>

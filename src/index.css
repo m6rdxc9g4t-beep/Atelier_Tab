@@ -37,12 +37,19 @@
   --muted: var(--text-muted);
   --faint: color-mix(in oklab, var(--text-muted) 70%, var(--bg-surface));
 
-  /* Accent = couleur du type EPIC */
-  --accent: var(--type-epic);
-  --accent-soft: color-mix(in oklab, var(--type-epic) 14%, var(--bg-surface));
-  /* Texte posé sur l'accent (et sur une teinte pleine) : le blanc du thème clair. */
-  --accent-ink: var(--bg-surface);
-  --selection: color-mix(in oklab, var(--type-epic) 12%, transparent);
+  /* Accent = couleur signature d'Atelier Tab (vert « Excel », docs/SUITE.md §1.7),
+     posée par data-atelier-app="tab" sur <html> (styles/atelier-brand). */
+  --accent: var(--atelier-signature);
+  --accent-soft: color-mix(in oklab, var(--atelier-signature) 14%, var(--bg-surface));
+  /* Texte posé sur l'accent (bouton plein, case cochée) : nuit, défini par la marque. */
+  --accent-ink: var(--atelier-signature-contrast);
+  /* Texte ou icône fine en signature : mélangé au texte en clair pour rester lisible. */
+  --accent-fg: color-mix(in oklab, var(--atelier-signature) 62%, var(--text-primary));
+  --selection: color-mix(in oklab, var(--atelier-signature) 12%, transparent);
+  /* Texte posé sur une teinte pleine (avatars, bouton danger) : le blanc du thème clair. */
+  --solid-ink: var(--bg-surface);
+  /* Anneau de focus : cyan commun de la suite (assombri en clair pour rester visible). */
+  --focus-ring: color-mix(in oklab, var(--atelier-neon) 45%, var(--atelier-neon-deep));
   /* Assombrit une teinte pleine sous un texte clair (avatars). */
   --tone-shade: var(--text-primary);
 
@@ -65,10 +72,13 @@
 :root[data-theme='dark'],
 [data-theme='dark'],
 .dark {
-  /* En sombre, --bg-surface est foncé : le texte sur l'accent reste clair. */
-  --accent-ink: var(--text-primary);
-  --accent-soft: color-mix(in oklab, var(--type-epic) 22%, var(--bg-surface));
-  --selection: color-mix(in oklab, var(--type-epic) 18%, transparent);
+  /* En sombre (néon) : signature éclaircie pour le texte, cyan pur pour le focus. */
+  --accent-fg: var(--atelier-signature-light);
+  --accent-soft: color-mix(in oklab, var(--atelier-signature) 22%, var(--bg-surface));
+  --selection: color-mix(in oklab, var(--atelier-signature) 18%, transparent);
+  --focus-ring: var(--atelier-neon);
+  /* --bg-surface est foncé : le texte sur une teinte pleine reste clair. */
+  --solid-ink: var(--text-primary);
   --faint: color-mix(in oklab, var(--text-muted) 65%, var(--bg-surface));
   --tone-shade: var(--bg-surface);
 }
@@ -86,6 +96,9 @@
   --color-accent: var(--accent);
   --color-accent-soft: var(--accent-soft);
   --color-accent-ink: var(--accent-ink);
+  --color-accent-fg: var(--accent-fg);
+  --color-solid-ink: var(--solid-ink);
+  --color-focus: var(--focus-ring);
   --color-selection: var(--selection);
   --color-danger: var(--danger);
   --color-warning: var(--warning);
@@ -98,6 +111,12 @@
 
   --font-sans: var(--ds-font-sans);
   --font-mono: var(--ds-font-mono);
+
+  /* Effets néon (styles/atelier-brand) : halo des menus et modales en sombre,
+     halo signature du bouton principal. `dark:shadow-glow-strong` seulement :
+     en clair le jeton vaut `none`, qui n'a pas sa place dans une liste d'ombres. */
+  --shadow-glow-strong: var(--atelier-glow-strong);
+  --shadow-signature: var(--atelier-signature-glow);
 }
 
 /*
@@ -165,7 +184,7 @@
   /* Teinte pleine (avatars) : assombrie pour que les initiales restent lisibles. */
   .tone-solid {
     background-color: color-mix(in oklab, var(--tone) 78%, var(--tone-shade));
-    color: var(--accent-ink);
+    color: var(--solid-ink);
   }
   .tone-dot {
     background-color: var(--tone);
@@ -198,7 +217,17 @@
     @apply bg-surface text-ink font-sans text-[13px] antialiased;
     font-feature-settings: 'tnum' 1;
   }
+  /* Thème sombre « néon holographique » : léger halo cyan en haut de la page. */
+  :root[data-theme='dark'] body,
+  .dark body {
+    background-image: radial-gradient(
+      120% 60% at 50% -10%,
+      color-mix(in oklab, var(--atelier-neon) 10%, transparent),
+      transparent 60%
+    );
+    background-attachment: fixed;
+  }
   *:focus-visible {
-    @apply outline-2 outline-offset-1 outline-accent;
+    @apply outline-2 outline-offset-1 outline-focus;
   }
 }

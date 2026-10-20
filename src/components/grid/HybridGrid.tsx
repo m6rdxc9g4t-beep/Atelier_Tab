@@ -237,7 +237,7 @@ const GridRow = memo(function GridRow({
         className={cn(
           'sticky left-0 z-10 flex shrink-0 items-center justify-between border-r border-b border-line px-2 text-[11px] tabular-nums',
           summary ? 'bg-surface-sunken' : 'bg-surface',
-          selected ? 'text-accent' : 'text-faint',
+          selected ? 'text-accent-fg' : 'text-faint',
         )}
         style={{ width: GUTTER_WIDTH }}
       >

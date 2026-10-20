@@ -432,7 +432,8 @@ function createWindow() {
     minHeight: 600,
     title: APP_NAME,
     show: false,
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#16181d' : '#ffffff',
+    // Fond sombre = --bg-main du thème « néon » (src/styles/atelier-ds/dark.css).
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#06111F' : '#ffffff',
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,

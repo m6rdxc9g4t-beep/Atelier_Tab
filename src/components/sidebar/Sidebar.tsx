@@ -26,7 +26,7 @@ export function Sidebar() {
   return (
     <aside
       aria-label="Projets"
-      className="flex w-60 shrink-0 flex-col border-r border-line bg-surface-sunken"
+      className="atelier-glass flex w-60 shrink-0 flex-col border-r border-line bg-surface-sunken"
     >
       <div className="flex h-11 shrink-0 items-center gap-2 border-b border-line px-3">
         <FolderOpen size={14} className="text-muted" aria-hidden />
@@ -188,7 +188,7 @@ function ProjectItem({ project }: { project: Project }) {
                       : 'text-muted hover:bg-surface-hover hover:text-ink',
                   )}
                 >
-                  <Table2 size={13} className={cn('shrink-0', active && 'text-accent')} />
+                  <Table2 size={13} className={cn('shrink-0', active && 'text-accent-fg')} />
                   <span className="min-w-0 flex-1 truncate">{table.name}</span>
                   <ExportStatusDot tableId={tableId} />
                 </button>

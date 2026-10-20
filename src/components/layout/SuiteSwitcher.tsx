@@ -147,7 +147,7 @@ export function SuiteSwitcher() {
           role="menu"
           aria-label="Suite Atelier"
           onKeyDown={onMenuKey}
-          className="absolute top-full left-0 z-40 mt-2 w-80 rounded-lg border border-line bg-surface-raised p-1.5 shadow-lg shadow-black/10 dark:shadow-black/40"
+          className="absolute top-full left-0 z-40 mt-2 w-80 rounded-lg border border-line bg-surface-raised p-1.5 shadow-lg shadow-black/10 dark:shadow-glow-strong"
         >
           <p
             className="px-2.5 pt-1 pb-1.5 text-[11px] font-semibold tracking-wide text-muted uppercase"
@@ -177,7 +177,12 @@ export function SuiteSwitcher() {
                 }}
                 className="flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-left hover:bg-surface-hover focus-visible:bg-surface-hover"
               >
-                <span className="atelier-brand__tile atelier-brand__tile--sm" aria-hidden="true">
+                {/* Chaque tuile prend la couleur signature de SON app (docs/SUITE.md §1.7). */}
+                <span
+                  className="atelier-brand__tile atelier-brand__tile--sm"
+                  data-atelier-app={app.id}
+                  aria-hidden="true"
+                >
                   <Icon />
                 </span>
                 <span className="min-w-0 flex-1">
@@ -196,7 +201,7 @@ export function SuiteSwitcher() {
                   </span>
                   <span className="block truncate text-[12px] text-muted">{app.description}</span>
                 </span>
-                <span className="grid size-5 shrink-0 place-items-center text-accent">
+                <span className="grid size-5 shrink-0 place-items-center text-accent-fg">
                   {current && <Check size={15} aria-hidden />}
                 </span>
               </button>

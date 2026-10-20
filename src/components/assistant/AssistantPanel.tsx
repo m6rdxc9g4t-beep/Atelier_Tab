@@ -114,10 +114,10 @@ export function AssistantPanel() {
   return (
     <aside
       aria-label="Assistant"
-      className="flex w-[380px] shrink-0 flex-col border-l border-line bg-surface"
+      className="atelier-glass flex w-[380px] shrink-0 flex-col border-l border-line bg-surface"
     >
       <div className="flex h-11 shrink-0 items-center gap-2 border-b border-line pr-2 pl-3">
-        <Sparkles size={15} className="text-accent" />
+        <Sparkles size={15} className="text-accent-fg" />
         <span className="flex-1 font-semibold">Assistant</span>
         <button
           type="button"
@@ -190,7 +190,7 @@ export function AssistantPanel() {
       <div className="shrink-0 border-t border-line p-3">
         <div
           className={cn(
-            'flex items-end gap-2 rounded-lg border border-line bg-surface-raised p-2 focus-within:border-accent',
+            'flex items-end gap-2 rounded-lg border border-line bg-surface-raised p-2 focus-within:border-focus',
             !ready && 'opacity-60',
           )}
         >
@@ -224,7 +224,7 @@ export function AssistantPanel() {
               disabled={!ready || !draft.trim()}
               aria-label="Envoyer"
               title="Envoyer (Entrée)"
-              className="grid size-7 shrink-0 place-items-center rounded-md bg-accent text-accent-ink disabled:opacity-40"
+              className="grid size-7 shrink-0 place-items-center rounded-md bg-accent text-accent-ink enabled:hover:shadow-signature focus-visible:shadow-signature disabled:opacity-40"
             >
               <ArrowUp size={15} />
             </button>
@@ -303,7 +303,7 @@ function EnginePicker({
             onChange={(e) => onClaudeModel(e.target.value as ClaudeModelAlias)}
             disabled={disabled}
             aria-label="Modèle Claude"
-            className="h-7 min-w-0 flex-1 rounded-md border border-line bg-surface px-1.5 text-ink outline-none focus:border-accent"
+            className="h-7 min-w-0 flex-1 rounded-md border border-line bg-surface px-1.5 text-ink outline-none focus:border-focus"
           >
             {CLAUDE_MODELS.map((m) => (
               <option key={m.alias} value={m.alias}>
@@ -317,7 +317,7 @@ function EnginePicker({
             onChange={(e) => onModel(e.target.value)}
             disabled={disabled}
             aria-label="Modèle Ollama"
-            className="h-7 min-w-0 flex-1 truncate rounded-md border border-line bg-surface px-1.5 text-ink outline-none focus:border-accent"
+            className="h-7 min-w-0 flex-1 truncate rounded-md border border-line bg-surface px-1.5 text-ink outline-none focus:border-focus"
           >
             {ollama.models.map((m) => (
               <option key={m.name} value={m.name} disabled={!m.tools}>
@@ -453,7 +453,9 @@ function ConfirmCard({ entry }: { entry: ConfirmEntry }) {
             onClick={() => answerConfirmation(entry.id, true)}
             className={cn(
               'h-7 rounded-md px-3 font-medium',
-              danger ? 'bg-danger text-accent-ink' : 'bg-accent text-accent-ink',
+              danger
+                ? 'bg-danger text-solid-ink'
+                : 'bg-accent text-accent-ink hover:shadow-signature focus-visible:shadow-signature',
             )}
           >
             Autoriser

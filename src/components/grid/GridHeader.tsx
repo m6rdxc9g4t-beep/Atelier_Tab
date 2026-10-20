@@ -83,7 +83,7 @@ function ColumnHeader({
       <span
         className={cn(
           'w-5 shrink-0 text-center text-[11px] font-semibold tabular-nums',
-          active ? 'text-accent' : 'text-faint',
+          active ? 'text-accent-fg' : 'text-faint',
           plain && 'w-full',
         )}
       >
