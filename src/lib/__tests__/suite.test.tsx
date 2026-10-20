@@ -11,16 +11,18 @@ afterEach(() => {
 })
 
 describe('module suite (SUITE.md §2–3)', () => {
-  it('liste les trois applications avec leurs adresses par défaut', () => {
+  it('liste les quatre applications avec leurs adresses par défaut', () => {
     expect(CURRENT_APP).toBe('tab')
     expect(SUITE_APPS.map((a) => [a.id, a.name, a.url, a.healthUrl])).toEqual([
       ['viz', 'Atelier Viz', 'http://127.0.0.1:8000', 'http://127.0.0.1:8000/api/health'],
       ['tab', 'Atelier Tab', 'http://127.0.0.1:4175', 'http://127.0.0.1:4175/api/health'],
       ['projets', 'Atelier Projets', 'http://127.0.0.1:4174', 'http://127.0.0.1:3000/api/health'],
+      // App en ligne : aucune route de santé, jamais sondée (SUITE.md §3).
+      ['cuisine', 'Atelier Cuisine', 'https://atelier-cuisine-iota.vercel.app', null],
     ])
     expect(HEALTH_TIMEOUT_MS).toBe(1500)
     // Marque commune (SUITE.md §1.6) : « atelier_Viz »…
-    expect(SUITE_APPS.map((a) => a.short)).toEqual(['Viz', 'Tab', 'Projets'])
+    expect(SUITE_APPS.map((a) => a.short)).toEqual(['Viz', 'Tab', 'Projets', 'Cuisine'])
   })
 
   it('réponse opaque = en marche, erreur réseau = arrêtée (no-cors)', async () => {
@@ -68,7 +70,7 @@ describe('sélecteur « Suite Atelier »', () => {
     return trigger
   }
 
-  it('affiche les trois applications, l’app courante cochée, et l’état des API', async () => {
+  it('affiche les quatre applications, l’app courante cochée, et l’état des API', async () => {
     render(<SuiteSwitcher />)
     await open()
     const items = screen.getAllByRole('menuitemradio')
@@ -77,9 +79,17 @@ describe('sélecteur « Suite Atelier »', () => {
       // L'app courante est toujours « en marche », sans être sondée (SUITE.md §3).
       'Atelier Tab (application courante) — En marche',
       'Atelier Projets — En marche',
+      // Cuisine : app en ligne, mention « En ligne », jamais sondée.
+      'Atelier Cuisine — En ligne',
     ])
     expect(items[1]?.getAttribute('aria-checked')).toBe('true')
     expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('vercel'))).toBe(false)
+    // Chaque tuile porte la couleur signature de son app (orchidée pour Cuisine).
+    expect(
+      items.map((i) => i.querySelector('[data-atelier-app]')?.getAttribute('data-atelier-app')),
+    ).toEqual(['viz', 'tab', 'projets', 'cuisine'])
+    expect(items[3]?.querySelector('[data-status]')).toBeNull()
   })
 
   it('ouvre une application dans un nouvel onglet (navigateur)', async () => {
@@ -89,6 +99,37 @@ describe('sélecteur « Suite Atelier »', () => {
     fireEvent.click(screen.getByRole('menuitemradio', { name: /Atelier Projets/ }))
     expect(openSpy).toHaveBeenCalledWith('http://127.0.0.1:4174', '_blank', 'noopener,noreferrer')
     expect(screen.queryByRole('menu')).toBeNull()
+  })
+
+  it('ouvre Atelier Cuisine dans un nouvel onglet (navigateur)', async () => {
+    const openSpy = vi.spyOn(window, 'open').mockReturnValue(null)
+    render(<SuiteSwitcher />)
+    await open()
+    fireEvent.click(screen.getByRole('menuitemradio', { name: /Atelier Cuisine/ }))
+    expect(openSpy).toHaveBeenCalledWith(
+      'https://atelier-cuisine-iota.vercel.app',
+      '_blank',
+      'noopener,noreferrer',
+    )
+  })
+
+  it('app de bureau : Cuisine passe par le processus principal, sinon window.open', async () => {
+    const openLocalApp = vi.fn(async () => false)
+    window.atelierDesktop = { openLocalApp } as unknown as NonNullable<typeof window.atelierDesktop>
+    const openSpy = vi.spyOn(window, 'open').mockReturnValue(null)
+    render(<SuiteSwitcher />)
+    await open()
+    await act(async () => {
+      fireEvent.click(screen.getByRole('menuitemradio', { name: /Atelier Cuisine/ }))
+      await new Promise((r) => setTimeout(r, 0))
+    })
+    expect(openLocalApp).toHaveBeenCalledWith('https://atelier-cuisine-iota.vercel.app')
+    // Adresse refusée par le processus principal : repli sur window.open (navigateur par défaut).
+    expect(openSpy).toHaveBeenCalledWith(
+      'https://atelier-cuisine-iota.vercel.app',
+      '_blank',
+      'noopener,noreferrer',
+    )
   })
 
   it('passe par shell.openExternal dans l’app de bureau', async () => {
@@ -115,7 +156,7 @@ describe('sélecteur « Suite Atelier »', () => {
     fireEvent.keyDown(screen.getByRole('menu'), { key: 'ArrowDown' })
     expect(document.activeElement).toBe(items[1])
     fireEvent.keyDown(screen.getByRole('menu'), { key: 'End' })
-    expect(document.activeElement).toBe(items[2])
+    expect(document.activeElement).toBe(items[3])
     fireEvent.keyDown(screen.getByRole('menu'), { key: 'ArrowDown' })
     expect(document.activeElement).toBe(items[0])
     fireEvent.keyDown(document, { key: 'Escape' })

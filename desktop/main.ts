@@ -64,7 +64,7 @@ import { resolveInside } from './safe-path'
 import { SnapshotWriter } from './snapshots'
 import { cacheControlFor, uiBuildStamp, uiChangedSinceLastLaunch } from './ui-cache'
 import { buildRelayRequest } from './suite-relay'
-import { openSuiteOrExternal, SUITE_BUNDLES } from './suite-launch'
+import { openSuiteOrExternal, SUITE_BUNDLES, suiteBundleFor } from './suite-launch'
 
 /** Nom affiché (menus, titre, boîtes de dialogue). Le dossier de données reste ~/Atelier_Tab. */
 const APP_NAME = 'Atelier Tab'
@@ -175,7 +175,8 @@ handle('export:save', (_event, filename: unknown, content: unknown) => {
 
 // Ouvre une autre application de la suite : l'app de bureau installée (macOS, `open -b`),
 // sinon le navigateur par défaut (docs/SUITE.md §3). Surface IPC volontairement étroite :
-// http(s) vers 127.0.0.1 / localhost uniquement.
+// http(s) vers 127.0.0.1 / localhost, ou une app en ligne de la suite reconnue par
+// `suiteBundleFor` (Atelier Cuisine : https, hôte exact). Aucune requête n'y est faite.
 // L'adresse de Tab lui-même (4175) ramène sa fenêtre : ni `open -b`, ni navigateur.
 const openSuiteUrl = (url: string) =>
   openSuiteOrExternal(url, {
@@ -186,7 +187,8 @@ const openSuiteUrl = (url: string) =>
   })
 
 handle('suite:open', async (_event, url: unknown) => {
-  if (!isLocalHttpUrl(url)) return false
+  if (typeof url !== 'string') return false
+  if (!isLocalHttpUrl(url) && suiteBundleFor(url) === null) return false
   await openSuiteUrl(url)
   return true
 })

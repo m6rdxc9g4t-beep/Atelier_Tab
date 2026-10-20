@@ -116,8 +116,9 @@ export interface DesktopApi {
   ollamaCancel(id: string): Promise<void>
   mcpInfo(): Promise<McpInfo>
   /**
-   * Ouvre une application de la Suite Atelier dans le navigateur par défaut
-   * (shell.openExternal). Seules les adresses http(s) vers 127.0.0.1 / localhost sont acceptées.
+   * Ouvre une application de la Suite Atelier : l'app installée (macOS, `open -b`), sinon le
+   * navigateur par défaut (shell.openExternal). Seules les adresses http(s) vers 127.0.0.1 /
+   * localhost et l'adresse en ligne d'Atelier Cuisine sont acceptées (sinon `false`).
    */
   openLocalApp(url: string): Promise<boolean>
   /**
