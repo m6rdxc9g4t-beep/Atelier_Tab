@@ -330,11 +330,13 @@ formules recalculées, lignes de total étendues, validation de l'export).
   (preset: "atelier" pour une colonne de statut avec les 8 statuts de la Suite Atelier)
 - create_project, create_table, rename : organiser
 - evaluate : calculer une formule
+- get_settings : lire le mode « En ligne » (lecture seule ; seul l'utilisateur le change dans l'app)
 - check_export, export_table : exporter vers Atelier Projets (atelier_projets)
 
 ## Format des fichiers (édition directe)
 
-- \`atelier.json\` : espaces de travail, projets (avec \`tableIds\`), collaborateurs.
+- \`atelier.json\` : espaces de travail, projets (avec \`tableIds\`), collaborateurs, réglages
+  (\`preferences.onlineMode\` : mode « En ligne » choisi par l'utilisateur, ne pas le modifier).
 - \`tables/<id>.json\` : une table.
   - \`fieldOrder\` : ordre des colonnes ; la position donne la lettre (A, B, C…).
   - \`rowOrder\` : ordre des lignes ; la position donne le numéro (1, 2, 3…).

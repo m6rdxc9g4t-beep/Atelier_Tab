@@ -65,6 +65,9 @@ export interface DataActions {
   /** Mémorise le résultat du dernier export (affiché dans la sidebar). */
   logExport(entry: ExportLogEntry): void
 
+  /** Mode « En ligne » (docs/SUITE.md §5.1) : choix de l'utilisateur seulement (aucun outil IA). */
+  setOnlineMode(online: boolean): void
+
   setActiveView(tableId: string, viewId: string): void
   /** Active la première vue du mode demandé, en la créant si besoin. */
   setViewMode(tableId: string, mode: ViewMode): void
@@ -86,6 +89,8 @@ export function pickData(s: AppData): AppData {
     collaborators: s.collaborators,
     // Données enregistrées avant l'ajout des intégrations : valeur par défaut.
     integrations: s.integrations ?? { atelierProjets: {} },
+    // Données enregistrées avant l'ajout des réglages : hors ligne.
+    preferences: { onlineMode: s.preferences?.onlineMode === true },
   }
 }
 
@@ -294,6 +299,11 @@ export function createDataStore(options: { adapter?: StorageAdapter; initialData
           set((s) => {
             s.integrations ??= { atelierProjets: {} }
             s.integrations.atelierProjets.lastExport = entry
+          }),
+
+        setOnlineMode: (online) =>
+          set((s) => {
+            s.preferences = { onlineMode: online }
           }),
 
         // ------------------------------------------------------------ vues

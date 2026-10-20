@@ -1,8 +1,10 @@
 /**
- * Boucle de l'assistant : le modèle répond ou demande des outils ; les outils sont
- * exécutés sur le store de l'app, leurs résultats renvoyés au modèle, jusqu'à la réponse.
+ * Boucle de l'assistant, indépendante du moteur (Ollama ou Claude, `provider.ts`) : le modèle
+ * répond ou demande des outils ; les outils sont exécutés sur le store de l'app par ses
+ * actions habituelles, leurs résultats renvoyés au modèle, jusqu'à la réponse.
  */
-import { chat, requestId, type ChatMessage, type OllamaTransport, type ToolCall } from './ollama'
+import { requestId, type ChatMessage, type ToolCall } from './ollama'
+import type { ChatProvider } from './provider'
 import { runTool, toolSchemas, type ToolHost } from './tools'
 
 export type AgentEvent =
@@ -49,8 +51,7 @@ function parseArgs(call: ToolCall): Record<string, unknown> {
 }
 
 export interface RunAgentOptions {
-  transport: OllamaTransport
-  model: string
+  provider: ChatProvider
   /** Conversation précédente (sans message système). */
   history: ChatMessage[]
   prompt: string
@@ -60,17 +61,16 @@ export interface RunAgentOptions {
   /** Reçoit l'identifiant de la requête en cours, pour pouvoir l'annuler. */
   onRequest?(id: string): void
   isCancelled?(): boolean
+  /** Par défaut : celui du fournisseur (Ollama 12, Claude 8). */
   maxSteps?: number
 }
 
 /** Exécute un tour de conversation. Renvoie l'historique mis à jour (sans message système). */
 export async function runAgent(opts: RunAgentOptions): Promise<ChatMessage[]> {
-  const tools = toolSchemas().map((t) => ({
-    type: 'function',
-    function: { name: t.name, description: t.description, parameters: t.parameters },
-  }))
+  const tools = toolSchemas()
   const history: ChatMessage[] = [...opts.history, { role: 'user', content: opts.prompt }]
-  const maxSteps = opts.maxSteps ?? 12
+  const maxSteps = opts.maxSteps ?? opts.provider.maxSteps
+  const system = systemPrompt(opts.context)
 
   for (let step = 0; step < maxSteps; step++) {
     if (opts.isCancelled?.()) {
@@ -79,15 +79,7 @@ export async function runAgent(opts: RunAgentOptions): Promise<ChatMessage[]> {
     }
     const id = requestId()
     opts.onRequest?.(id)
-    const res = await chat(
-      opts.transport,
-      {
-        model: opts.model,
-        messages: [{ role: 'system', content: systemPrompt(opts.context) }, ...history],
-        tools,
-      },
-      id,
-    )
+    const res = await opts.provider.step({ id, system, messages: history, tools })
     if (res.cancelled || opts.isCancelled?.()) {
       opts.onEvent({ type: 'cancelled' })
       return history

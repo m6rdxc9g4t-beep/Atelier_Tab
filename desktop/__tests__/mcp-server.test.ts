@@ -54,12 +54,12 @@ afterAll(async () => {
 })
 
 describe('serveur MCP', () => {
-  it('se présente avec des instructions et 15 outils', async () => {
+  it('se présente avec des instructions et 16 outils', async () => {
     expect(client.getServerVersion()?.name).toBe('atelier-tab')
     expect(client.getInstructions()).toMatch(/list_tables puis read_table/)
     expect(client.getInstructions()).toMatch(/Instantanés lus par Atelier Viz/)
     const { tools } = await client.listTools()
-    expect(tools).toHaveLength(15)
+    expect(tools).toHaveLength(16)
     expect(tools.find((t) => t.name === 'set_cells')?.inputSchema.required).toEqual([
       'table',
       'cells',
@@ -128,5 +128,23 @@ describe('serveur MCP', () => {
     expect(res.isError).toBe(false)
     expect(res.json.name).toBe('Budget Global')
     expect(res.notes[0]).toMatch(/fichiers invalides ignorés[\s\S]*tbl_calculs_surfaces\.json/)
+  })
+
+  it('lit le mode « En ligne » d’atelier.json (lecture seule) et le conserve', async () => {
+    expect((await call('get_settings')).json).toMatchObject({ online_mode: false })
+    const file = path.join(dir, 'atelier.json')
+    const index = JSON.parse(fs.readFileSync(file, 'utf8'))
+    expect(index.preferences).toEqual({ onlineMode: false })
+    index.preferences = { onlineMode: true }
+    fs.writeFileSync(file, JSON.stringify(index, null, 2))
+    expect((await call('get_settings')).json).toMatchObject({ online_mode: true, mode: 'En ligne' })
+    // Une modification par un autre outil ne touche pas au réglage.
+    await call('create_project', { workspace: 'Espace Architecture', name: 'Projet MCP' })
+    expect(JSON.parse(fs.readFileSync(file, 'utf8')).preferences).toEqual({ onlineMode: true })
+    // Aucun outil ne permet de passer en ligne ou hors ligne.
+    const { tools } = await client.listTools()
+    expect(tools.map((t) => t.name).filter((n) => /online|mode|setting/i.test(n))).toEqual([
+      'get_settings',
+    ])
   })
 })

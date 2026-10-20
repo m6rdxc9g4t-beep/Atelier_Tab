@@ -156,6 +156,27 @@ const atelierProjetsSchema = z.object({
   lastExport: exportLogSchema.optional().catch(undefined),
 })
 
+/** Réglages par défaut : hors ligne (docs/SUITE.md §5.1). */
+export const DEFAULT_PREFERENCES = { onlineMode: false } as const
+
+/**
+ * Réglages (`preferences`). Lecture tolérante et prudente : clé absente, valeur abîmée ou
+ * autre type qu'un booléen → hors ligne. `online_mode` (écrit à la main) est accepté.
+ */
+export const preferencesSchema = z
+  .preprocess(
+    (v) => {
+      if (typeof v !== 'object' || v === null) return v
+      const raw = v as Record<string, unknown>
+      return 'onlineMode' in raw || !('online_mode' in raw)
+        ? raw
+        : { ...raw, onlineMode: raw.online_mode }
+    },
+    z.object({ onlineMode: z.boolean().catch(false).default(false) }),
+  )
+  .catch({ ...DEFAULT_PREFERENCES })
+  .default({ ...DEFAULT_PREFERENCES })
+
 export const indexFileSchema = z.object({
   format: z.literal(DATA_FORMAT).optional(),
   version: z.literal(DATA_FORMAT_VERSION).optional(),
@@ -174,6 +195,7 @@ export const indexFileSchema = z.object({
   integrations: z
     .object({ atelierProjets: atelierProjetsSchema.default({}) })
     .default({ atelierProjets: {} }),
+  preferences: preferencesSchema,
 })
 
 /**
@@ -219,6 +241,7 @@ export function serializeData(data: AppData): Map<string, string> {
       projects: data.projects,
       collaborators: data.collaborators,
       integrations: { atelierProjets: integration },
+      preferences: { onlineMode: data.preferences?.onlineMode === true },
     }),
   )
   for (const table of Object.values(data.tables)) files.set(tableFile(table.id), stringify(table))
@@ -251,6 +274,22 @@ function describeIssues(error: z.ZodError): string {
     .slice(0, 3)
     .map((i) => `${i.path.join('.') || '(racine)'} : ${i.message}`)
     .join(' ; ')
+}
+
+/**
+ * Mode « En ligne » lu dans le texte de `atelier.json` (processus principal, serveur MCP).
+ * Ne lit que la clé `preferences` : un index autrement abîmé ne change rien. Fichier absent,
+ * illisible ou valeur douteuse → hors ligne (faux).
+ */
+export function readOnlineMode(indexText: string | null): boolean {
+  if (indexText === null) return false
+  try {
+    const raw = JSON.parse(indexText) as unknown
+    if (typeof raw !== 'object' || raw === null) return false
+    return preferencesSchema.parse((raw as { preferences?: unknown }).preferences).onlineMode
+  } catch {
+    return false
+  }
 }
 
 export function parseIndexFile(text: string): IndexFile {
@@ -379,5 +418,6 @@ export function assembleData(index: IndexFile, tables: Record<string, Table>): A
         Object.entries(index.integrations.atelierProjets).filter(([, v]) => v !== undefined),
       ),
     },
+    preferences: { onlineMode: index.preferences.onlineMode },
   }
 }

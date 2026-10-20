@@ -4,6 +4,7 @@ import type { OllamaRequest, OllamaResponse } from '@/services/desktop'
 import { runAgent, systemPrompt, type AgentEvent } from '../agent'
 import { createHeadlessSession, type HeadlessSession } from '../headless'
 import { listModels, preferredModel, stripThinking, type OllamaTransport } from '../ollama'
+import { ollamaProvider } from '../provider'
 
 /** Faux Ollama : renvoie des réponses /api/chat préparées et mémorise les requêtes. */
 function fakeOllama(chatReplies: unknown[], extra: Partial<Record<string, OllamaResponse>> = {}) {
@@ -56,8 +57,7 @@ describe('runAgent', () => {
     const events: AgentEvent[] = []
     const h = host()
     const history = await runAgent({
-      transport,
-      model: 'qwen3:8b',
+      provider: ollamaProvider(transport, 'qwen3:8b'),
       history: [],
       prompt: 'Ajoute Menuiseries à 12 000 €',
       host: h,
@@ -82,7 +82,7 @@ describe('runAgent', () => {
     }
     expect(second.messages[0]?.role).toBe('system')
     expect(second.messages.at(-1)).toMatchObject({ role: 'tool', tool_name: 'add_rows' })
-    expect(second.tools).toHaveLength(15)
+    expect(second.tools).toHaveLength(16)
     expect(history.map((m) => m.role)).toEqual(['user', 'assistant', 'tool', 'assistant'])
   })
 
@@ -97,8 +97,7 @@ describe('runAgent', () => {
     ])
     const events: AgentEvent[] = []
     await runAgent({
-      transport,
-      model: 'm',
+      provider: ollamaProvider(transport, 'm'),
       history: [],
       prompt: 'Lis',
       host: host(),
@@ -121,8 +120,7 @@ describe('runAgent', () => {
     }
     const events: AgentEvent[] = []
     await runAgent({
-      transport,
-      model: 'gemma',
+      provider: ollamaProvider(transport, 'gemma'),
       history: [],
       prompt: 'x',
       host: host(),
@@ -146,8 +144,7 @@ describe('runAgent', () => {
     const { transport } = fakeOllama([loop, loop, loop])
     const events: AgentEvent[] = []
     await runAgent({
-      transport,
-      model: 'm',
+      provider: ollamaProvider(transport, 'm'),
       history: [],
       prompt: 'x',
       host: host(),

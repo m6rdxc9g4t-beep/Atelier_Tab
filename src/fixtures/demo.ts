@@ -208,6 +208,8 @@ const materials = buildTable({
 export function createDemoData(): AppData {
   return {
     schemaVersion: 1,
+    // Hors ligne par défaut (docs/SUITE.md §5.1).
+    preferences: { onlineMode: false },
     workspaceOrder: ['ws_arch_01', 'ws_inge_01'],
     workspaces: {
       ws_arch_01: {

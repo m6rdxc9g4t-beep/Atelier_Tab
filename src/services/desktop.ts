@@ -27,6 +27,55 @@ export interface OllamaResponse {
   error?: string
 }
 
+/** Alias des modèles Claude proposés (docs/SUITE.md §5.2). */
+export type ClaudeModelAlias = 'sonnet' | 'opus' | 'haiku'
+
+/** Message de la conversation transmise à la CLI Claude (transcription sur l'entrée standard). */
+export interface ClaudeMessage {
+  role: 'user' | 'assistant'
+  content: string
+}
+
+/**
+ * Requête `claude:chat` : seulement la conversation, le prompt système, le schéma de sortie
+ * et l'alias du modèle. Le processus principal la valide et construit seul la ligne de
+ * commande (docs/SUITE.md §5.3) : aucun argument libre ne vient de l'interface.
+ */
+export interface ClaudeChatRequest {
+  id: string
+  model: ClaudeModelAlias
+  system: string
+  messages: ClaudeMessage[]
+  /** JSON Schema de la réponse (`--json-schema`). */
+  schema?: Record<string, unknown>
+}
+
+export type ClaudeErrorCode = 'invalid' | 'offline' | 'missing' | 'timeout' | 'cancelled' | 'cli'
+
+export type ClaudeChatResponse =
+  | {
+      ok: true
+      /** Sortie structurée (`structured_output`), ou JSON relu dans `result`. */
+      output?: unknown
+      /** Texte final (`result`). */
+      text: string
+    }
+  | { ok: false; code: ClaudeErrorCode; error: string }
+
+/** État de Claude (pastille de l'en-tête, choix du moteur). */
+export interface ClaudeStatus {
+  /** Mode « En ligne » de l'app (atelier.json). */
+  online: boolean
+  /** Exécutable `claude` trouvé. */
+  found: boolean
+  /** Utilisable : en ligne, trouvé et `claude auth status` réussi. */
+  available: boolean
+  /** Explication (indisponible, ou avertissement). */
+  detail: string | null
+  /** Version de la CLI (« 2.1.0 (Claude Code) »). */
+  version?: string
+}
+
 export interface McpInfo {
   /** Commande à lancer pour enregistrer le serveur dans Claude Code. */
   claudeCommand: string
@@ -73,6 +122,11 @@ export interface DesktopApi {
    * Origin l'est (docs/SUITE.md §4.1).
    */
   postLocal(request: LocalPostRequest): Promise<LocalPostResponse>
+  /** État de Claude (mis en cache 60 s par le processus principal ; `refresh` force la vérification). */
+  claudeStatus(refresh?: boolean): Promise<ClaudeStatus>
+  /** Un appel isolé à la CLI Claude (docs/SUITE.md §5.3), refusé hors ligne. */
+  claudeChat(request: ClaudeChatRequest): Promise<ClaudeChatResponse>
+  claudeCancel(id: string): Promise<void>
 }
 
 declare global {

@@ -4,7 +4,9 @@ import {
   assembleData,
   DataFileError,
   parseIndexFile,
+  parseAppState,
   parseTableFile,
+  readOnlineMode,
   serializeData,
   tableIdFromPath,
 } from '../format'
@@ -148,6 +150,60 @@ describe('projet cible Atelier Projets (integrations.atelierProjets.projectId)',
     // Un journal d'export abîmé n'empêche pas le chargement.
     expect(read({ webhookUrl: 'https://a.example', lastExport: { at: 1 } })).toEqual({
       webhookUrl: 'https://a.example',
+    })
+  })
+})
+
+describe('mode « En ligne » (preferences.onlineMode, SUITE.md §5.1)', () => {
+  const base = { workspaces: {}, projects: {} }
+  const index = (extra: Record<string, unknown>) => JSON.stringify({ ...base, ...extra })
+
+  it('hors ligne par défaut, enregistré et relu', () => {
+    const data = createDemoData()
+    expect(data.preferences.onlineMode).toBe(false)
+    data.preferences = { onlineMode: true }
+    const text = serializeData(data).get('atelier.json')!
+    expect(JSON.parse(text).preferences).toEqual({ onlineMode: true })
+    expect(parseIndexFile(text).preferences.onlineMode).toBe(true)
+    expect(assembleData(parseIndexFile(text), {}).preferences).toEqual({ onlineMode: true })
+    expect(readOnlineMode(text)).toBe(true)
+  })
+
+  it('lecture tolérante et prudente : absent, abîmé ou douteux → hors ligne', () => {
+    // Ancien fichier sans réglages.
+    expect(parseIndexFile(index({})).preferences).toEqual({ onlineMode: false })
+    // Valeurs abîmées : le fichier reste lisible, le mode reste hors ligne.
+    for (const preferences of ['oui', 42, null, [], { onlineMode: 'true' }, { onlineMode: 1 }]) {
+      expect(parseIndexFile(index({ preferences })).preferences.onlineMode).toBe(false)
+      expect(readOnlineMode(index({ preferences }))).toBe(false)
+    }
+    // Écrit à la main en snake_case.
+    expect(parseIndexFile(index({ preferences: { online_mode: true } })).preferences).toEqual({
+      onlineMode: true,
+    })
+    expect(readOnlineMode(index({ preferences: { online_mode: true } }))).toBe(true)
+  })
+
+  it('readOnlineMode : fichier absent ou JSON cassé → hors ligne ; ne dépend que de preferences', () => {
+    expect(readOnlineMode(null)).toBe(false)
+    expect(readOnlineMode('{ cassé')).toBe(false)
+    expect(readOnlineMode('true')).toBe(false)
+    // Le reste de l'index peut être invalide : seule la clé preferences est lue.
+    expect(
+      readOnlineMode(JSON.stringify({ workspaces: 3, preferences: { onlineMode: true } })),
+    ).toBe(true)
+  })
+
+  it('l’état reçu de l’interface garde le réglage (data:save)', () => {
+    const data = createDemoData()
+    data.preferences = { onlineMode: true }
+    expect(parseAppState(JSON.parse(JSON.stringify(data))).preferences).toEqual({
+      onlineMode: true,
+    })
+    const { preferences: _p, ...old } = createDemoData()
+    void _p
+    expect(parseAppState(JSON.parse(JSON.stringify(old))).preferences).toEqual({
+      onlineMode: false,
     })
   })
 })

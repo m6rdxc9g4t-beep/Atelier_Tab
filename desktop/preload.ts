@@ -25,6 +25,9 @@ const api: DesktopApi = {
   mcpInfo: () => ipcRenderer.invoke('mcp:info'),
   openLocalApp: (url) => ipcRenderer.invoke('suite:open', url),
   postLocal: (request) => ipcRenderer.invoke('suite:post', request),
+  claudeStatus: (refresh) => ipcRenderer.invoke('claude:status', refresh === true),
+  claudeChat: (request) => ipcRenderer.invoke('claude:chat', request),
+  claudeCancel: (id) => ipcRenderer.invoke('claude:cancel', id),
 }
 
 contextBridge.exposeInMainWorld('atelierDesktop', api)

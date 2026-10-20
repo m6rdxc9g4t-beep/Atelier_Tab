@@ -163,6 +163,15 @@ export interface AtelierIntegration {
   lastExport?: ExportLogEntry
 }
 
+/** Réglages de l'app enregistrés avec les données (`atelier.json`). */
+export interface AppPreferences {
+  /**
+   * Mode « En ligne » (docs/SUITE.md §5.1) : seul cas où l'assistant peut appeler Claude.
+   * Faux par défaut (hors ligne : rien ne quitte la machine).
+   */
+  onlineMode: boolean
+}
+
 export interface AppData {
   schemaVersion: 1
   workspaceOrder: string[]
@@ -171,4 +180,5 @@ export interface AppData {
   tables: Record<string, Table>
   collaborators: Record<string, Collaborator>
   integrations: { atelierProjets: AtelierIntegration }
+  preferences: AppPreferences
 }

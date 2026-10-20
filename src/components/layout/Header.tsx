@@ -12,7 +12,9 @@ import { useAssistant } from '@/store/assistant.store'
 import { useDataStore, useUIStore } from '@/store'
 import type { Table, ViewMode } from '@/types/domain'
 import { cn } from '@/lib/cn'
+import { ProviderBadges } from '@/components/assistant/ProviderBadges'
 import { AtelierBrand } from './AtelierBrand'
+import { OnlineToggle } from './OnlineToggle'
 import { SuiteSwitcher } from './SuiteSwitcher'
 import { ThemeToggle } from './ThemeToggle'
 
@@ -104,11 +106,13 @@ export function Header({ table, mode }: { table: Table; mode: ViewMode }) {
         <span className="@max-[64rem]:hidden">Exporter vers Atelier Projets</span>
         <span className="hidden @max-[64rem]:inline">Exporter</span>
       </button>
+      <ProviderBadges className="@max-[72rem]:hidden" />
+      <OnlineToggle labelClassName="@max-[44rem]:sr-only" />
       <button
         type="button"
         onClick={toggleAssistant}
         aria-pressed={assistantOpen}
-        title="Assistant IA local (⌘J)"
+        title="Assistant IA (⌘J)"
         className={cn(
           'flex h-8 shrink-0 items-center gap-1.5 rounded-lg border px-2.5',
           assistantOpen

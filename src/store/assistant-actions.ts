@@ -1,8 +1,9 @@
 /**
- * Lance un tour de conversation avec l'assistant Ollama sur les données de l'app.
+ * Lance un tour de conversation avec l'assistant (Ollama ou Claude) sur les données de l'app.
+ * Les outils demandés par le modèle sont exécutés ici, par les actions du store.
  */
 import { runAgent, type AgentContext } from '@/ai/agent'
-import type { OllamaTransport } from '@/ai/ollama'
+import type { ChatProvider } from '@/ai/provider'
 import type { ToolHost } from '@/ai/tools'
 import { downloadText } from '@/dataflow'
 import { getDesktopApi } from '@/services/desktop'
@@ -43,21 +44,22 @@ function currentContext(): AgentContext {
 }
 
 let currentRequest: string | null = null
+let currentProvider: ChatProvider | null = null
 let cancelled = false
 
-export async function askAssistant(prompt: string, transport: OllamaTransport): Promise<void> {
+export async function askAssistant(prompt: string, provider: ChatProvider): Promise<void> {
   const state = useAssistant.getState()
   const text = prompt.trim()
-  if (!text || state.running || !state.model) return
+  if (!text || state.running) return
   cancelled = false
+  currentProvider = provider
   state.addEntry({ kind: 'user', text })
   state.setRunning(true)
   const toolEntries: number[] = []
 
   try {
     const history = await runAgent({
-      transport,
-      model: state.model,
+      provider,
       history: state.history,
       prompt: text,
       host: appToolHost(),
@@ -81,7 +83,12 @@ export async function askAssistant(prompt: string, transport: OllamaTransport): 
             })
           }
         } else if (event.type === 'answer') {
-          s.addEntry({ kind: 'assistant', text: event.text })
+          s.addEntry({
+            kind: 'assistant',
+            text: event.text,
+            engine: provider.engine,
+            model: provider.model,
+          })
         } else if (event.type === 'error') {
           s.addEntry({ kind: 'error', text: event.message })
         } else {
@@ -92,11 +99,12 @@ export async function askAssistant(prompt: string, transport: OllamaTransport): 
     useAssistant.getState().setHistory(history)
   } finally {
     currentRequest = null
+    currentProvider = null
     useAssistant.getState().setRunning(false)
   }
 }
 
-export function cancelAssistant(transport: OllamaTransport): void {
+export function cancelAssistant(): void {
   cancelled = true
-  if (currentRequest) transport.cancel(currentRequest)
+  if (currentRequest) currentProvider?.cancel(currentRequest)
 }

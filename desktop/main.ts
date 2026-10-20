@@ -7,11 +7,14 @@
  * - Instantanés pour Atelier Viz : ~/Atelier_Tab/exports/<tableId>.json, mis à jour après
  *   chaque enregistrement (docs/SUITE.md §4.2).
  * - Ollama : les requêtes de l'assistant passent par ici (pas de contrainte CORS).
+ * - Claude : la CLI Claude Code est lancée ici, isolée, et seulement en ligne
+ *   (docs/SUITE.md §5, `claude-cli.ts`) ; les outils restent exécutés par l'interface.
  * - Suite Atelier : ouverture des autres applications et envoi vers Atelier Projets local
- *   (adresses 127.0.0.1 / localhost uniquement).
+ *   (adresses 127.0.0.1 / localhost uniquement) ; route de santé sur 127.0.0.1:4175 (§3).
  */
 import { execFile } from 'node:child_process'
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import {
@@ -29,6 +32,7 @@ import {
   type MenuItemConstructorOptions,
 } from 'electron'
 import { isLocalHttpUrl } from '@/lib/local-url'
+import { INDEX_FILE, readOnlineMode } from '@/storage/format'
 import type {
   DesktopLoadResult,
   LocalPostRequest,
@@ -45,11 +49,13 @@ import {
   FileStore,
   parseSaveRequest,
 } from './file-store'
+import { ClaudeCli, findClaudeExecutable, isExecutableFile, spawnRunner } from './claude-cli'
+import { startHealthServer } from './health-server'
 import { guardSender } from './ipc-guard'
 import { resolveInside } from './safe-path'
 import { SnapshotWriter } from './snapshots'
 import { buildRelayRequest } from './suite-relay'
-import { openSuiteOrExternal } from './suite-launch'
+import { openSuiteOrExternal, SUITE_BUNDLES } from './suite-launch'
 
 /** Nom affiché (menus, titre, boîtes de dialogue). Le dossier de données reste ~/Atelier_Tab. */
 const APP_NAME = 'Atelier Tab'
@@ -160,11 +166,13 @@ handle('export:save', (_event, filename: unknown, content: unknown) => {
 // Ouvre une autre application de la suite : l'app de bureau installée (macOS, `open -b`),
 // sinon le navigateur par défaut (docs/SUITE.md §3). Surface IPC volontairement étroite :
 // http(s) vers 127.0.0.1 / localhost uniquement.
+// L'adresse de Tab lui-même (4175) ramène sa fenêtre : ni `open -b`, ni navigateur.
 const openSuiteUrl = (url: string) =>
   openSuiteOrExternal(url, {
     execFile,
     openExternal: (u) => shell.openExternal(u),
     platform: process.platform,
+    self: { bundleId: SUITE_BUNDLES['4175'] ?? 'fr.atelier.tab', focus: focusMainWindow },
   })
 
 handle('suite:open', async (_event, url: unknown) => {
@@ -255,6 +263,37 @@ handle('ollama:cancel', (_event, id: string) => {
 })
 
 // ---------------------------------------------------------------------------
+// Claude (CLI Claude Code, docs/SUITE.md §5.3)
+// ---------------------------------------------------------------------------
+
+/** Mode « En ligne », relu dans atelier.json à chaque appel (absent ou abîmé → hors ligne). */
+function isOnline(): boolean {
+  try {
+    return readOnlineMode(fs.readFileSync(path.join(dataDir, INDEX_FILE), 'utf8'))
+  } catch {
+    return false
+  }
+}
+
+const claude = new ClaudeCli({
+  runner: spawnRunner,
+  isOnline,
+  findExecutable: () =>
+    findClaudeExecutable({
+      env: process.env,
+      homedir: os.homedir(),
+      platform: process.platform,
+      isExecutable: isExecutableFile,
+    }),
+})
+
+// L'interface n'envoie que la conversation, le prompt système, le schéma et l'alias du
+// modèle : `ClaudeCli.chat` les valide et construit seul la ligne de commande.
+handle('claude:status', (_event, refresh: unknown) => claude.status(refresh === true))
+handle('claude:chat', (_event, request: unknown) => claude.chat(request))
+handle('claude:cancel', (_event, id: unknown) => claude.cancel(id))
+
+// ---------------------------------------------------------------------------
 // Serveur MCP (Claude Code)
 // ---------------------------------------------------------------------------
 
@@ -307,6 +346,19 @@ function serveDist() {
 }
 
 let mainWindow: BrowserWindow | null = null
+
+/** Ramène la fenêtre au premier plan (route `GET /` de santé, adresse de Tab lui-même). */
+function focusMainWindow() {
+  const win = mainWindow
+  if (!win) {
+    if (app.isReady()) createWindow()
+    return
+  }
+  if (win.isMinimized()) win.restore()
+  win.show()
+  if (process.platform === 'darwin') app.focus({ steal: true })
+  win.focus()
+}
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -435,6 +487,10 @@ if (!app.requestSingleInstanceLock()) {
     serveDist()
     buildMenu()
     createWindow()
+    // Indicateur « en marche » pour les autres apps de la suite (§3). Port pris : journalisé.
+    void startHealthServer({ onFocus: focusMainWindow }).then((server) => {
+      if (server) app.on('will-quit', () => server.close())
+    })
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow()
     })

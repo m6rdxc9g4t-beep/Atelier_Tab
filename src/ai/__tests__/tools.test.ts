@@ -37,6 +37,7 @@ describe('définitions', () => {
       'create_table',
       'rename',
       'evaluate',
+      'get_settings',
       'check_export',
       'configure_export',
       'export_table',
@@ -44,6 +45,22 @@ describe('définitions', () => {
     const setCells = schemas.find((s) => s.name === 'set_cells')!
     expect(setCells.parameters).toMatchObject({ type: 'object', required: ['table', 'cells'] })
     expect(JSON.stringify(schemas)).not.toContain('$schema')
+  })
+
+  it('get_settings lit le mode « En ligne » sans pouvoir le changer', async () => {
+    const data = createDemoData()
+    const session = createHeadlessSession(data, async () => '')
+    try {
+      const off = await runTool('get_settings', {}, session.host)
+      expect(JSON.parse(off.content)).toMatchObject({ online_mode: false, mode: 'Hors ligne' })
+      session.host.store.getState().setOnlineMode(true)
+      const on = await runTool('get_settings', { online_mode: false }, session.host)
+      expect(JSON.parse(on.content)).toMatchObject({ online_mode: true })
+      // Les arguments sont ignorés : l'outil ne change rien.
+      expect(session.host.store.getState().preferences.onlineMode).toBe(true)
+    } finally {
+      session.dispose()
+    }
   })
 })
 

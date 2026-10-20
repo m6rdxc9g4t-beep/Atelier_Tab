@@ -684,6 +684,23 @@ export const TOOLS = [
   }),
 
   tool({
+    name: 'get_settings',
+    description:
+      'Lit les réglages de l’app : mode « En ligne » ou « Hors ligne ». Hors ligne (par défaut), rien ne quitte la machine et Claude n’est pas utilisable dans l’assistant. Lecture seule : seul l’utilisateur change ce mode, avec l’interrupteur de l’en-tête.',
+    input: z.object({}),
+    run(_, host) {
+      const online = data(host).preferences?.onlineMode === true
+      return {
+        online_mode: online,
+        mode: online ? 'En ligne' : 'Hors ligne',
+        explanation: online
+          ? 'Claude peut répondre dans l’assistant (la demande et les cellules lues par les outils lui sont envoyées).'
+          : 'Rien ne quitte la machine : l’assistant utilise Ollama (local). Seul l’utilisateur peut passer en ligne, depuis l’en-tête.',
+      }
+    },
+  }),
+
+  tool({
     name: 'check_export',
     description:
       'Vérifie si une table est prête à être exportée vers atelier_projets (schéma 2.1.0) : points bloquants, avertissements, nombre de lignes et totaux.',
