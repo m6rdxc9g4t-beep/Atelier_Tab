@@ -99,6 +99,36 @@ describe('copies du design system', () => {
   })
 })
 
+// Marque commune « néon monochrome » (docs/SUITE.md §1.6–1.7) : copie à l'octet près.
+const BRAND_REFERENCE = path.resolve(REFERENCE, 'brand', 'atelier-brand.css')
+const brandCss = read('atelier-brand/atelier-brand.css')
+
+describe('marque commune (src/styles/atelier-brand/)', () => {
+  it.skipIf(!fs.existsSync(BRAND_REFERENCE))(
+    'atelier-brand.css est identique à design-system/brand/atelier-brand.css',
+    () => {
+      expect(brandCss).toBe(fs.readFileSync(BRAND_REFERENCE, 'utf8'))
+    },
+  )
+
+  it.each([
+    ['tab', '#21a366'],
+    ['viz', '#f2c811'],
+    ['projets', '#94d82d'],
+    ['cuisine', '#e056e2'],
+  ])('définit la signature de %s (%s) pour le sélecteur de la suite', (app, hex) => {
+    expect(brandCss).toMatch(new RegExp(`--atelier-sig-${app}: ${hex};`, 'i'))
+    expect(brandCss).toContain(
+      `[data-atelier-app="${app}"] { --atelier-signature: var(--atelier-sig-${app});`,
+    )
+  })
+
+  it('est protégée du formatage automatique', () => {
+    const ignore = fs.readFileSync(path.resolve(src, '..', '.prettierignore'), 'utf8')
+    expect(ignore).toContain('src/styles/atelier-brand/')
+  })
+})
+
 describe('jetons d’Atelier Tab (src/index.css)', () => {
   it('importe les trois copies', () => {
     for (const f of ['colors.css', 'light.css', 'dark.css']) {

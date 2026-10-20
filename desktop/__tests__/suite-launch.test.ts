@@ -8,6 +8,21 @@ describe('suiteBundleFor (SUITE.md §3)', () => {
     expect(suiteBundleFor('http://127.0.0.1:4174/#/gantt')).toBe('local.atelier-projets.desktop')
   })
 
+  it('reconnaît Atelier Cuisine par son adresse en ligne (https, hôte exact)', () => {
+    expect(suiteBundleFor('https://atelier-cuisine-iota.vercel.app')).toBe('fr.ateliercuisine.app')
+    expect(suiteBundleFor('https://atelier-cuisine-iota.vercel.app/stock?x=1')).toBe(
+      'fr.ateliercuisine.app',
+    )
+    // Ni http, ni autre port, ni identifiants, ni hôte voisin.
+    expect(suiteBundleFor('http://atelier-cuisine-iota.vercel.app')).toBeNull()
+    expect(suiteBundleFor('https://atelier-cuisine-iota.vercel.app:8443')).toBeNull()
+    expect(suiteBundleFor('https://u:p@atelier-cuisine-iota.vercel.app')).toBeNull()
+    expect(suiteBundleFor('https://evil.atelier-cuisine-iota.vercel.app')).toBeNull()
+    expect(suiteBundleFor('https://atelier-cuisine-iota.vercel.app.evil.com')).toBeNull()
+    expect(suiteBundleFor('https://vercel.app')).toBeNull()
+    expect(suiteBundleFor('https://constructor')).toBeNull()
+  })
+
   it('ignore les autres adresses', () => {
     expect(suiteBundleFor('http://127.0.0.1:3000')).toBeNull()
     expect(suiteBundleFor('http://example.com:8000')).toBeNull()
@@ -41,6 +56,17 @@ describe('openSuiteOrExternal', () => {
     const d = deps('darwin', true)
     expect(await openSuiteOrExternal('http://127.0.0.1:4174', d.deps)).toBe('browser')
     expect(d.openExternal).toHaveBeenCalledWith('http://127.0.0.1:4174')
+  })
+
+  it("ouvre l'app Mac d'Atelier Cuisine, sinon sa PWA dans le navigateur", async () => {
+    const url = 'https://atelier-cuisine-iota.vercel.app'
+    const installed = deps('darwin')
+    expect(await openSuiteOrExternal(url, installed.deps)).toBe('app')
+    expect(installed.calls).toEqual([['/usr/bin/open', '-b', 'fr.ateliercuisine.app']])
+    expect(installed.openExternal).not.toHaveBeenCalled()
+    const missing = deps('darwin', true)
+    expect(await openSuiteOrExternal(url, missing.deps)).toBe('browser')
+    expect(missing.openExternal).toHaveBeenCalledWith(url)
   })
 
   it('hors macOS, va directement au navigateur', async () => {

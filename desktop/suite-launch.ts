@@ -1,9 +1,10 @@
 /**
  * Ouverture d'une application de la Suite Atelier depuis l'app de bureau (docs/SUITE.md §3).
  *
- * Une adresse d'app de la suite (127.0.0.1 / localhost, port connu) ouvre l'application
- * installée avec `/usr/bin/open -b <identifiant>` (macOS, liste fermée, sans shell) ;
- * si elle n'est pas installée ou hors macOS, l'adresse part dans le navigateur par défaut.
+ * Une adresse d'app de la suite (127.0.0.1 / localhost, port connu ; ou l'adresse en ligne
+ * d'Atelier Cuisine, https) ouvre l'application installée avec `/usr/bin/open -b <identifiant>`
+ * (macOS, liste fermée, sans shell) ; si elle n'est pas installée ou hors macOS, l'adresse part
+ * dans le navigateur par défaut.
  */
 
 /** Port de l'interface → identifiant de l'application de bureau (contrat §3). */
@@ -11,6 +12,14 @@ export const SUITE_BUNDLES: Readonly<Record<string, string>> = {
   '8000': 'fr.atelier-viz.app',
   '4175': 'fr.atelier.tab',
   '4174': 'local.atelier-projets.desktop',
+}
+
+/**
+ * Apps en ligne de la suite : hôte exact (https, port par défaut) → identifiant (contrat §3).
+ * Atelier Cuisine : PWA sur Vercel, app Mac Tauri si installée.
+ */
+export const SUITE_ONLINE_BUNDLES: Readonly<Record<string, string>> = {
+  'atelier-cuisine-iota.vercel.app': 'fr.ateliercuisine.app',
 }
 
 const LOCAL_HOSTS = new Set(['127.0.0.1', 'localhost'])
@@ -25,8 +34,13 @@ export function suiteBundleFor(url: unknown): string | null {
     return null
   }
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null
-  if (!LOCAL_HOSTS.has(parsed.hostname)) return null
-  return SUITE_BUNDLES[parsed.port] ?? null
+  if (parsed.username !== '' || parsed.password !== '') return null
+  if (LOCAL_HOSTS.has(parsed.hostname)) return SUITE_BUNDLES[parsed.port] ?? null
+  // App en ligne : https seulement, port par défaut, hôte exact (liste fermée).
+  if (parsed.protocol !== 'https:' || parsed.port !== '') return null
+  return Object.hasOwn(SUITE_ONLINE_BUNDLES, parsed.hostname)
+    ? (SUITE_ONLINE_BUNDLES[parsed.hostname] ?? null)
+    : null
 }
 
 export type ExecFileFn = (

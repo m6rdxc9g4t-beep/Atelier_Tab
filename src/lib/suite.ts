@@ -1,14 +1,15 @@
 /**
- * Suite Atelier (docs/SUITE.md §2 et §3) : adresses des trois applications, état
- * « en marche / arrêtée » et ouverture d'une application.
+ * Suite Atelier (docs/SUITE.md §2 et §3) : adresses des applications du sélecteur, état
+ * « en marche / arrêtée » des trois apps locales et ouverture d'une application.
  *
  * Adresses = colonne « Interface (aperçu / app) » du contrat, surchargeables par variables
- * Vite : VITE_ATELIER_VIZ_URL, VITE_ATELIER_TAB_URL, VITE_ATELIER_PROJETS_URL (interfaces)
- * et VITE_ATELIER_PROJETS_API_URL (API d'Atelier Projets, pour l'indicateur).
+ * Vite : VITE_ATELIER_VIZ_URL, VITE_ATELIER_TAB_URL, VITE_ATELIER_PROJETS_URL (interfaces),
+ * VITE_ATELIER_PROJETS_API_URL (API d'Atelier Projets, pour l'indicateur) et
+ * VITE_ATELIER_CUISINE_URL (Atelier Cuisine, app en ligne : jamais sondée).
  */
 import { getDesktopApi } from '@/services/desktop'
 
-export type SuiteAppId = 'viz' | 'tab' | 'projets'
+export type SuiteAppId = 'viz' | 'tab' | 'projets' | 'cuisine'
 
 export interface SuiteApp {
   id: SuiteAppId
@@ -19,8 +20,12 @@ export interface SuiteApp {
   description: string
   /** Adresse ouverte par le sélecteur. */
   url: string
-  /** Route de santé (`/api/health`), sondée pour les autres apps ; l'app courante est toujours « en marche ». */
-  healthUrl: string
+  /**
+   * Route de santé (`/api/health`), sondée pour les autres apps ; l'app courante est toujours
+   * « en marche ». `null` : app en ligne sans API locale (Atelier Cuisine), jamais sondée,
+   * affichée « en ligne » (§3).
+   */
+  healthUrl: string | null
 }
 
 /** Application courante. */
@@ -40,6 +45,7 @@ const VIZ_URL = urlFrom('VITE_ATELIER_VIZ_URL', 'http://127.0.0.1:8000')
 const TAB_URL = urlFrom('VITE_ATELIER_TAB_URL', 'http://127.0.0.1:4175')
 const PROJETS_URL = urlFrom('VITE_ATELIER_PROJETS_URL', 'http://127.0.0.1:4174')
 const PROJETS_API_URL = urlFrom('VITE_ATELIER_PROJETS_API_URL', 'http://127.0.0.1:3000')
+const CUISINE_URL = urlFrom('VITE_ATELIER_CUISINE_URL', 'https://atelier-cuisine-iota.vercel.app')
 
 export const SUITE_APPS: readonly SuiteApp[] = [
   {
@@ -67,6 +73,16 @@ export const SUITE_APPS: readonly SuiteApp[] = [
     description: 'Projets agiles, Git, temps passé',
     url: PROJETS_URL,
     healthUrl: `${PROJETS_API_URL}/api/health`,
+  },
+  {
+    id: 'cuisine',
+    name: 'Atelier Cuisine',
+    short: 'Cuisine',
+    description: 'Stock, repas, courses et budget du foyer',
+    url: CUISINE_URL,
+    // App en ligne (PWA + app Mac, données Supabase) : aucune API locale, jamais sondée.
+    // La politique de contenu de Tab n'admet d'ailleurs aucune requête vers l'extérieur.
+    healthUrl: null,
   },
 ]
 
@@ -105,11 +121,18 @@ export async function checkHealth(
 /**
  * Ouvre une application de la suite : dans l'app de bureau, le processus principal ouvre
  * l'application installée (sinon le navigateur par défaut) ; dans un navigateur, nouvel onglet.
+ * Une adresse que le processus principal ne reconnaît pas (adresse de Cuisine surchargée)
+ * repasse par `window.open`, que l'app de bureau envoie au navigateur par défaut.
  */
 export function openSuiteApp(app: SuiteApp): void {
   const desktop = getDesktopApi()
   if (desktop) {
-    void desktop.openLocalApp(app.url)
+    void desktop.openLocalApp(app.url).then(
+      (opened) => {
+        if (!opened) window.open(app.url, '_blank', 'noopener,noreferrer')
+      },
+      () => undefined,
+    )
     return
   }
   window.open(app.url, '_blank', 'noopener,noreferrer')
