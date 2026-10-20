@@ -9,8 +9,12 @@
  * - Ollama : les requêtes de l'assistant passent par ici (pas de contrainte CORS).
  * - Claude : la CLI Claude Code est lancée ici, isolée, et seulement en ligne
  *   (docs/SUITE.md §5, `claude-cli.ts`) ; les outils restent exécutés par l'interface.
- * - Suite Atelier : ouverture des autres applications et envoi vers Atelier Projets local
- *   (adresses 127.0.0.1 / localhost uniquement) ; route de santé sur 127.0.0.1:4175 (§3).
+ * - Mode « En ligne » : fichier de préférences hors du dossier de données (à côté du fichier de
+ *   secrets), écrit ici seulement, sur action de l'utilisateur (§5.1).
+ * - Envois webhook : relayés ici (`webhook:post`), avec la politique réseau de §5.4 (hors ligne :
+ *   cette machine seulement ; jeton seulement vers Atelier Projets local ; pas de redirection).
+ * - Interface : politique de contenu (`connect-src` limité à cette machine, `csp.ts`).
+ * - Suite Atelier : ouverture des autres applications ; route de santé sur 127.0.0.1:4175 (§3).
  */
 import { execFile } from 'node:child_process'
 import fs from 'node:fs'
@@ -32,25 +36,28 @@ import {
   type MenuItemConstructorOptions,
 } from 'electron'
 import { isLocalHttpUrl } from '@/lib/local-url'
-import { INDEX_FILE, readOnlineMode } from '@/storage/format'
 import type {
   DesktopLoadResult,
-  LocalPostRequest,
-  LocalPostResponse,
   McpInfo,
   OllamaRequest,
   OllamaResponse,
+  WebhookPostResponse,
 } from '@/services/desktop'
 import type { AppData } from '@/types/domain'
 import {
   defaultDataDir,
+  defaultPreferencesFile,
   defaultSecretsFile,
   ensureDataDirGuide,
   FileStore,
   parseSaveRequest,
+  readPreferencesFile,
+  writePreferencesFile,
 } from './file-store'
 import { ClaudeCli, findClaudeExecutable, isExecutableFile, spawnRunner } from './claude-cli'
+import { CSP_HEADER, rendererCsp } from './csp'
 import { startHealthServer } from './health-server'
+import { bringToFront } from './window-focus'
 import { guardSender } from './ipc-guard'
 import { resolveInside } from './safe-path'
 import { SnapshotWriter } from './snapshots'
@@ -77,7 +84,8 @@ protocol.registerSchemesAsPrivileged([
 // ---------------------------------------------------------------------------
 
 const dataDir = defaultDataDir()
-const store = new FileStore({ dir: dataDir, secretsFile: defaultSecretsFile() })
+const preferencesFile = defaultPreferencesFile()
+const store = new FileStore({ dir: dataDir, secretsFile: defaultSecretsFile(), preferencesFile })
 const snapshots = new SnapshotWriter({
   dir: dataDir,
   onError: (e) => console.error('Instantané Atelier Viz :', e),
@@ -181,14 +189,16 @@ handle('suite:open', async (_event, url: unknown) => {
   return true
 })
 
-// Envoi vers la route d'import d'Atelier Projets local. La page de l'app a l'origine
-// app://atelier, refusée par le CORS de Projets (seules http://127.0.0.1:* et
-// http://localhost:* y sont admises, l'origine `null` est refusée) ; depuis ce processus,
-// la requête part sans en-tête Origin, ce que Projets traite comme un appel local
-// (docs/SUITE.md §4.1).
-handle('suite:post', async (_event, raw: LocalPostRequest): Promise<LocalPostResponse> => {
-  const req = buildRelayRequest(raw)
-  if (!req) return { status: 0, body: '', error: 'Adresse non autorisée' }
+// Envois webhook de l'interface (docs/SUITE.md §4.1, §5.4). La page de l'app a l'origine
+// app://atelier, refusée par le CORS de Projets ; depuis ce processus, la requête part sans
+// en-tête Origin, ce que Projets traite comme un appel local. La politique de contenu de
+// l'interface n'admet que cette machine : un envoi https vers l'extérieur (autorisé par
+// l'utilisateur) passe donc aussi par ici. Revérifié ici : mode hors ligne (fichier de
+// préférences), jeton seulement vers Atelier Projets local, aucune redirection suivie.
+handle('webhook:post', async (_event, raw: unknown): Promise<WebhookPostResponse> => {
+  const decision = buildRelayRequest(raw, { online: isOnline() })
+  if (!decision.ok) return { status: 0, body: '', error: decision.error }
+  const req = decision.request
   try {
     const res = await fetch(req.url, {
       method: 'POST',
@@ -266,14 +276,22 @@ handle('ollama:cancel', (_event, id: string) => {
 // Claude (CLI Claude Code, docs/SUITE.md §5.3)
 // ---------------------------------------------------------------------------
 
-/** Mode « En ligne », relu dans atelier.json à chaque appel (absent ou abîmé → hors ligne). */
+/**
+ * Mode « En ligne », relu à chaque appel dans le fichier de préférences (hors du dossier de
+ * données, docs/SUITE.md §5.1). Absent ou abîmé → hors ligne. Une ancienne valeur restée dans
+ * atelier.json est ignorée.
+ */
 function isOnline(): boolean {
-  try {
-    return readOnlineMode(fs.readFileSync(path.join(dataDir, INDEX_FILE), 'utf8'))
-  } catch {
-    return false
-  }
+  return readPreferencesFile(preferencesFile).onlineMode
 }
+
+// Seul l'interrupteur de l'en-tête (action de l'utilisateur) appelle ce canal ; aucun outil
+// d'IA n'y a accès (ni l'assistant, qui passe par les outils, ni le serveur MCP).
+handle('prefs:set-online', (_event, online: unknown) => {
+  if (typeof online !== 'boolean') throw new Error('Réglage refusé : valeur invalide')
+  writePreferencesFile(preferencesFile, { onlineMode: online })
+  return isOnline()
+})
 
 const claude = new ClaudeCli({
   runner: spawnRunner,
@@ -333,31 +351,44 @@ async function showClaudeConnection(win: BrowserWindow | null) {
 // Fenêtre et menus
 // ---------------------------------------------------------------------------
 
+/** Page HTML de l'interface, servie avec sa politique de contenu (`csp.ts`). */
+function htmlResponse(file: string): Response {
+  const html = fs.readFileSync(file, 'utf8')
+  return new Response(html, {
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+      [CSP_HEADER]: rendererCsp(html),
+      'X-Content-Type-Options': 'nosniff',
+    },
+  })
+}
+
 function serveDist() {
   protocol.handle(SCHEME, async (request) => {
     const { pathname } = new URL(request.url)
     const relative = decodeURIComponent(pathname).replace(/^\/+/, '') || 'index.html'
     const target = path.normalize(path.join(DIST, relative))
     if (!target.startsWith(DIST)) return new Response('Interdit', { status: 403 })
+    if (target.endsWith('.html') && fs.existsSync(target)) return htmlResponse(target)
     const response = await net.fetch(pathToFileURL(target).toString()).catch(() => null)
     if (response && response.ok) return response
-    return net.fetch(pathToFileURL(path.join(DIST, 'index.html')).toString())
+    return htmlResponse(path.join(DIST, 'index.html'))
   })
 }
 
 let mainWindow: BrowserWindow | null = null
 
-/** Ramène la fenêtre au premier plan (route `GET /` de santé, adresse de Tab lui-même). */
+/**
+ * Ramène la fenêtre (route `GET /` de santé, adresse de Tab lui-même) : `show()` / `focus()`
+ * seulement, jamais de vol du premier plan (`bringToFront`).
+ */
 function focusMainWindow() {
   const win = mainWindow
   if (!win) {
     if (app.isReady()) createWindow()
     return
   }
-  if (win.isMinimized()) win.restore()
-  win.show()
-  if (process.platform === 'darwin') app.focus({ steal: true })
-  win.focus()
+  bringToFront(win)
 }
 
 function createWindow() {

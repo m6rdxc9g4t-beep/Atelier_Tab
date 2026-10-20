@@ -11,7 +11,7 @@
  * une ligne absente de `rowOrder` est ajoutée à la fin, une référence orpheline est ignorée.
  */
 import { z } from 'zod'
-import type { AppData, Table } from '@/types/domain'
+import type { AppData, AppPreferences, Table } from '@/types/domain'
 
 export const DATA_FORMAT = 'atelier_tab'
 export const DATA_FORMAT_VERSION = 1
@@ -160,22 +160,31 @@ const atelierProjetsSchema = z.object({
 export const DEFAULT_PREFERENCES = { onlineMode: false } as const
 
 /**
- * Réglages (`preferences`). Lecture tolérante et prudente : clé absente, valeur abîmée ou
- * autre type qu'un booléen → hors ligne. `online_mode` (écrit à la main) est accepté.
+ * Fichier des préférences de l'utilisateur (mode « En ligne »), rangé **hors du dossier de
+ * données**, à côté du fichier de secrets (docs/SUITE.md §5.1) : le dossier ~/Atelier_Tab est
+ * modifiable par les IA, le mode en ligne ne doit pas l'être.
  */
-export const preferencesSchema = z
-  .preprocess(
-    (v) => {
-      if (typeof v !== 'object' || v === null) return v
-      const raw = v as Record<string, unknown>
-      return 'onlineMode' in raw || !('online_mode' in raw)
-        ? raw
-        : { ...raw, onlineMode: raw.online_mode }
-    },
-    z.object({ onlineMode: z.boolean().catch(false).default(false) }),
-  )
-  .catch({ ...DEFAULT_PREFERENCES })
-  .default({ ...DEFAULT_PREFERENCES })
+export const PREFERENCES_FILE = 'preferences.json'
+
+/**
+ * Lit le fichier de préférences. Lecture prudente : fichier absent, JSON cassé ou valeur qui
+ * n'est pas exactement `true` → hors ligne.
+ */
+export function parsePreferencesFile(text: string | null): AppPreferences {
+  if (text === null) return { ...DEFAULT_PREFERENCES }
+  try {
+    const raw = JSON.parse(text) as unknown
+    if (typeof raw !== 'object' || raw === null) return { ...DEFAULT_PREFERENCES }
+    return { onlineMode: (raw as { onlineMode?: unknown }).onlineMode === true }
+  } catch {
+    return { ...DEFAULT_PREFERENCES }
+  }
+}
+
+/** Contenu du fichier de préférences. */
+export function serializePreferences(prefs: AppPreferences): string {
+  return JSON.stringify({ onlineMode: prefs.onlineMode === true }, null, 2) + '\n'
+}
 
 export const indexFileSchema = z.object({
   format: z.literal(DATA_FORMAT).optional(),
@@ -195,7 +204,9 @@ export const indexFileSchema = z.object({
   integrations: z
     .object({ atelierProjets: atelierProjetsSchema.default({}) })
     .default({ atelierProjets: {} }),
-  preferences: preferencesSchema,
+  // Ancien emplacement du mode « En ligne » (avant docs/SUITE.md §5.1 durci) : accepté à la
+  // lecture mais **ignoré** — l'app repart hors ligne ; le réglage vit dans `PREFERENCES_FILE`.
+  preferences: z.unknown().optional(),
 })
 
 /**
@@ -241,7 +252,7 @@ export function serializeData(data: AppData): Map<string, string> {
       projects: data.projects,
       collaborators: data.collaborators,
       integrations: { atelierProjets: integration },
-      preferences: { onlineMode: data.preferences?.onlineMode === true },
+      // Le mode « En ligne » n'est jamais écrit ici (fichier de préférences, hors du dossier).
     }),
   )
   for (const table of Object.values(data.tables)) files.set(tableFile(table.id), stringify(table))
@@ -274,22 +285,6 @@ function describeIssues(error: z.ZodError): string {
     .slice(0, 3)
     .map((i) => `${i.path.join('.') || '(racine)'} : ${i.message}`)
     .join(' ; ')
-}
-
-/**
- * Mode « En ligne » lu dans le texte de `atelier.json` (processus principal, serveur MCP).
- * Ne lit que la clé `preferences` : un index autrement abîmé ne change rien. Fichier absent,
- * illisible ou valeur douteuse → hors ligne (faux).
- */
-export function readOnlineMode(indexText: string | null): boolean {
-  if (indexText === null) return false
-  try {
-    const raw = JSON.parse(indexText) as unknown
-    if (typeof raw !== 'object' || raw === null) return false
-    return preferencesSchema.parse((raw as { preferences?: unknown }).preferences).onlineMode
-  } catch {
-    return false
-  }
 }
 
 export function parseIndexFile(text: string): IndexFile {
@@ -418,6 +413,7 @@ export function assembleData(index: IndexFile, tables: Record<string, Table>): A
         Object.entries(index.integrations.atelierProjets).filter(([, v]) => v !== undefined),
       ),
     },
-    preferences: { onlineMode: index.preferences.onlineMode },
+    // Hors ligne ici ; le FileStore y reporte le fichier de préférences (hors du dossier).
+    preferences: { ...DEFAULT_PREFERENCES },
   }
 }

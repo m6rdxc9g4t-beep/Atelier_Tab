@@ -5,7 +5,15 @@ import { produce } from 'immer'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createDemoData } from '@/fixtures/demo'
 import type { AppData } from '@/types/domain'
-import { DATA_DIR_GUIDE, ensureDataDirGuide, FileStore } from '../file-store'
+import {
+  DATA_DIR_GUIDE,
+  defaultPreferencesFile,
+  defaultSecretsFile,
+  ensureDataDirGuide,
+  FileStore,
+  readPreferencesFile,
+  writePreferencesFile,
+} from '../file-store'
 
 let dir: string
 let secrets: string
@@ -143,6 +151,55 @@ describe('FileStore', () => {
     } finally {
       stop()
     }
+  })
+})
+
+describe('mode « En ligne » hors du dossier de données (SUITE.md §5.1)', () => {
+  const prefsFile = () => path.join(dir, '..', `${path.basename(dir)}-config`, 'preferences.json')
+  afterEach(() => fs.rmSync(path.dirname(prefsFile()), { recursive: true, force: true }))
+
+  it('à côté du fichier de secrets, hors du dossier de données', () => {
+    const saved = { ...process.env }
+    try {
+      process.env.ATELIER_TAB_SECRETS = '/conf/Atelier_Tab/secrets.json'
+      expect(defaultPreferencesFile()).toBe('/conf/Atelier_Tab/preferences.json')
+      delete process.env.ATELIER_TAB_SECRETS
+      expect(path.dirname(defaultPreferencesFile())).toBe(path.dirname(defaultSecretsFile()))
+      expect(defaultPreferencesFile().startsWith(path.join(os.homedir(), 'Atelier_Tab'))).toBe(
+        false,
+      )
+    } finally {
+      process.env = saved
+    }
+  })
+
+  it('lu par le FileStore, jamais écrit par lui ; atelier.json ne le contient plus', () => {
+    const file = prefsFile()
+    const withPrefs = () => new FileStore({ dir, secretsFile: secrets, preferencesFile: file })
+    const data = edit(createDemoData(), (d) => {
+      d.preferences = { onlineMode: true }
+    })
+    withPrefs().save(data)
+    expect(JSON.parse(read('atelier.json'))).not.toHaveProperty('preferences')
+    expect(fs.existsSync(file)).toBe(false)
+    expect(withPrefs().load().data?.preferences).toEqual({ onlineMode: false })
+
+    // Seul le processus principal l'écrit (action de l'utilisateur), en 0600.
+    writePreferencesFile(file, { onlineMode: true })
+    expect(withPrefs().load().data?.preferences).toEqual({ onlineMode: true })
+    if (process.platform !== 'win32') expect(fs.statSync(file).mode & 0o777).toBe(0o600)
+    expect(readPreferencesFile(file)).toEqual({ onlineMode: true })
+    expect(readPreferencesFile(undefined)).toEqual({ onlineMode: false })
+    expect(readPreferencesFile(path.join(dir, 'absent.json'))).toEqual({ onlineMode: false })
+  })
+
+  it('migration : un ancien réglage d’atelier.json est ignoré, l’app repart hors ligne', () => {
+    store().save(createDemoData())
+    const index = JSON.parse(read('atelier.json'))
+    write('atelier.json', JSON.stringify({ ...index, preferences: { onlineMode: true } }))
+    const loaded = new FileStore({ dir, secretsFile: secrets, preferencesFile: prefsFile() }).load()
+    expect(loaded.errors).toEqual([])
+    expect(loaded.data?.preferences).toEqual({ onlineMode: false })
   })
 })
 

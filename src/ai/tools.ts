@@ -1,21 +1,34 @@
 /**
  * Outils d'Atelier_Tab pour les IA : un seul jeu de définitions, utilisé par le serveur
- * MCP (Claude Code) et par l'assistant intégré (Ollama).
+ * MCP (Claude Code) et par l'assistant intégré (Ollama ou Claude).
  *
  * Chaque outil agit sur un `DataStore` à travers ses actions, exactement comme
  * l'interface : mêmes conversions de saisie (« 45 000 € », « 30/11/2026 »), mêmes
  * réécritures de formules à l'insertion d'une ligne, même moteur de calcul.
+ *
+ * Garde-fous (docs/SUITE.md §5.4) :
+ * - appelés par l'**assistant** (`caller: 'assistant'`), `configure_export` et `export_table`
+ *   n'acceptent que des adresses de cette machine ; toute autre adresse demande une confirmation
+ *   de l'utilisateur dans le panneau (`host.confirm`), de même que les outils destructeurs
+ *   (`delete_rows`, `delete_column`). Sans `confirm`, ces actions sont refusées ;
+ * - quel que soit l'appelant : hors ligne, aucun envoi vers une adresse extérieure ; le jeton
+ *   d'accès ne part que vers la route d'import d'Atelier Projets locale (`sendToWebhook`) ;
+ * - le serveur MCP (`caller: 'mcp'`) est appelé par Claude Code, qui demande lui-même
+ *   confirmation à l'utilisateur avant chaque appel d'outil.
  */
 import { z } from 'zod'
 import {
   buildAtelierPayload,
+  isLoopbackUrl,
   isProjetsImportUrl,
   isValidWebhookUrl,
+  offlineSendMessage,
   PROJETS_LOCAL_IMPORT_URL,
   PROJETS_PRESET_LABEL,
   sendToWebhook,
   toEnrichedCsv,
   validatePayload,
+  webhookBlockReason,
   WEBHOOK_PRESETS,
   withProjetsParams,
   type ProjetsImportSummary,
@@ -48,8 +61,29 @@ import {
 
 export { ToolError }
 
+/** Qui appelle les outils : l'assistant de l'app (Ollama, Claude) ou un client MCP (Claude Code). */
+export type ToolCaller = 'assistant' | 'mcp'
+
+/** Action soumise à l'utilisateur avant d'être exécutée (carte « Autoriser / Refuser »). */
+export interface ConfirmRequest {
+  /** Outil qui demande la confirmation. */
+  tool: string
+  kind: 'send' | 'configure' | 'delete'
+  /** Phrase affichée, ex. « L’assistant veut envoyer 3 lignes de « Lots » vers https://… ». */
+  message: string
+  /** Adresse visée (envoi ou configuration). */
+  url?: string
+}
+
 /** Environnement d'exécution des outils. */
 export interface ToolHost {
+  /** Appelant : décide des confirmations demandées (docs/SUITE.md §5.4). */
+  caller: ToolCaller
+  /**
+   * Demande à l'utilisateur d'autoriser une action (assistant seulement). Résout `true` s'il
+   * l'autorise. Absent : les actions qui exigent une confirmation sont refusées.
+   */
+  confirm?(request: ConfirmRequest): Promise<boolean>
   store: DataStore
   getSheet(tableId: string): TableSheet | undefined
   /** Enregistre un fichier d'export ; renvoie où il se trouve. */
@@ -152,6 +186,26 @@ function freshTable(host: ToolHost, tableId: string): Table {
 }
 
 const NUMERIC: FieldType[] = ['number', 'currency', 'percent', 'formula']
+
+/**
+ * Confirmation de l'utilisateur pour une action de l'assistant. Sans effet pour un client MCP
+ * (Claude Code confirme lui-même). Lève une `ToolError` si l'utilisateur refuse.
+ */
+async function requireConfirmation(host: ToolHost, request: ConfirmRequest): Promise<void> {
+  if (host.caller !== 'assistant') return
+  if (!host.confirm) {
+    throw new ToolError(
+      'Action refusée : elle demande la confirmation de l’utilisateur, impossible ici.',
+    )
+  }
+  if (!(await host.confirm(request))) {
+    throw new ToolError(
+      'Refusé par l’utilisateur : rien n’a été fait. Ne retente pas cette action.',
+    )
+  }
+}
+
+const plural = (n: number, one: string, many: string) => `${n} ${n > 1 ? many : one}`
 
 /** Convertit une valeur fournie par l'IA en valeur stockée, avec les règles de saisie de l'interface. */
 function toStored(field: Field, value: z.infer<typeof cellValue>, d: AppData): CellInput {
@@ -437,9 +491,15 @@ export const TOOLS = [
     description:
       'Supprime des lignes (numéros affichés ou ids). Les formules qui les lisaient sont ajustées comme dans Excel.',
     input: z.object({ table: tableRef, rows: z.array(rowRef).min(1) }),
-    run({ table: ref, rows }, host) {
+    async run({ table: ref, rows }, host) {
       const table = resolveTable(data(host), ref)
       const ids = [...new Set(rows.map((r) => resolveRow(table, r)))]
+      const numbers = ids.map((id) => rowNumberOf(table, id)).sort((a, b) => a - b)
+      await requireConfirmation(host, {
+        tool: 'delete_rows',
+        kind: 'delete',
+        message: `L’assistant veut supprimer ${plural(ids.length, 'ligne', 'lignes')} (${numbers.slice(0, 12).join(', ')}${numbers.length > 12 ? '…' : ''}) de « ${table.name} ».`,
+      })
       host.store.getState().deleteRecords(table.id, ids)
       return { deleted: ids.length, remaining_rows: freshTable(host, table.id).rowOrder.length }
     },
@@ -562,9 +622,14 @@ export const TOOLS = [
     description:
       'Supprime une colonne et ses valeurs. Les formules qui la lisaient affichent #REF!.',
     input: z.object({ table: tableRef, column: columnRef }),
-    run({ table: ref, column }, host) {
+    async run({ table: ref, column }, host) {
       const table = resolveTable(data(host), ref)
       const field = resolveColumn(table, column)
+      await requireConfirmation(host, {
+        tool: 'delete_column',
+        kind: 'delete',
+        message: `L’assistant veut supprimer la colonne ${letterOf(table, field.id)} « ${field.label} » de « ${table.name} » et toutes ses valeurs.`,
+      })
       host.store.getState().deleteField(table.id, field.id)
       return { deleted: field.label }
     },
@@ -686,7 +751,7 @@ export const TOOLS = [
   tool({
     name: 'get_settings',
     description:
-      'Lit les réglages de l’app : mode « En ligne » ou « Hors ligne ». Hors ligne (par défaut), rien ne quitte la machine et Claude n’est pas utilisable dans l’assistant. Lecture seule : seul l’utilisateur change ce mode, avec l’interrupteur de l’en-tête.',
+      'Lit les réglages de l’app : mode « En ligne » ou « Hors ligne ». Hors ligne (par défaut) : Claude n’est pas utilisable dans l’assistant et aucun envoi n’est fait vers une adresse extérieure ; les envois vers cette machine (Atelier Projets local) restent possibles. En ligne : Claude peut répondre et un envoi vers une adresse extérieure est possible (avec confirmation de l’utilisateur quand l’assistant le demande). Lecture seule : seul l’utilisateur change ce mode, avec l’interrupteur de l’en-tête.',
     input: z.object({}),
     run(_, host) {
       const online = data(host).preferences?.onlineMode === true
@@ -694,8 +759,8 @@ export const TOOLS = [
         online_mode: online,
         mode: online ? 'En ligne' : 'Hors ligne',
         explanation: online
-          ? 'Claude peut répondre dans l’assistant (la demande et les cellules lues par les outils lui sont envoyées).'
-          : 'Rien ne quitte la machine : l’assistant utilise Ollama (local). Seul l’utilisateur peut passer en ligne, depuis l’en-tête.',
+          ? 'Claude peut répondre dans l’assistant (la demande et les cellules lues par les outils lui sont envoyées). Un envoi vers une adresse extérieure est possible ; demandé par l’assistant, il exige la confirmation de l’utilisateur.'
+          : 'L’assistant utilise Ollama (local) et aucun envoi n’est fait vers une adresse extérieure ; seuls les envois vers cette machine (127.0.0.1, localhost) restent possibles. Seul l’utilisateur peut passer en ligne, depuis l’en-tête.',
       }
     },
   }),
@@ -725,7 +790,7 @@ export const TOOLS = [
 
   tool({
     name: 'configure_export',
-    description: `Règle l’envoi direct (webhook) : préréglage « ${PROJETS_PRESET_LABEL} » (${PROJETS_LOCAL_IMPORT_URL}), autre adresse https, et projet cible dans Atelier Projets. Sans argument, renvoie la configuration actuelle. Le jeton d’accès ne se règle que dans l’app.`,
+    description: `Règle l’envoi direct (webhook) : préréglage « ${PROJETS_PRESET_LABEL} » (${PROJETS_LOCAL_IMPORT_URL}), autre adresse, et projet cible dans Atelier Projets. Sans argument, renvoie la configuration actuelle. Une adresse hors de cette machine est refusée hors ligne et, demandée par l’assistant, soumise à la confirmation de l’utilisateur. Le jeton d’accès ne se règle que dans l’app et ne part que vers Atelier Projets local.`,
     input: z.object({
       preset: z
         .enum(['atelier-projets-local'])
@@ -742,7 +807,7 @@ export const TOOLS = [
           'Atelier Projets : id du projet cible. "" : projet du même nom que le projet Atelier Tab.',
         ),
     }),
-    run({ preset, url, project_id }, host) {
+    async run({ preset, url, project_id }, host) {
       const target = preset
         ? WEBHOOK_PRESETS.find((p) => p.id === preset)?.url
         : url !== undefined
@@ -752,6 +817,18 @@ export const TOOLS = [
         throw new ToolError(
           'Adresse invalide : utilisez https:// (ou http://127.0.0.1 / http://localhost pour cette machine)',
         )
+      }
+      const current = data(host).integrations.atelierProjets.webhookUrl
+      if (target && target !== current && !isLoopbackUrl(target) && host.caller === 'assistant') {
+        if (data(host).preferences?.onlineMode !== true) {
+          throw new ToolError(offlineSendMessage(target))
+        }
+        await requireConfirmation(host, {
+          tool: 'configure_export',
+          kind: 'configure',
+          url: target,
+          message: `L’assistant veut régler l’envoi direct vers ${target}, hors de cet ordinateur. Les prochains envois de tables partiront vers cette adresse.`,
+        })
       }
       const patch: { webhookUrl?: string; projectId?: string } = {}
       if (target !== undefined) patch.webhookUrl = target
@@ -770,7 +847,7 @@ export const TOOLS = [
   tool({
     name: 'export_table',
     description:
-      'Exporte une table vers Atelier Projets (atelier_projets) : fichier JSON (schéma 2.1.0), CSV enrichi pour Excel, ou envoi direct au webhook configuré (configure_export). Un envoi à Atelier Projets renvoie son résumé (créés, mis à jour, ignorés, avertissements).',
+      'Exporte une table vers Atelier Projets (atelier_projets) : fichier JSON (schéma 2.1.0), CSV enrichi pour Excel, ou envoi direct au webhook configuré (configure_export). Un envoi à Atelier Projets renvoie son résumé (créés, mis à jour, ignorés, avertissements). Hors ligne, seul un envoi vers cette machine est possible ; demandé par l’assistant, un envoi vers une autre adresse exige la confirmation de l’utilisateur.',
     input: z.object({
       table: tableRef,
       format: z.enum(['json', 'csv', 'webhook']),
@@ -803,9 +880,22 @@ export const TOOLS = [
           throw new ToolError(
             `Aucun webhook configuré : renseignez son adresse dans le dialogue d’export de l’app (préréglage « ${PROJETS_PRESET_LABEL} » : ${PROJETS_LOCAL_IMPORT_URL})`,
           )
+        const url = withProjetsParams(webhookUrl, { projectId })
+        const online = d.preferences?.onlineMode === true
+        const blocked = webhookBlockReason(url, online)
+        if (blocked) throw new ToolError(blocked)
+        if (!isLoopbackUrl(url)) {
+          await requireConfirmation(host, {
+            tool: 'export_table',
+            kind: 'send',
+            url,
+            message: `L’assistant veut envoyer ${plural(count, 'ligne', 'lignes')} de « ${table.name} » vers ${url}, hors de cet ordinateur.`,
+          })
+        }
         const res = await sendToWebhook(
           payload,
-          { url: withProjetsParams(webhookUrl, { projectId }), token },
+          // Relu après la confirmation : l'utilisateur a pu passer hors ligne entre-temps.
+          { url, token, online: data(host).preferences?.onlineMode === true },
           host.webhookFetch ? { fetch: host.webhookFetch } : {},
         )
         ok = res.ok

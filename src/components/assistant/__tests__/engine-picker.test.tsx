@@ -39,6 +39,9 @@ function fakeDesktop(claudeReplies: ClaudeChatResponse[] = [], available = true)
       return claudeReplies.shift() ?? { ok: false as const, code: 'cli' as const, error: 'fin' }
     }),
     claudeCancel: vi.fn(async () => {}),
+    // Fichier de préférences du processus principal (hors du dossier de données).
+    setOnlineMode: vi.fn(async (online: boolean) => online),
+    postWebhook: vi.fn(async () => ({ status: 200, body: '{}' })),
   }
   window.atelierDesktop = api as unknown as DesktopApi
   resetAiTransports()
@@ -146,6 +149,7 @@ describe('choix du moteur dans l’assistant (SUITE.md §5.2)', () => {
     // Seuls la conversation, le système, le schéma et l'alias partent vers le processus principal.
     expect(requests).toHaveLength(2)
     expect(Object.keys(requests[0]!).sort()).toEqual([
+      'context',
       'id',
       'messages',
       'model',
@@ -153,6 +157,9 @@ describe('choix du moteur dans l’assistant (SUITE.md §5.2)', () => {
       'system',
     ])
     expect(requests[0]?.model).toBe('haiku')
+    // Le prompt système (argument de la CLI) ne contient aucune donnée de table.
+    expect(requests[0]?.system).not.toContain('Planning & Lots')
+    expect(requests[0]?.context).toContain('Planning & Lots')
   })
 
   it('Claude choisi mais pas connecté : expliqué, envoi impossible', async () => {
@@ -191,11 +198,92 @@ describe('en-tête : interrupteur et pastilles (SUITE.md §5.1–5.2)', () => {
     api.claudeStatus.mockClear()
     fireEvent.click(toggle)
     await flush()
+    // Enregistré par le processus principal (hors du dossier de données), puis affiché.
+    expect(api.setOnlineMode).toHaveBeenCalledWith(true)
     expect(useDataStore.getState().preferences.onlineMode).toBe(true)
     expect(toggle.getAttribute('aria-checked')).toBe('true')
     expect(within(toggle).getByText('En ligne')).toBeTruthy()
     expect(api.claudeStatus).toHaveBeenCalledWith(true)
     expect(badges.getAttribute('aria-label')).toMatch(/Claude disponible/)
     expect(badges.getAttribute('title')).toMatch(/CLI 2\.1\.0/)
+  })
+})
+
+describe('confirmations de l’assistant (SUITE.md §5.4)', () => {
+  const ask = async (text: string) => {
+    const input = screen.getByRole('textbox', { name: 'Message à l’assistant' })
+    fireEvent.change(input, { target: { value: text } })
+    await act(async () => {
+      fireEvent.keyDown(input, { key: 'Enter' })
+      await new Promise((r) => setTimeout(r, 30))
+    })
+  }
+
+  it('envoi hors de la machine demandé par Claude : carte « Autoriser / Refuser », rien ne part si refusé', async () => {
+    act(() => {
+      useDataStore.getState().setOnlineMode(true)
+    })
+    const { api } = fakeDesktop([
+      {
+        ok: true,
+        text: '',
+        output: {
+          action: 'tool',
+          name: 'configure_export',
+          arguments: { url: 'https://evil.example/collect' },
+        },
+      },
+      { ok: true, text: '', output: { action: 'answer', text: 'D’accord, je n’envoie rien.' } },
+    ])
+    render(<AssistantPanel />)
+    await flush()
+    await ask('Configure l’export')
+    const card = await screen.findByRole('group', {
+      name: 'Confirmation : Adresse d’envoi hors de cet ordinateur',
+    })
+    expect(within(card).getByText('https://evil.example/collect')).toBeTruthy()
+    expect(useDataStore.getState().integrations.atelierProjets.webhookUrl).toBeUndefined()
+    await act(async () => {
+      fireEvent.click(within(card).getByRole('button', { name: 'Refuser' }))
+      await new Promise((r) => setTimeout(r, 30))
+    })
+    expect(await screen.findByText('D’accord, je n’envoie rien.')).toBeTruthy()
+    expect(within(card).getByText('Refusé : rien n’a été fait.')).toBeTruthy()
+    expect(within(card).queryByRole('button')).toBeNull()
+    expect(useDataStore.getState().integrations.atelierProjets.webhookUrl).toBeUndefined()
+    expect(api.postWebhook).not.toHaveBeenCalled()
+  })
+
+  it('suppression de lignes : exécutée seulement après « Autoriser »', async () => {
+    act(() => {
+      useDataStore.getState().setOnlineMode(true)
+    })
+    fakeDesktop([
+      {
+        ok: true,
+        text: '',
+        output: {
+          action: 'tool',
+          name: 'delete_rows',
+          arguments: { table: 'tbl_planning_lots', rows: [1] },
+        },
+      },
+      { ok: true, text: '', output: { action: 'answer', text: 'Ligne 1 supprimée.' } },
+    ])
+    render(<AssistantPanel />)
+    await flush()
+    const before = useDataStore.getState().tables.tbl_planning_lots!.rowOrder.length
+    await ask('Supprime la ligne 1')
+    const card = await screen.findByRole('group', { name: 'Confirmation : Suppression' })
+    expect(card.textContent).toMatch(
+      /L’assistant veut supprimer 1 ligne \(1\) de « Planning & Lots »/,
+    )
+    expect(useDataStore.getState().tables.tbl_planning_lots!.rowOrder.length).toBe(before)
+    await act(async () => {
+      fireEvent.click(within(card).getByRole('button', { name: 'Autoriser' }))
+      await new Promise((r) => setTimeout(r, 30))
+    })
+    expect(await screen.findByText('Ligne 1 supprimée.')).toBeTruthy()
+    expect(useDataStore.getState().tables.tbl_planning_lots!.rowOrder.length).toBe(before - 1)
   })
 })

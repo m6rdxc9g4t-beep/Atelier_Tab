@@ -25,7 +25,9 @@ import { toolSchemas } from '../tools'
 let session: HeadlessSession | null = null
 afterEach(() => session?.dispose())
 const host = () => {
-  session = createHeadlessSession(createDemoData(), async (name) => `/exports/${name}`)
+  session = createHeadlessSession(createDemoData(), async (name) => `/exports/${name}`, {
+    caller: 'assistant',
+  })
   return session.host
 }
 const context = { today: '20/10/2026', table: { id: 'tbl_planning_lots', name: 'Planning & Lots' } }
@@ -89,7 +91,8 @@ describe('protocole Claude (SUITE.md §5.3)', () => {
         role: 'assistant',
         content: '{"action":"tool","name":"read_table","arguments":{"table":"Budget"}}',
       },
-      { role: 'user', content: '[Résultat de l’outil read_table]\n{"rows":[]}' },
+      // Rôle distinct : rendu en bloc de données par le processus principal, jamais « Utilisateur ».
+      { role: 'tool', name: 'read_table', content: '{"rows":[]}' },
       { role: 'assistant', content: 'Elle est vide.' },
     ])
   })
@@ -149,6 +152,7 @@ describe('runAgent avec Claude', () => {
     // Chaque tour : alias validé, schéma contraint, conversation seulement.
     expect(requests).toHaveLength(2)
     expect(Object.keys(requests[0]!).sort()).toEqual([
+      'context',
       'id',
       'messages',
       'model',
@@ -159,7 +163,11 @@ describe('runAgent avec Claude', () => {
     expect(requests[0]?.messages).toEqual([
       { role: 'user', content: 'Ajoute Menuiseries à 12 000 €' },
     ])
-    expect(requests[1]?.messages.at(-1)?.content).toMatch(/^\[Résultat de l’outil add_rows\]\n\{/)
+    // Données (nom de table) : dans le contexte (entrée standard), pas dans le prompt système.
+    expect(requests[0]?.context).toContain('« Planning & Lots » (id tbl_planning_lots)')
+    expect(requests[0]?.system).not.toContain('Planning & Lots')
+    expect(requests[1]?.messages.at(-1)).toMatchObject({ role: 'tool', name: 'add_rows' })
+    expect(requests[1]?.messages.at(-1)?.content).toMatch(/^\{"added"/)
     expect(history.map((m) => m.role)).toEqual(['user', 'assistant', 'tool', 'assistant'])
   })
 

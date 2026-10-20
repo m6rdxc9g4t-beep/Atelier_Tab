@@ -130,7 +130,7 @@ describe('résumé renvoyé par Atelier Projets', () => {
     }))
     const res = await sendToWebhook(
       payload,
-      { url: withProjetsParams(PROJETS_LOCAL_IMPORT_URL, { projectId: '3' }) },
+      { url: withProjetsParams(PROJETS_LOCAL_IMPORT_URL, { projectId: '3' }), online: false },
       { fetch, idempotencyKey: 'k1' },
     )
     expect(res).toMatchObject({ ok: true, status: 200, attempts: 1 })
@@ -151,7 +151,11 @@ describe('résumé renvoyé par Atelier Projets', () => {
       status: 422,
       text: async () => JSON.stringify({ message: 'Version de schéma 2.0.0 non prise en charge' }),
     }))
-    const res = await sendToWebhook(payload, { url: PROJETS_LOCAL_IMPORT_URL }, { fetch })
+    const res = await sendToWebhook(
+      payload,
+      { url: PROJETS_LOCAL_IMPORT_URL, online: false },
+      { fetch },
+    )
     expect(res).toMatchObject({ ok: false, status: 422, attempts: 1 })
     expect(res.message).toMatch(/\(422\) — Version de schéma 2.0.0 non prise en charge$/)
   })

@@ -6,6 +6,7 @@ import {
   Loader2,
   RefreshCw,
   RotateCcw,
+  ShieldAlert,
   ShieldCheck,
   Sparkles,
   Square,
@@ -22,7 +23,7 @@ import {
 import { ENGINE_CHOICES, privacyNote, resolveEngine, type EngineState } from '@/ai/engine'
 import type { ModelsResult } from '@/ai/ollama'
 import { ENGINE_LABELS, ollamaProvider } from '@/ai/provider'
-import { askAssistant, cancelAssistant } from '@/store/assistant-actions'
+import { answerConfirmation, askAssistant, cancelAssistant } from '@/store/assistant-actions'
 import { useAssistant, type AssistantEntry } from '@/store/assistant.store'
 import {
   getClaudeTransport,
@@ -396,6 +397,7 @@ function Entry({ entry }: { entry: AssistantEntry }) {
       </li>
     )
   }
+  if (entry.kind === 'confirm') return <ConfirmCard entry={entry} />
   const label = describeToolCall(entry.name, entry.args, tables)
   return (
     <li className="text-[12px] text-muted">
@@ -410,6 +412,65 @@ function Entry({ entry }: { entry: AssistantEntry }) {
         <span className="truncate">{label}</span>
       </span>
       {entry.detail && <span className="mt-0.5 block pl-[18px] text-danger">{entry.detail}</span>}
+    </li>
+  )
+}
+
+const CONFIRM_TITLES: Record<ConfirmEntry['request']['kind'], string> = {
+  send: 'Envoi hors de cet ordinateur',
+  configure: 'Adresse d’envoi hors de cet ordinateur',
+  delete: 'Suppression',
+}
+
+type ConfirmEntry = Extract<AssistantEntry, { kind: 'confirm' }>
+
+/**
+ * Carte « Autoriser / Refuser » : une action de l'assistant qui enverrait des données hors de
+ * cet ordinateur ou supprimerait des données attend la décision de l'utilisateur
+ * (docs/SUITE.md §5.4). Le texte vient de l'app, l'adresse est affichée telle quelle.
+ */
+function ConfirmCard({ entry }: { entry: ConfirmEntry }) {
+  const { request, status } = entry
+  const danger = request.kind === 'delete'
+  return (
+    <li
+      role="group"
+      aria-label={`Confirmation : ${CONFIRM_TITLES[request.kind]}`}
+      className="rounded-lg border border-warning/40 bg-warning/10 px-3 py-2.5 text-ink"
+    >
+      <p className="flex items-center gap-1.5 font-medium">
+        <ShieldAlert size={14} className="shrink-0 text-warning" aria-hidden />
+        {CONFIRM_TITLES[request.kind]}
+      </p>
+      <p className="mt-1 break-words">{request.message}</p>
+      {request.url && (
+        <p className="mt-1 font-mono text-[11.5px] break-all text-muted">{request.url}</p>
+      )}
+      {status === 'pending' ? (
+        <div className="mt-2.5 flex gap-2">
+          <button
+            type="button"
+            onClick={() => answerConfirmation(entry.id, true)}
+            className={cn(
+              'h-7 rounded-md px-3 font-medium',
+              danger ? 'bg-danger text-accent-ink' : 'bg-accent text-accent-ink',
+            )}
+          >
+            Autoriser
+          </button>
+          <button
+            type="button"
+            onClick={() => answerConfirmation(entry.id, false)}
+            className="h-7 rounded-md border border-line px-3 hover:bg-surface-hover"
+          >
+            Refuser
+          </button>
+        </div>
+      ) : (
+        <p className="mt-1.5 text-[12px] text-muted">
+          {status === 'allowed' ? 'Autorisé par vous.' : 'Refusé : rien n’a été fait.'}
+        </p>
+      )}
     </li>
   )
 }

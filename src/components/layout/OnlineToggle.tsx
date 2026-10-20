@@ -1,15 +1,17 @@
 /**
  * Interrupteur « Hors ligne / En ligne » de l'en-tête (docs/SUITE.md §5.1), comme Atelier Viz.
- * Hors ligne par défaut ; mémorisé dans atelier.json (`preferences.onlineMode`). C'est le seul
- * moyen de passer en ligne : aucun outil d'IA ne peut le faire.
+ * Hors ligne par défaut ; mémorisé hors du dossier de données (fichier de préférences du
+ * processus principal, `setOnlineModeByUser`). C'est le seul moyen de passer en ligne : aucun
+ * outil d'IA ne peut le faire.
  */
 import { Cloud, HardDrive } from 'lucide-react'
 import { useDataStore } from '@/store'
+import { setOnlineModeByUser } from '@/store/preferences-actions'
+import { useNotices } from '@/store/notices.store'
 import { cn } from '@/lib/cn'
 
 export function OnlineToggle({ labelClassName }: { labelClassName?: string }) {
   const online = useDataStore((s) => s.preferences?.onlineMode === true)
-  const setOnlineMode = useDataStore((s) => s.setOnlineMode)
   const Icon = online ? Cloud : HardDrive
   return (
     <button
@@ -17,7 +19,15 @@ export function OnlineToggle({ labelClassName }: { labelClassName?: string }) {
       role="switch"
       aria-checked={online}
       aria-label="Mode en ligne"
-      onClick={() => setOnlineMode(!online)}
+      onClick={() =>
+        void setOnlineModeByUser(!online).catch((e: unknown) =>
+          useNotices.getState().push({
+            tone: 'warning',
+            title: 'Réglage non enregistré',
+            detail: e instanceof Error ? e.message : String(e),
+          }),
+        )
+      }
       title={
         online
           ? 'En ligne : Claude est autorisé dans l’assistant. Cliquer pour repasser en local.'

@@ -102,21 +102,18 @@ export function claudeSystemPrompt(base: string, tools: readonly ToolSchema[]): 
   ].join('\n')
 }
 
-/** Résultat d'outil tel que Claude le lit dans la transcription. */
-export function toolResultText(name: string, content: string): string {
-  return `[Résultat de l’outil ${name}]\n${content}`
-}
-
 /**
  * Historique commun (format Ollama) → messages pour la CLI. Les appels d'outils deviennent
- * l'objet JSON que Claude aurait produit ; les résultats, un message de l'utilisateur.
+ * l'objet JSON que Claude aurait produit ; les résultats gardent un rôle `tool` distinct :
+ * le processus principal les rend en blocs de données délimités, jamais comme des messages
+ * de l'utilisateur (docs/SUITE.md §5.4).
  */
 export function toClaudeMessages(history: readonly ChatMessage[]): ClaudeMessage[] {
   const out: ClaudeMessage[] = []
   for (const m of history) {
     if (m.role === 'system') continue
     if (m.role === 'tool') {
-      out.push({ role: 'user', content: toolResultText(m.tool_name ?? 'outil', m.content) })
+      out.push({ role: 'tool', name: m.tool_name ?? 'outil', content: m.content })
       continue
     }
     if (m.role === 'assistant' && m.tool_calls?.length) {
@@ -184,11 +181,13 @@ export function claudeProvider(transport: ClaudeTransport, model: ClaudeModelAli
     engine: 'claude',
     model: claudeModelLabel(model),
     maxSteps: CLAUDE_MAX_STEPS,
-    async step({ id, system, messages, tools }): Promise<ChatResult> {
+    async step({ id, system, context, messages, tools }): Promise<ChatResult> {
       const res = await transport.chat({
         id,
         model,
         system: claudeSystemPrompt(system, tools),
+        // Données : sur l'entrée standard, jamais en argument (contrat §5.3).
+        ...(context ? { context } : {}),
         messages: toClaudeMessages(messages),
         schema: agentResponseSchema(tools.map((t) => t.name)),
       })

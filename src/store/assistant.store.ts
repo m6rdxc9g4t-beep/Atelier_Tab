@@ -8,6 +8,7 @@ import { DEFAULT_CLAUDE_MODEL, isClaudeModel, type ClaudeModelAlias } from '@/ai
 import { isEngineChoice, type EngineChoice } from '@/ai/engine'
 import type { ChatMessage } from '@/ai/ollama'
 import type { EngineId } from '@/ai/provider'
+import type { ConfirmRequest } from '@/ai/tools'
 
 export type AssistantEntry =
   | { id: number; kind: 'user'; text: string }
@@ -28,6 +29,13 @@ export type AssistantEntry =
       detail?: string
     }
   | { id: number; kind: 'error'; text: string }
+  | {
+      id: number
+      /** Action de l'assistant soumise à l'utilisateur (docs/SUITE.md §5.4). */
+      kind: 'confirm'
+      request: ConfirmRequest
+      status: 'pending' | 'allowed' | 'refused'
+    }
 
 /** Omit appliqué à chaque membre de l'union. */
 type NewEntry = AssistantEntry extends infer E

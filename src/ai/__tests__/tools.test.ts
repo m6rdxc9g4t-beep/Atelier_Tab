@@ -1,17 +1,22 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { createDemoData } from '@/fixtures/demo'
-import { createHeadlessSession, type HeadlessSession } from '../headless'
-import { runTool, toolSchemas } from '../tools'
+import { createHeadlessSession, type HeadlessOptions, type HeadlessSession } from '../headless'
+import { runTool, toolSchemas, type ConfirmRequest } from '../tools'
 
 let session: HeadlessSession | null = null
 const saved: { name: string; content: string; path?: string }[] = []
 
-function open() {
+/** Hôte d'outils ; par défaut un client MCP (Claude Code confirme lui-même chaque appel). */
+function open(options: HeadlessOptions = { caller: 'mcp' }) {
   saved.length = 0
-  session = createHeadlessSession(createDemoData(), async (name, content, _mime, path) => {
-    saved.push({ name, content, path })
-    return path ?? `/exports/${name}`
-  })
+  session = createHeadlessSession(
+    createDemoData(),
+    async (name, content, _mime, path) => {
+      saved.push({ name, content, path })
+      return path ?? `/exports/${name}`
+    },
+    options,
+  )
   return session
 }
 afterEach(() => session?.dispose())
@@ -49,7 +54,7 @@ describe('définitions', () => {
 
   it('get_settings lit le mode « En ligne » sans pouvoir le changer', async () => {
     const data = createDemoData()
-    const session = createHeadlessSession(data, async () => '')
+    const session = createHeadlessSession(data, async () => '', { caller: 'mcp' })
     try {
       const off = await runTool('get_settings', {}, session.host)
       expect(JSON.parse(off.content)).toMatchObject({ online_mode: false, mode: 'Hors ligne' })
@@ -61,6 +66,13 @@ describe('définitions', () => {
     } finally {
       session.dispose()
     }
+  })
+
+  it('get_settings ne prétend plus que « rien ne quitte la machine » hors ligne', () => {
+    const def = toolSchemas().find((t) => t.name === 'get_settings')!
+    expect(def.description).not.toMatch(/rien ne quitte la machine/)
+    expect(def.description).toMatch(/aucun envoi n’est fait vers une adresse extérieure/)
+    expect(def.description).toMatch(/cette machine \(Atelier Projets local\) restent possibles/)
   })
 })
 
@@ -441,5 +453,183 @@ describe('export', () => {
     expect(sent).toEqual(['http://127.0.0.1:3000/api/imports/atelier-tab?projectId=3'])
     expect(json.message).toBe('3 ligne(s) envoyée(s) — Atelier Projets : 3 créés')
     expect(json.atelier_projets).toMatchObject({ projectId: 3, created: 3, warnings: [] })
+  })
+})
+
+/** Faux transport webhook : mémorise les envois. */
+function recordSends(s: HeadlessSession) {
+  const sent: { url: string; headers: Record<string, string>; redirect: string }[] = []
+  s.host.webhookFetch = async (url, init) => {
+    sent.push({ url, headers: init.headers, redirect: init.redirect })
+    return { ok: true, status: 200, text: async () => '{}' }
+  }
+  return sent
+}
+
+/** Confirmations simulées : mémorise les demandes, répond `answer`. */
+function confirmer(answer: boolean) {
+  const asked: ConfirmRequest[] = []
+  return {
+    asked,
+    confirm: async (r: ConfirmRequest) => {
+      asked.push(r)
+      return answer
+    },
+  }
+}
+
+describe('garde-fous de l’assistant (SUITE.md §5.4)', () => {
+  it('suppression de lignes : confirmation demandée, rien n’est supprimé sans accord', async () => {
+    const no = confirmer(false)
+    open({ caller: 'assistant', confirm: no.confirm })
+    const res = await call('delete_rows', { table: 'Planning & Lots', rows: [1, 2] })
+    expect(res.ok).toBe(false)
+    expect(res.content).toMatch(/Refusé par l’utilisateur : rien n’a été fait/)
+    expect(no.asked).toEqual([
+      expect.objectContaining({
+        tool: 'delete_rows',
+        kind: 'delete',
+        message: 'L’assistant veut supprimer 2 lignes (1, 2) de « Planning & Lots ».',
+      }),
+    ])
+    expect(session!.snapshot().tables.tbl_planning_lots?.rowOrder).toHaveLength(4)
+
+    const yes = confirmer(true)
+    open({ caller: 'assistant', confirm: yes.confirm })
+    expect((await call('delete_rows', { table: 'Planning & Lots', rows: [1] })).ok).toBe(true)
+    expect(session!.snapshot().tables.tbl_planning_lots?.rowOrder).toHaveLength(3)
+  })
+
+  it('suppression de colonne : confirmation demandée ; sans moyen de confirmer, refusée', async () => {
+    open({ caller: 'assistant' })
+    const res = await call('delete_column', { table: 'Planning & Lots', column: 'Échéance' })
+    expect(res.ok).toBe(false)
+    expect(res.content).toMatch(/demande la confirmation de l’utilisateur/)
+    expect(session!.snapshot().tables.tbl_planning_lots?.fields.due_date).toBeDefined()
+
+    const yes = confirmer(true)
+    open({ caller: 'assistant', confirm: yes.confirm })
+    expect((await call('delete_column', { table: 'Planning & Lots', column: 'F' })).ok).toBe(true)
+    expect(yes.asked[0]?.message).toBe(
+      'L’assistant veut supprimer la colonne F « Échéance » de « Planning & Lots » et toutes ses valeurs.',
+    )
+  })
+
+  it('configure_export : bouclage sans confirmation ; ailleurs, refusé hors ligne, confirmé en ligne', async () => {
+    const no = confirmer(false)
+    open({ caller: 'assistant', confirm: no.confirm })
+    expect((await call('configure_export', { preset: 'atelier-projets-local' })).ok).toBe(true)
+    expect((await call('configure_export', { url: 'http://localhost:3000/hook' })).ok).toBe(true)
+    expect(no.asked).toEqual([])
+
+    // Hors ligne : refusé d'emblée, sans même demander.
+    const offline = await call('configure_export', { url: 'https://evil.example/collect' })
+    expect(offline.ok).toBe(false)
+    expect(offline.content).toMatch(/Mode hors ligne : envoi vers evil\.example refusé/)
+    expect(no.asked).toEqual([])
+
+    // En ligne : l'utilisateur refuse → adresse inchangée.
+    session!.host.store.getState().setOnlineMode(true)
+    const refused = await call('configure_export', { url: 'https://evil.example/collect' })
+    expect(refused.ok).toBe(false)
+    expect(no.asked[0]).toMatchObject({
+      tool: 'configure_export',
+      kind: 'configure',
+      url: 'https://evil.example/collect',
+    })
+    expect(session!.snapshot().integrations.atelierProjets.webhookUrl).toBe(
+      'http://localhost:3000/hook',
+    )
+
+    const yes = confirmer(true)
+    open({ caller: 'assistant', confirm: yes.confirm })
+    session!.host.store.getState().setOnlineMode(true)
+    expect((await call('configure_export', { url: 'https://partenaire.example/api' })).ok).toBe(
+      true,
+    )
+    expect(session!.snapshot().integrations.atelierProjets.webhookUrl).toBe(
+      'https://partenaire.example/api',
+    )
+  })
+
+  it('export_table vers une adresse extérieure : confirmation à chaque envoi, rien ne part sans', async () => {
+    const no = confirmer(false)
+    open({ caller: 'assistant', confirm: no.confirm })
+    const s = session!
+    const sent = recordSends(s)
+    // Adresse réglée par l'utilisateur dans le dialogue d'export, mode en ligne.
+    s.host.store.getState().setAtelierIntegration({
+      webhookUrl: 'https://partenaire.example/api',
+      token: 'jeton-projets',
+    })
+    s.host.store.getState().setOnlineMode(true)
+    const res = await call('export_table', { table: 'Planning & Lots', format: 'webhook' })
+    expect(res.ok).toBe(false)
+    expect(sent).toEqual([])
+    expect(no.asked[0]).toMatchObject({
+      tool: 'export_table',
+      kind: 'send',
+      url: 'https://partenaire.example/api',
+      message:
+        'L’assistant veut envoyer 3 lignes de « Planning & Lots » vers https://partenaire.example/api, hors de cet ordinateur.',
+    })
+
+    const yes = confirmer(true)
+    s.host.confirm = yes.confirm
+    expect((await call('export_table', { table: 'Planning & Lots', format: 'webhook' })).ok).toBe(
+      true,
+    )
+    // Envoyé après accord, sans le jeton (réservé à Atelier Projets local), sans redirection.
+    expect(sent).toHaveLength(1)
+    expect(sent[0]?.headers.Authorization).toBeUndefined()
+    expect(sent[0]?.redirect).toBe('error')
+  })
+
+  it('export_table vers Atelier Projets local : ni confirmation ni blocage hors ligne, jeton joint', async () => {
+    const no = confirmer(false)
+    open({ caller: 'assistant', confirm: no.confirm })
+    const sent = recordSends(session!)
+    session!.host.store.getState().setAtelierIntegration({ token: 'jeton-projets' })
+    await call('configure_export', { preset: 'atelier-projets-local' })
+    expect((await call('export_table', { table: 'Planning & Lots', format: 'webhook' })).ok).toBe(
+      true,
+    )
+    expect(no.asked).toEqual([])
+    expect(sent[0]?.headers.Authorization).toBe('Bearer jeton-projets')
+  })
+})
+
+describe('politique réseau, quel que soit l’appelant (MCP compris)', () => {
+  it('hors ligne : aucun envoi vers une adresse extérieure', async () => {
+    open({ caller: 'mcp' })
+    const sent = recordSends(session!)
+    session!.host.store.getState().setAtelierIntegration({ webhookUrl: 'https://evil.example/x' })
+    const res = await call('export_table', { table: 'Planning & Lots', format: 'webhook' })
+    expect(res.ok).toBe(false)
+    expect(res.content).toMatch(/Mode hors ligne : envoi vers evil\.example refusé/)
+    expect(sent).toEqual([])
+  })
+
+  it('le jeton ne part que vers la route d’import d’Atelier Projets locale', async () => {
+    open({ caller: 'mcp' })
+    const sent = recordSends(session!)
+    const s = session!.host.store.getState()
+    s.setOnlineMode(true)
+    s.setAtelierIntegration({ token: 'jeton-projets' })
+    for (const webhookUrl of [
+      'http://127.0.0.1:3000/api/imports/atelier-tab',
+      'https://projets.example/api/imports/atelier-tab',
+      'http://127.0.0.1:3000/autre',
+    ]) {
+      s.setAtelierIntegration({ webhookUrl })
+      expect((await call('export_table', { table: 'Planning & Lots', format: 'webhook' })).ok).toBe(
+        true,
+      )
+    }
+    expect(sent.map((e) => e.headers.Authorization)).toEqual([
+      'Bearer jeton-projets',
+      undefined,
+      undefined,
+    ])
   })
 })

@@ -14,6 +14,7 @@ import {
 import {
   ATELIER_SCHEMA_VERSION,
   defaultWebhookUrl,
+  isLoopbackUrl,
   isProjetsImportUrl,
   isValidWebhookUrl,
   PROJETS_PRESET_LABEL,
@@ -300,8 +301,11 @@ function WebhookSettings() {
   const save = useDataStore((s) => s.setAtelierIntegration)
   const [url, setUrl] = useState(() => defaultWebhookUrl(integration.webhookUrl))
   const [projectId, setProjectId] = useState(integration.projectId ?? '')
+  const online = useDataStore((s) => s.preferences?.onlineMode === true)
   const invalid = url !== '' && !isValidWebhookUrl(url)
   const projets = isProjetsImportUrl(url)
+  // Hors ligne : rien ne part hors de cette machine (docs/SUITE.md §5.4).
+  const offlineBlocked = !invalid && url !== '' && !online && !isLoopbackUrl(url)
 
   const applyPreset = (presetUrl: string) => {
     setUrl(presetUrl)
@@ -354,6 +358,12 @@ function WebhookSettings() {
               Utilisez une adresse https:// (http://localhost ou http://127.0.0.1 en local)
             </span>
           )}
+          {offlineBlocked && (
+            <span className="text-[12px] text-danger">
+              Hors ligne : l’envoi vers une adresse hors de cet ordinateur est refusé. Activez « En
+              ligne » dans l’en-tête pour l’utiliser.
+            </span>
+          )}
         </label>
         <label className="flex flex-col gap-1">
           <span className="text-[12px] text-muted">Jeton d’accès (facultatif)</span>
@@ -364,7 +374,9 @@ function WebhookSettings() {
             autoComplete="off"
             className="h-8 rounded-md border border-line bg-surface px-2 outline-none focus:border-accent"
           />
-          <span className="text-[12px] text-muted">Conservé sur cet ordinateur uniquement</span>
+          <span className="text-[12px] text-muted">
+            Conservé sur cet ordinateur ; envoyé seulement à Atelier Projets sur cet ordinateur
+          </span>
         </label>
       </div>
       {projets && (

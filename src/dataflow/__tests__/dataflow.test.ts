@@ -8,6 +8,8 @@ import {
   buildAtelierPayload,
   exportFilename,
   isValidWebhookUrl,
+  tokenAllowedFor,
+  webhookBlockReason,
   sendToWebhook,
   slugify,
   toEnrichedCsv,
@@ -199,17 +201,18 @@ describe('webhook', () => {
   const ok = (status = 200) => new Response('{}', { status })
   const noSleep = () => Promise.resolve()
 
-  it('envoie le JSON avec les en-têtes attendus', async () => {
+  it('envoie le JSON avec les en-têtes attendus, sans suivre de redirection', async () => {
     const fetch = vi.fn(async () => ok(202))
     const res = await sendToWebhook(
       payload,
-      { url: 'https://atelier.example/api/import', token: 'secret' },
+      { url: 'http://127.0.0.1:3000/api/imports/atelier-tab', token: 'secret', online: false },
       { fetch, sleep: noSleep, idempotencyKey: 'key-1' },
     )
     expect(res).toMatchObject({ ok: true, status: 202, attempts: 1 })
     const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit]
-    expect(url).toBe('https://atelier.example/api/import')
+    expect(url).toBe('http://127.0.0.1:3000/api/imports/atelier-tab')
     expect(init.method).toBe('POST')
+    expect(init.redirect).toBe('error')
     expect(init.headers).toMatchObject({
       'Content-Type': 'application/json',
       'Idempotency-Key': 'key-1',
@@ -217,6 +220,37 @@ describe('webhook', () => {
       'X-Atelier-Schema-Version': '2.1.0',
     })
     expect(JSON.parse(init.body as string).project.id).toBe('proj_renovation_2026')
+  })
+
+  it('le jeton ne part que vers la route d’import d’Atelier Projets locale (SUITE.md §5.4)', async () => {
+    expect(tokenAllowedFor('http://127.0.0.1:3000/api/imports/atelier-tab')).toBe(true)
+    expect(tokenAllowedFor('http://localhost:3000/api/imports/atelier-tab/preview')).toBe(true)
+    expect(tokenAllowedFor('https://atelier.example/api/imports/atelier-tab')).toBe(false)
+    expect(tokenAllowedFor('http://127.0.0.1:3000/api/autre')).toBe(false)
+    const fetch = vi.fn(async () => ok(200))
+    await sendToWebhook(
+      payload,
+      { url: 'https://atelier.example/api/import', token: 'secret', online: true },
+      { fetch, sleep: noSleep },
+    )
+    const [, init] = fetch.mock.calls[0] as unknown as [string, RequestInit]
+    expect((init.headers as Record<string, string>).Authorization).toBeUndefined()
+  })
+
+  it('hors ligne : refuse toute adresse qui n’est pas cette machine (SUITE.md §5.4)', async () => {
+    const fetch = vi.fn(async () => ok(200))
+    const res = await sendToWebhook(
+      payload,
+      { url: 'https://atelier.example/api/import', online: false },
+      { fetch, sleep: noSleep },
+    )
+    expect(res).toMatchObject({ ok: false, attempts: 0 })
+    expect(res.message).toMatch(/^Mode hors ligne : envoi vers atelier\.example refusé/)
+    expect(fetch).not.toHaveBeenCalled()
+    expect(webhookBlockReason('http://localhost:3000/hook', false)).toBeNull()
+    expect(webhookBlockReason('https://localhost/hook', false)).toBeNull()
+    expect(webhookBlockReason('https://atelier.example/x', true)).toBeNull()
+    expect(webhookBlockReason('https://127.0.0.1.evil.example/x', false)).toMatch(/hors ligne/)
   })
 
   it('réessaie sur erreur serveur avec la même clé d’idempotence', async () => {
@@ -227,7 +261,7 @@ describe('webhook', () => {
       .mockResolvedValueOnce(ok(200))
     const res = await sendToWebhook(
       payload,
-      { url: 'https://a.example/hook' },
+      { url: 'https://a.example/hook', online: true },
       { fetch, sleep: noSleep },
     )
     expect(res).toMatchObject({ ok: true, attempts: 3 })
@@ -241,7 +275,7 @@ describe('webhook', () => {
     const fetch = vi.fn(async () => ok(401))
     const res = await sendToWebhook(
       payload,
-      { url: 'https://a.example/hook' },
+      { url: 'https://a.example/hook', online: true },
       { fetch, sleep: noSleep },
     )
     expect(res).toMatchObject({ ok: false, status: 401, attempts: 1 })
@@ -251,7 +285,7 @@ describe('webhook', () => {
   it('refuse une adresse non sécurisée', async () => {
     expect(isValidWebhookUrl('http://atelier.example')).toBe(false)
     expect(isValidWebhookUrl('http://localhost:3000/hook')).toBe(true)
-    const res = await sendToWebhook(payload, { url: 'ftp://x' })
+    const res = await sendToWebhook(payload, { url: 'ftp://x', online: true })
     expect(res).toMatchObject({ ok: false, attempts: 0 })
   })
 })

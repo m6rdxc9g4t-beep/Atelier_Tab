@@ -84,8 +84,8 @@ export async function refreshClaude(force = false): Promise<void> {
   useAiStatus.setState({ checkingClaude: true })
   try {
     let status = await transport.status(force)
-    // Le processus principal relit atelier.json : juste après une bascule, l'enregistrement
-    // peut ne pas être encore écrit. Une seconde lecture lève le doute.
+    // Le processus principal relit son fichier de préférences : une bascule faite ailleurs
+    // (autre fenêtre) peut ne pas être encore vue ici. Une seconde lecture lève le doute.
     if (status.online !== online) {
       await new Promise((r) => setTimeout(r, 300))
       status = await transport.status(force)
@@ -114,8 +114,9 @@ export function refreshAiStatus(force = false): Promise<void> {
 let watching = false
 
 /**
- * Première vérification, puis suivi du mode « En ligne » : à chaque bascule (interrupteur,
- * ou atelier.json modifié à côté), l'état de Claude est relu.
+ * Première vérification, puis suivi du mode « En ligne » : à chaque bascule de l'interrupteur
+ * (enregistrée par le processus principal avant la mise à jour du store), l'état de Claude
+ * est relu.
  */
 export function startAiStatusWatch(): () => void {
   if (watching) return () => {}

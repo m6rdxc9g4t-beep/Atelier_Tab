@@ -16,14 +16,19 @@ export interface HeadlessSession {
   dispose(): void
 }
 
+/** Appelant et options de l'hôte (l'appelant est obligatoire : il décide des confirmations). */
+export type HeadlessOptions = Pick<ToolHost, 'caller'> &
+  Partial<Pick<ToolHost, 'confirm' | 'webhookFetch'>>
+
 export function createHeadlessSession(
   initial: AppData,
   saveExport: ToolHost['saveExport'],
+  options: HeadlessOptions,
 ): HeadlessSession {
   const store = createDataStore({ adapter: memoryAdapter(), initialData: structuredClone(initial) })
   const engine = connectComputed(store)
   return {
-    host: { store, getSheet: engine.getSheet, saveExport },
+    host: { ...options, store, getSheet: engine.getSheet, saveExport },
     snapshot: () => pickData(store.getState()),
     dispose: engine.disconnect,
   }

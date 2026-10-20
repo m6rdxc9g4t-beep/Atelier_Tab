@@ -4,6 +4,9 @@
  *
  * Premier lancement avec ce stockage : les données de l'ancienne version (IndexedDB)
  * sont reprises et écrites dans le dossier ; à défaut, les données de démonstration.
+ *
+ * Le mode « En ligne » vient toujours du processus principal (fichier de préférences, hors du
+ * dossier de données, docs/SUITE.md §5.1) : une ancienne valeur reprise d'IndexedDB est ignorée.
  */
 import { createDemoData } from '@/fixtures/demo'
 import type { DesktopApi } from '@/services/desktop'
@@ -17,6 +20,20 @@ function migratedAlready(): boolean {
     return localStorage.getItem(MIGRATED_FLAG) === '1'
   } catch {
     return false
+  }
+}
+
+/** État repris d'une ancienne version : mode « En ligne » remis à hors ligne. */
+export function withoutOnlineMode(persisted: string): string {
+  try {
+    const parsed = JSON.parse(persisted) as { state?: Record<string, unknown> }
+    if (typeof parsed.state !== 'object' || parsed.state === null) return persisted
+    return JSON.stringify({
+      ...parsed,
+      state: { ...parsed.state, preferences: { onlineMode: false } },
+    })
+  } catch {
+    return persisted
   }
 }
 
@@ -43,7 +60,9 @@ export function desktopAdapter(api: DesktopApi): StorageAdapter {
         : await indexedDbAdapter()
             .getItem(key)
             .catch(() => null)
-      const persisted = legacy ?? JSON.stringify({ state: createDemoData(), version: 1 })
+      const persisted = legacy
+        ? withoutOnlineMode(legacy)
+        : JSON.stringify({ state: createDemoData(), version: 1 })
       await api.saveData(persisted)
       markMigrated()
       return persisted

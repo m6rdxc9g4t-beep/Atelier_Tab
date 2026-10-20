@@ -8,6 +8,7 @@
  * moteur au milieu d'une conversation.
  */
 import { chat, type ChatMessage, type ChatResult, type OllamaTransport } from './ollama'
+import { contextBlock, toolResultBlock } from './tool-data'
 
 export type EngineId = 'ollama' | 'claude'
 
@@ -24,7 +25,10 @@ export interface ToolSchema {
 export interface StepRequest {
   /** Identifiant de la requête, pour pouvoir l'annuler. */
   id: string
+  /** Consignes seulement (aucune donnée de table). */
   system: string
+  /** Contexte de l'app (table ouverte…) : données, que chaque moteur place dans un bloc délimité. */
+  context?: string
   /** Conversation (sans message système). */
   messages: ChatMessage[]
   tools: ToolSchema[]
@@ -47,12 +51,15 @@ export function ollamaProvider(transport: OllamaTransport, model: string): ChatP
     engine: 'ollama',
     model,
     maxSteps: 12,
-    step: ({ id, system, messages, tools }) =>
+    step: ({ id, system, context, messages, tools }) =>
       chat(
         transport,
         {
           model,
-          messages: [{ role: 'system', content: system }, ...messages],
+          messages: [
+            { role: 'system', content: context ? `${system}\n\n${contextBlock(context)}` : system },
+            ...messages.map(asOllamaMessage),
+          ],
           tools: tools.map((t) => ({
             type: 'function',
             function: { name: t.name, description: t.description, parameters: t.parameters },
@@ -62,4 +69,14 @@ export function ollamaProvider(transport: OllamaTransport, model: string): ChatP
       ),
     cancel: (id) => transport.cancel(id),
   }
+}
+
+/**
+ * Message de l'historique commun tel qu'envoyé à Ollama : un résultat d'outil garde son rôle
+ * `tool` et son contenu est placé dans un bloc de données délimité (docs/SUITE.md §5.4).
+ */
+export function asOllamaMessage(m: ChatMessage): ChatMessage {
+  return m.role === 'tool'
+    ? { ...m, content: toolResultBlock(m.tool_name ?? 'outil', m.content) }
+    : m
 }
