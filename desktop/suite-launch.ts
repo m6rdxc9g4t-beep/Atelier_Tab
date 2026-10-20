@@ -39,6 +39,12 @@ export interface SuiteLaunchDeps {
   execFile: ExecFileFn
   openExternal: (url: string) => Promise<unknown>
   platform: string
+  /**
+   * Identifiant de l'app qui appelle (Tab : `fr.atelier.tab`) et moyen de ramener sa fenêtre.
+   * Une adresse qui désigne l'app elle-même (ex. `http://127.0.0.1:4175`) ramène la fenêtre
+   * au lieu de relancer `open -b` ou d'ouvrir le navigateur sur sa propre route de santé.
+   */
+  self?: { bundleId: string; focus: () => void }
 }
 
 /** `open -b` : vrai si l'application a été trouvée et lancée. */
@@ -54,13 +60,18 @@ function openBundle(bundleId: string, execFile: ExecFileFn): Promise<boolean> {
 
 /**
  * Ouvre l'application de bureau de la suite si l'adresse en désigne une (macOS),
- * sinon l'adresse dans le navigateur par défaut. Rend `'app'` ou `'browser'`.
+ * sinon l'adresse dans le navigateur par défaut. Rend `'self'` (l'app elle-même, fenêtre
+ * ramenée), `'app'` ou `'browser'`.
  */
 export async function openSuiteOrExternal(
   url: string,
   deps: SuiteLaunchDeps,
-): Promise<'app' | 'browser'> {
+): Promise<'self' | 'app' | 'browser'> {
   const bundleId = suiteBundleFor(url)
+  if (bundleId && deps.self && bundleId === deps.self.bundleId) {
+    deps.self.focus()
+    return 'self'
+  }
   if (bundleId && deps.platform === 'darwin' && (await openBundle(bundleId, deps.execFile)))
     return 'app'
   await deps.openExternal(url)

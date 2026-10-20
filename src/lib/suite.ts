@@ -19,8 +19,8 @@ export interface SuiteApp {
   description: string
   /** Adresse ouverte par le sélecteur. */
   url: string
-  /** Route de santé de l'API (null : application sans API, pas d'indicateur). */
-  healthUrl: string | null
+  /** Route de santé (`/api/health`), sondée pour les autres apps ; l'app courante est toujours « en marche ». */
+  healthUrl: string
 }
 
 /** Application courante. */
@@ -57,7 +57,8 @@ export const SUITE_APPS: readonly SuiteApp[] = [
     short: 'Tab',
     description: 'Tableur et base de données typée',
     url: TAB_URL,
-    healthUrl: null,
+    // Route de santé seule : processus principal de l'app de bureau, ou greffon Vite (§3).
+    healthUrl: `${TAB_URL}/api/health`,
   },
   {
     id: 'projets',

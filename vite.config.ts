@@ -3,9 +3,11 @@ import { fileURLToPath, URL } from 'node:url'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
+import { healthPlugin } from './desktop/health-server.ts'
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  // healthPlugin : `GET /api/health` en dev et en aperçu (docs/SUITE.md §3).
+  plugins: [react(), tailwindcss(), healthPlugin()],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
