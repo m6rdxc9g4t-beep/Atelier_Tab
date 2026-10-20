@@ -31,6 +31,7 @@ import {
   nativeTheme,
   net,
   protocol,
+  session,
   shell,
   type IpcMainInvokeEvent,
   type MenuItemConstructorOptions,
@@ -61,6 +62,7 @@ import { bringToFront } from './window-focus'
 import { guardSender } from './ipc-guard'
 import { resolveInside } from './safe-path'
 import { SnapshotWriter } from './snapshots'
+import { cacheControlFor, uiBuildStamp, uiChangedSinceLastLaunch } from './ui-cache'
 import { buildRelayRequest } from './suite-relay'
 import { openSuiteOrExternal, SUITE_BUNDLES } from './suite-launch'
 
@@ -359,8 +361,33 @@ function htmlResponse(file: string): Response {
       'Content-Type': 'text/html; charset=utf-8',
       [CSP_HEADER]: rendererCsp(html),
       'X-Content-Type-Options': 'nosniff',
+      // Jamais de copie en cache : après une mise à jour, la fenêtre doit charger la nouvelle interface.
+      'Cache-Control': cacheControlFor('index.html'),
     },
   })
+}
+
+/** Empreinte de l'interface livrée (`dist/index.html`), ou chaîne vide si elle est illisible. */
+function currentUiStamp(): string {
+  try {
+    return uiBuildStamp(fs.readFileSync(path.join(DIST, 'index.html'), 'utf8'))
+  } catch {
+    return ''
+  }
+}
+
+/**
+ * Interface changée depuis le dernier lancement (mise à jour de l'app) : vide le cache HTTP et le
+ * cache de code de Chromium, qui réaffichaient sinon l'ancienne interface.
+ */
+async function resetCachesIfUiChanged(stamp: string): Promise<void> {
+  if (!stamp || !uiChangedSinceLastLaunch(app.getPath('userData'), stamp)) return
+  try {
+    await session.defaultSession.clearCache()
+    await session.defaultSession.clearCodeCaches({})
+  } catch (error) {
+    console.error('Atelier Tab : impossible de vider le cache de l’interface', error)
+  }
 }
 
 function serveDist() {
@@ -371,12 +398,18 @@ function serveDist() {
     if (!target.startsWith(DIST)) return new Response('Interdit', { status: 403 })
     if (target.endsWith('.html') && fs.existsSync(target)) return htmlResponse(target)
     const response = await net.fetch(pathToFileURL(target).toString()).catch(() => null)
-    if (response && response.ok) return response
+    if (response && response.ok) {
+      const headers = new Headers(response.headers)
+      headers.set('Cache-Control', cacheControlFor(path.relative(DIST, target)))
+      return new Response(response.body, { status: response.status, headers })
+    }
     return htmlResponse(path.join(DIST, 'index.html'))
   })
 }
 
 let mainWindow: BrowserWindow | null = null
+/** Empreinte de l'interface livrée, calculée une fois au démarrage. */
+const uiStamp = currentUiStamp()
 
 /**
  * Ramène la fenêtre (route `GET /` de santé, adresse de Tab lui-même) : `show()` / `focus()`
@@ -423,7 +456,8 @@ function createWindow() {
   win.on('closed', () => {
     if (mainWindow === win) mainWindow = null
   })
-  void win.loadURL(`${SCHEME}://${HOST}/index.html`)
+  // L'empreinte dans l'adresse garantit qu'une nouvelle interface n'est jamais confondue avec l'ancienne.
+  void win.loadURL(`${SCHEME}://${HOST}/index.html?v=${uiStamp}`)
 }
 
 function buildMenu() {
@@ -514,9 +548,10 @@ if (!app.requestSingleInstanceLock()) {
     mainWindow.focus()
   })
 
-  void app.whenReady().then(() => {
+  void app.whenReady().then(async () => {
     serveDist()
     buildMenu()
+    await resetCachesIfUiChanged(uiStamp)
     createWindow()
     // Indicateur « en marche » pour les autres apps de la suite (§3). Port pris : journalisé.
     void startHealthServer({ onFocus: focusMainWindow }).then((server) => {
