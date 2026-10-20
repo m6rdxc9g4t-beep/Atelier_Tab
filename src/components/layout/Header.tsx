@@ -41,7 +41,7 @@ export function Header({ table, mode }: { table: Table; mode: ViewMode }) {
   const toggleAssistant = useAssistant((s) => s.toggle)
 
   return (
-    <header className="@container flex h-11 shrink-0 items-center gap-3 border-b border-line px-3">
+    <header className="@container relative z-30 flex h-11 shrink-0 items-center gap-3 border-b border-line-strong bg-sidebar/70 px-3 backdrop-blur-sm">
       {sidebarCollapsed && (
         <button
           type="button"
@@ -65,13 +65,15 @@ export function Header({ table, mode }: { table: Table; mode: ViewMode }) {
         {workspace && <ChevronRight size={13} className="shrink-0 text-faint" />}
         {project && <span className="truncate">{project.name}</span>}
         {project && <ChevronRight size={13} className="shrink-0 text-faint" />}
-        <span className="truncate font-semibold text-ink">{table.name}</span>
+        <span className="atelier-neon-text max-w-[60%] shrink-0 truncate font-semibold text-ink">
+          {table.name}
+        </span>
       </nav>
 
       <div
         role="tablist"
         aria-label="Mode d'affichage"
-        className="flex shrink-0 rounded-lg bg-surface-sunken p-0.5"
+        className="flex shrink-0 rounded-lg border border-line-strong bg-field p-0.5"
       >
         {MODES.map(({ mode: m, label, icon: Icon, hint }) => (
           <button
@@ -84,7 +86,7 @@ export function Header({ table, mode }: { table: Table; mode: ViewMode }) {
             className={cn(
               'flex h-7 items-center gap-1.5 rounded-md px-2.5',
               mode === m
-                ? 'bg-surface-raised font-medium text-ink shadow-sm ring-1 ring-line'
+                ? 'bg-accent-soft font-medium text-ink shadow-[0_0_14px_-4px_var(--atelier-signature)] ring-1 ring-line-strong [&>svg]:text-accent-fg'
                 : 'text-muted hover:text-ink',
             )}
           >
@@ -100,11 +102,11 @@ export function Header({ table, mode }: { table: Table; mode: ViewMode }) {
         onClick={() => setExportOpen(true)}
         aria-label="Exporter vers Atelier Projets"
         title="Exporter cette table vers Atelier Projets (JSON, CSV ou envoi direct)"
-        className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg bg-accent px-3 font-medium text-accent-ink hover:opacity-90"
+        className="flex h-8 shrink-0 items-center gap-1.5 atelier-btn-primary rounded-lg px-3 font-medium hover:brightness-110"
       >
         <Send size={14} />
-        <span className="@max-[64rem]:hidden">Exporter vers Atelier Projets</span>
-        <span className="hidden @max-[64rem]:inline">Exporter</span>
+        <span className="@max-[80rem]:hidden">Exporter vers Atelier Projets</span>
+        <span className="hidden @max-[80rem]:inline">Exporter</span>
       </button>
       <ProviderBadges className="@max-[72rem]:hidden" />
       <OnlineToggle labelClassName="@max-[44rem]:sr-only" />
@@ -117,10 +119,10 @@ export function Header({ table, mode }: { table: Table; mode: ViewMode }) {
           'flex h-8 shrink-0 items-center gap-1.5 rounded-lg border px-2.5',
           assistantOpen
             ? 'border-accent bg-accent-soft text-ink'
-            : 'border-line text-muted hover:bg-surface-hover hover:text-ink',
+            : 'border-line-strong bg-field text-muted hover:bg-surface-hover hover:text-ink',
         )}
       >
-        <Sparkles size={14} className={assistantOpen ? 'text-accent' : undefined} />
+        <Sparkles size={14} className={assistantOpen ? 'text-accent-fg' : undefined} />
         <span className="@max-[48rem]:sr-only">Assistant</span>
       </button>
       <ThemeToggle />

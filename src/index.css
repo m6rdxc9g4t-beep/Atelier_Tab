@@ -10,43 +10,58 @@
 @import './styles/atelier-ds/dark.css';
 
 /*
- * Thème Atelier Tab
+ * Thème Atelier Tab — charte « néon monochrome » (docs/SUITE.md §1.7)
  * - Clair par défaut ; sombre quand <html> porte `class="dark"` et `data-theme="dark"`
  *   (posés ensemble par useTheme). Le variant `dark:` de Tailwind accepte les deux marqueurs.
- * - Les jetons de Tab gardent leurs noms (les composants ne changent pas) mais leurs
- *   valeurs dérivent des variables de fondation (docs/SUITE.md §1.2). Aucun code couleur
- *   littéral ici : uniquement var() et color-mix(in oklab, …), comme design-system/tokens/ui.css.
+ * - Toute l'application est dans la couleur signature de Tab (vert « Excel ») : <html> porte
+ *   data-atelier-app="tab" et styles/atelier-brand/atelier-brand.css en dérive, pour chaque
+ *   thème, les jetons --atelier-* (fond, surfaces, texte, traits, halos). Les jetons de Tab
+ *   gardent leurs noms (les composants ne changent pas) et se branchent sur ces jetons.
+ *   Aucun code couleur littéral ici : uniquement var() et color-mix(in oklab, …).
+ * - Les variables de fondation (atelier-ds/light.css, dark.css) restent la base neutre de la suite ;
+ *   seules les couleurs officielles (statuts, types) en sont reprises directement : elles portent un sens.
  * - Les composants n'utilisent jamais de couleurs Tailwind brutes (bg-zinc-…) mais les
  *   utilitaires générés ci-dessous (bg-surface, text-muted, border-line…).
  */
 @custom-variant dark (&:where(.dark, .dark *, [data-theme='dark'], [data-theme='dark'] *));
 
 :root {
-  /* Surfaces */
-  --surface: var(--bg-surface);
-  --surface-sunken: var(--bg-main);
-  --surface-raised: var(--bg-surface);
-  --surface-hover: color-mix(in oklab, var(--bg-elevated) 70%, var(--bg-surface));
+  /* Fonds et surfaces */
+  --page: var(--atelier-bg);
+  --sidebar: var(--atelier-sidebar);
+  --surface: var(--atelier-surface);
+  --surface-sunken: color-mix(in oklab, var(--atelier-bg) 60%, var(--atelier-surface));
+  --surface-raised: var(--atelier-surface);
+  --surface-hover: var(--atelier-surface-2);
+  --field: var(--atelier-field);
 
   /* Traits */
-  --line: var(--border-color);
-  --line-strong: color-mix(in oklab, var(--border-color) 60%, var(--text-muted));
+  --edge: var(--atelier-border);
+  --line: var(--atelier-line);
+  --line-strong: var(--atelier-border-soft);
 
   /* Texte */
-  --ink: var(--text-primary);
-  --muted: var(--text-muted);
-  --faint: color-mix(in oklab, var(--text-muted) 70%, var(--bg-surface));
+  --ink: var(--atelier-text);
+  --muted: var(--atelier-muted);
+  --faint: color-mix(in oklab, var(--atelier-muted) 70%, var(--atelier-surface));
 
-  /* Accent = couleur du type EPIC */
-  --accent: var(--type-epic);
-  --accent-soft: color-mix(in oklab, var(--type-epic) 14%, var(--bg-surface));
-  /* Texte posé sur l'accent (et sur une teinte pleine) : le blanc du thème clair. */
-  --accent-ink: var(--bg-surface);
-  --selection: color-mix(in oklab, var(--type-epic) 12%, transparent);
+  /* Accent = couleur signature d'Atelier Tab */
+  --accent: var(--atelier-signature);
+  /* Élément actif : signature en transparence posée sur la surface (opaque pour les zones collantes). */
+  --accent-soft: color-mix(in oklab, var(--atelier-signature) 14%, var(--atelier-surface));
+  /* Texte posé sur l'accent (case cochée) : défini par la marque. */
+  --accent-ink: var(--atelier-signature-contrast);
+  /* Texte ou icône fine en signature : assombrie en clair, éclaircie en sombre. */
+  --accent-fg: var(--atelier-ink);
+  --selection: var(--atelier-surface-3);
+  /* Texte posé sur une teinte pleine (avatars, bouton danger) : la surface blanche en clair. */
+  --solid-ink: var(--atelier-surface);
+  /* Anneau de focus : la signature. */
+  --focus-ring: var(--atelier-signature);
   /* Assombrit une teinte pleine sous un texte clair (avatars). */
-  --tone-shade: var(--text-primary);
+  --tone-shade: var(--atelier-text);
 
-  /* États */
+  /* États (couleurs officielles : inchangées) */
   --success: var(--status-closed);
   --danger: var(--status-rejected);
   --warning: var(--status-hold);
@@ -65,15 +80,18 @@
 :root[data-theme='dark'],
 [data-theme='dark'],
 .dark {
-  /* En sombre, --bg-surface est foncé : le texte sur l'accent reste clair. */
-  --accent-ink: var(--text-primary);
-  --accent-soft: color-mix(in oklab, var(--type-epic) 22%, var(--bg-surface));
-  --selection: color-mix(in oklab, var(--type-epic) 18%, transparent);
-  --faint: color-mix(in oklab, var(--text-muted) 65%, var(--bg-surface));
-  --tone-shade: var(--bg-surface);
+  /* Même dosage que --atelier-signature-soft en sombre. */
+  --accent-soft: color-mix(in oklab, var(--atelier-signature) 18%, var(--atelier-surface));
+  /* La surface est foncée : le texte sur une teinte pleine reste clair. */
+  --solid-ink: var(--atelier-text);
+  --tone-shade: var(--atelier-surface);
 }
 
 @theme inline {
+  --color-page: var(--page);
+  --color-sidebar: var(--sidebar);
+  --color-field: var(--field);
+  --color-edge: var(--edge);
   --color-surface: var(--surface);
   --color-surface-sunken: var(--surface-sunken);
   --color-surface-raised: var(--surface-raised);
@@ -86,6 +104,9 @@
   --color-accent: var(--accent);
   --color-accent-soft: var(--accent-soft);
   --color-accent-ink: var(--accent-ink);
+  --color-accent-fg: var(--accent-fg);
+  --color-solid-ink: var(--solid-ink);
+  --color-focus: var(--focus-ring);
   --color-selection: var(--selection);
   --color-danger: var(--danger);
   --color-warning: var(--warning);
@@ -98,6 +119,12 @@
 
   --font-sans: var(--ds-font-sans);
   --font-mono: var(--ds-font-mono);
+
+  /* Halos néon (styles/atelier-brand), actifs dans les deux thèmes. */
+  --shadow-glow: var(--atelier-glow);
+  --shadow-glow-strong: var(--atelier-glow-strong);
+  --shadow-signature: var(--atelier-signature-glow);
+  --shadow-focus: var(--atelier-focus);
 }
 
 /*
@@ -159,13 +186,13 @@
 
   /* Comme --kind-soft / --kind-ink du design system (components/semantic.css). */
   .tone-soft {
-    background-color: color-mix(in oklab, var(--tone) 16%, var(--bg-surface));
-    color: color-mix(in oklab, var(--tone) 72%, var(--text-primary));
+    background-color: color-mix(in oklab, var(--tone) 16%, var(--surface));
+    color: color-mix(in oklab, var(--tone) 72%, var(--ink));
   }
   /* Teinte pleine (avatars) : assombrie pour que les initiales restent lisibles. */
   .tone-solid {
     background-color: color-mix(in oklab, var(--tone) 78%, var(--tone-shade));
-    color: var(--accent-ink);
+    color: var(--solid-ink);
   }
   .tone-dot {
     background-color: var(--tone);
@@ -194,11 +221,15 @@
 }
 
 @layer base {
+  /* Fond de page : teinte de la signature, fine grille et lueur en haut (les deux thèmes). */
   body {
-    @apply bg-surface text-ink font-sans text-[13px] antialiased;
+    @apply text-ink font-sans text-[13px] antialiased;
+    /* Raccourci obligatoire : --atelier-backdrop contient des tailles de motif. */
+    background: var(--atelier-backdrop), var(--page);
+    background-attachment: fixed;
     font-feature-settings: 'tnum' 1;
   }
   *:focus-visible {
-    @apply outline-2 outline-offset-1 outline-accent;
+    @apply outline-2 outline-offset-1 outline-focus;
   }
 }

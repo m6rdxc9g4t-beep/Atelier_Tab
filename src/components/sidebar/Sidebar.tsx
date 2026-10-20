@@ -26,7 +26,7 @@ export function Sidebar() {
   return (
     <aside
       aria-label="Projets"
-      className="flex w-60 shrink-0 flex-col border-r border-line bg-surface-sunken"
+      className="flex w-60 shrink-0 flex-col border-r border-line-strong bg-sidebar"
     >
       <div className="flex h-11 shrink-0 items-center gap-2 border-b border-line px-3">
         <FolderOpen size={14} className="text-muted" aria-hidden />
@@ -184,11 +184,11 @@ function ProjectItem({ project }: { project: Project }) {
                   className={cn(
                     'flex h-7 w-full items-center gap-1.5 rounded-md px-1.5 text-left',
                     active
-                      ? 'bg-accent-soft font-medium text-ink'
+                      ? 'atelier-nav-active font-medium'
                       : 'text-muted hover:bg-surface-hover hover:text-ink',
                   )}
                 >
-                  <Table2 size={13} className={cn('shrink-0', active && 'text-accent')} />
+                  <Table2 size={13} className={cn('shrink-0', active && 'text-accent-fg')} />
                   <span className="min-w-0 flex-1 truncate">{table.name}</span>
                   <ExportStatusDot tableId={tableId} />
                 </button>
@@ -271,7 +271,7 @@ function NameInput({
         if (e.key === 'Enter') onSubmit(e.currentTarget.value)
         if (e.key === 'Escape') onCancel()
       }}
-      className="h-7 w-full rounded-md border border-accent bg-surface px-2 outline-none placeholder:text-faint"
+      className="h-7 w-full rounded-md border border-accent bg-field px-2 outline-none placeholder:text-faint"
     />
   )
 }

@@ -432,7 +432,9 @@ function createWindow() {
     minHeight: 600,
     title: APP_NAME,
     show: false,
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#16181d' : '#ffffff',
+    // Fond = --atelier-bg de la charte « néon monochrome » pour le vert de Tab
+    // (sombre : signature 6 % dans #07070A ; clair : 5 % dans #FBFBFD).
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#0A0E0F' : '#F2F7F5',
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,

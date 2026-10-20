@@ -83,7 +83,7 @@ function ColumnHeader({
       <span
         className={cn(
           'w-5 shrink-0 text-center text-[11px] font-semibold tabular-nums',
-          active ? 'text-accent' : 'text-faint',
+          active ? 'text-accent-fg' : 'text-faint',
           plain && 'w-full',
         )}
       >
@@ -101,7 +101,7 @@ function ColumnHeader({
                 if (e.key === 'Enter') rename(e.currentTarget.value)
                 if (e.key === 'Escape') setRenaming(false)
               }}
-              className="min-w-0 flex-1 rounded border border-accent bg-surface px-1 text-ink outline-none"
+              className="min-w-0 flex-1 rounded border border-accent bg-field px-1 text-ink outline-none"
             />
           ) : (
             <span

@@ -15,7 +15,7 @@ export function Toaster() {
           <div
             key={n.id}
             role="status"
-            className="pointer-events-auto flex items-start gap-2 rounded-lg border border-line bg-surface-raised px-3 py-2 shadow-lg shadow-black/10 dark:shadow-black/40"
+            className="pointer-events-auto flex items-start gap-2 rounded-lg border border-edge bg-surface-raised px-3 py-2 shadow-glow-strong"
           >
             <Icon
               size={15}
@@ -25,7 +25,7 @@ export function Toaster() {
                   ? 'text-danger'
                   : n.tone === 'warning'
                     ? 'text-warning'
-                    : 'text-accent',
+                    : 'text-accent-fg',
               )}
             />
             <div className="min-w-0 flex-1">

@@ -106,23 +106,34 @@ describe('jetons d’Atelier Tab (src/index.css)', () => {
     }
   })
 
-  it('dérive ses jetons des variables de fondation (§1.2), sans couleur littérale', () => {
+  it('branche ses jetons sur la palette « néon monochrome » de la marque (§1.7), sans couleur littérale', () => {
     const tokens = declarations(indexCss.split('@theme inline')[0]!)
-    expect(tokens.get('--surface')).toBe('var(--bg-surface)')
-    expect(tokens.get('--surface-sunken')).toBe('var(--bg-main)')
-    expect(tokens.get('--surface-raised')).toBe('var(--bg-surface)')
-    expect(tokens.get('--surface-hover')).toContain('var(--bg-elevated)')
-    expect(tokens.get('--ink')).toBe('var(--text-primary)')
-    expect(tokens.get('--muted')).toBe('var(--text-muted)')
-    expect(tokens.get('--line')).toBe('var(--border-color)')
-    expect(tokens.get('--accent')).toBe('var(--type-epic)')
+    expect(tokens.get('--page')).toBe('var(--atelier-bg)')
+    expect(tokens.get('--sidebar')).toBe('var(--atelier-sidebar)')
+    expect(tokens.get('--surface')).toBe('var(--atelier-surface)')
+    expect(tokens.get('--surface-hover')).toBe('var(--atelier-surface-2)')
+    expect(tokens.get('--field')).toBe('var(--atelier-field)')
+    expect(tokens.get('--ink')).toBe('var(--atelier-text)')
+    expect(tokens.get('--muted')).toBe('var(--atelier-muted)')
+    expect(tokens.get('--edge')).toBe('var(--atelier-border)')
+    expect(tokens.get('--line')).toBe('var(--atelier-line)')
+    expect(tokens.get('--line-strong')).toBe('var(--atelier-border-soft)')
+    // Accent = couleur signature de Tab, posée par data-atelier-app="tab".
+    expect(tokens.get('--accent')).toBe('var(--atelier-signature)')
+    expect(tokens.get('--accent-fg')).toBe('var(--atelier-ink)')
+    // Couleurs qui portent un sens : officielles, inchangées.
     expect(tokens.get('--success')).toBe('var(--status-closed)')
     expect(tokens.get('--danger')).toBe('var(--status-rejected)')
     expect(tokens.get('--warning')).toBe('var(--status-hold)')
-    for (const derived of ['--surface-hover', '--line-strong', '--faint', '--accent-soft']) {
+    for (const derived of ['--surface-sunken', '--faint', '--accent-soft']) {
       expect(tokens.get(derived), derived).toMatch(/^color-mix\(in oklab, /)
     }
     expect(indexCss).not.toMatch(/#[0-9a-f]{3,8}\b/i)
+  })
+
+  it('le fond de page porte la grille et la lueur de la marque', () => {
+    expect(indexCss).toContain('background: var(--atelier-backdrop), var(--page)')
+    expect(indexCss).not.toContain('background-image: var(--atelier-backdrop)')
   })
 
   it('rayons 6 / 10 / 16 px et polices système, sans police téléchargée (§1.3)', () => {

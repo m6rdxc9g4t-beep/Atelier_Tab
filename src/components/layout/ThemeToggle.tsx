@@ -49,7 +49,7 @@ export function ThemeToggle() {
               >
                 <ItemIcon size={14} />
                 <span className="flex-1">{label}</span>
-                {checked && <Check size={13} className="text-accent" />}
+                {checked && <Check size={13} className="text-accent-fg" />}
               </button>
             )
           })}

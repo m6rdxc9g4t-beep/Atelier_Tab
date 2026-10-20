@@ -151,7 +151,7 @@ export function HybridGrid({ table, plain }: HybridGridProps) {
       aria-rowcount={table.rowOrder.length}
       tabIndex={0}
       onKeyDown={onKeyDown}
-      className="relative min-h-0 flex-1 overflow-auto outline-none"
+      className="relative m-3 mt-2.5 min-h-0 flex-1 overflow-auto rounded-xl border border-edge bg-surface shadow-glow outline-none"
     >
       <div style={{ width: totalWidth, minWidth: '100%' }} className="flex min-h-full flex-col">
         <GridHeader
@@ -237,7 +237,7 @@ const GridRow = memo(function GridRow({
         className={cn(
           'sticky left-0 z-10 flex shrink-0 items-center justify-between border-r border-b border-line px-2 text-[11px] tabular-nums',
           summary ? 'bg-surface-sunken' : 'bg-surface',
-          selected ? 'text-accent' : 'text-faint',
+          selected ? 'text-accent-fg' : 'text-faint',
         )}
         style={{ width: GUTTER_WIDTH }}
       >
