@@ -10,6 +10,7 @@
  * - Suite Atelier : ouverture des autres applications et envoi vers Atelier Projets local
  *   (adresses 127.0.0.1 / localhost uniquement).
  */
+import { execFile } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -48,6 +49,7 @@ import { guardSender } from './ipc-guard'
 import { resolveInside } from './safe-path'
 import { SnapshotWriter } from './snapshots'
 import { buildRelayRequest } from './suite-relay'
+import { openSuiteOrExternal } from './suite-launch'
 
 /** Nom affiché (menus, titre, boîtes de dialogue). Le dossier de données reste ~/Atelier_Tab. */
 const APP_NAME = 'Atelier Tab'
@@ -155,11 +157,19 @@ handle('export:save', (_event, filename: unknown, content: unknown) => {
 // Suite Atelier
 // ---------------------------------------------------------------------------
 
-// Ouvre une autre application de la suite dans le navigateur par défaut. Surface IPC
-// volontairement étroite : http(s) vers 127.0.0.1 / localhost uniquement.
+// Ouvre une autre application de la suite : l'app de bureau installée (macOS, `open -b`),
+// sinon le navigateur par défaut (docs/SUITE.md §3). Surface IPC volontairement étroite :
+// http(s) vers 127.0.0.1 / localhost uniquement.
+const openSuiteUrl = (url: string) =>
+  openSuiteOrExternal(url, {
+    execFile,
+    openExternal: (u) => shell.openExternal(u),
+    platform: process.platform,
+  })
+
 handle('suite:open', async (_event, url: unknown) => {
   if (!isLocalHttpUrl(url)) return false
-  await shell.openExternal(url)
+  await openSuiteUrl(url)
   return true
 })
 
@@ -318,13 +328,13 @@ function createWindow() {
   mainWindow = win
   win.once('ready-to-show', () => win.show())
   win.webContents.setWindowOpenHandler(({ url }) => {
-    if (/^https?:/.test(url)) void shell.openExternal(url)
+    if (/^https?:/.test(url)) void openSuiteUrl(url)
     return { action: 'deny' }
   })
   win.webContents.on('will-navigate', (event, url) => {
     if (!url.startsWith(`${SCHEME}://${HOST}/`)) {
       event.preventDefault()
-      if (/^https?:/.test(url)) void shell.openExternal(url)
+      if (/^https?:/.test(url)) void openSuiteUrl(url)
     }
   })
   win.on('closed', () => {
