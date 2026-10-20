@@ -30,8 +30,10 @@ Lancer les quatre vérifications avant tout commit.
 - Jamais d'`eval()` ni de `new Function()` : les formules passent par le parser maison.
 - Les couleurs viennent des tokens de `src/index.css` (`bg-surface`, `text-muted`, `border-line`, `text-accent`…), jamais de couleurs Tailwind brutes. Tout écran doit fonctionner en clair et en sombre.
 
-- **IA** : `src/ai/tools.ts` est la seule définition des outils, partagée par le serveur MCP (`desktop/mcp-server.ts`) et l'assistant Ollama. Un outil passe toujours par les actions du store, jamais par une écriture directe des données. Toute nouvelle fonctionnalité de données doit être accessible par un outil.
+- **IA** : `src/ai/tools.ts` est la seule définition des outils, partagée par le serveur MCP (`desktop/mcp-server.ts`) et l'assistant intégré (Ollama ou Claude). Un outil passe toujours par les actions du store, jamais par une écriture directe des données. Toute nouvelle fonctionnalité de données doit être accessible par un outil.
 - **Fichiers de données** : le format est défini dans `src/storage/format.ts`. Un changement de format exige une lecture tolérante de l'ancien (les fichiers peuvent être édités à la main ou par une IA) et un test.
+- **Moteurs de l'assistant** (docs/SUITE.md §5) : `runAgent` passe par `ChatProvider` (`src/ai/provider.ts`), jamais par un moteur précis. Claude : CLI Claude Code lancée **isolée** par le processus principal (`desktop/claude-cli.ts`, drapeaux du contrat §5.3), **jamais d'outil de la CLI** (`--tools ""`) ; les outils sont exécutés par l'app (protocole JSON contraint, `src/ai/claude.ts`). L'interface n'envoie que conversation, prompt système, schéma et alias de modèle ; aucun argument de ligne de commande libre. Hors ligne (`preferences.onlineMode` d'`atelier.json`, faux par défaut) : rien ne part vers Claude. Aucun outil d'IA ne passe en ligne.
+- Route de santé (`desktop/health-server.ts`) : `127.0.0.1` seulement, deux routes, aucune donnée.
 - `desktop/` est du code Node (processus principal Electron, accès disque, serveur MCP), construit par `npm run build:desktop` dans `dist-desktop/`.
 
 ## Suite Atelier

@@ -60,7 +60,7 @@ Les opérations structurelles (`engine/table/table-ops.ts`) réécrivent les for
 
 ## IA
 
-`src/ai/tools.ts` définit 15 outils (schémas Zod convertis en JSON Schema) qui agissent sur un `DataStore` à travers ses actions : mêmes conversions de saisie, mêmes réécritures de formules, même moteur que l'interface.
+`src/ai/tools.ts` définit 16 outils (schémas Zod convertis en JSON Schema) qui agissent sur un `DataStore` à travers ses actions : mêmes conversions de saisie, mêmes réécritures de formules, même moteur que l'interface.
 
 ```text
 Claude Code ──stdio──▶ atelier-mcp (desktop/mcp-server.ts)
@@ -68,9 +68,19 @@ Claude Code ──stdio──▶ atelier-mcp (desktop/mcp-server.ts)
                                                                                          │
 App (ouverte) ◀──────── surveillance du dossier ◀────────────────────────────────────────┘
 
-Ollama ◀──/api/chat── processus principal ◀──IPC── panneau Assistant
-                                                    └─ boucle d'outils (src/ai/agent.ts) sur le store de l'app
+Ollama ◀──/api/chat──────────── processus principal ◀──IPC ollama:*── ┐
+claude -p (CLI isolée) ◀─stdin── processus principal ◀──IPC claude:*── panneau Assistant
+                                  (desktop/claude-cli.ts)               └─ runAgent (src/ai/agent.ts) :
+                                                                           outils exécutés sur le store de l'app
 ```
+
+Moteurs de l'assistant (docs/SUITE.md §5) :
+
+- `src/ai/provider.ts` : interface `ChatProvider` (un tour = `step`), fournisseur Ollama ; `runAgent` ne connaît que cette interface et l'historique commun (format Ollama), donc on peut changer de moteur en cours de conversation.
+- `src/ai/claude.ts` : fournisseur Claude. La CLI n'a **aucun outil** (`--tools ""`) : Claude répond par un objet JSON contraint par `--json-schema` (`{"action":"tool","name","arguments"}` ou `{"action":"answer","text"}`), l'app exécute l'outil par `runTool` (les mêmes définitions que MCP et Ollama) et renvoie le résultat au tour suivant ; 8 tours au plus.
+- `src/ai/engine.ts` : choix Auto · Ollama · Claude (Claude seulement dans l'app de bureau et en ligne), ligne bouclier. `src/store/ai-status.store.ts` : état des deux moteurs (pastilles de l'en-tête, panneau).
+- `desktop/claude-cli.ts` (processus principal) : recherche de l'exécutable (`CLAUDE_CLI`, `PATH`, `~/.local/bin`, `/opt/homebrew/bin`, `/usr/local/bin`), `claude auth status` + `--version` en cache 60 s, validation de la requête (conversation, prompt système, schéma, alias `sonnet|opus|haiku` ; rien d'autre), ligne de commande construite ici seulement, `spawn` sans shell, dossier temporaire vide, `ANTHROPIC_API_KEY` retirée, `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`, délai de 180 s, annulation. Exécutant injectable : testé avec un exécutant simulé et une fausse CLI (`desktop/__tests__/fixtures/fake-claude.mjs`).
+- Mode « En ligne » : `preferences.onlineMode` dans `atelier.json` (`src/storage/format.ts`, lecture tolérante : absent ou abîmé → hors ligne). Le processus principal le relit sur disque à chaque appel (`readOnlineMode`) ; hors ligne, `claude:chat` est refusé et rien n'est lancé. Le serveur MCP le lit avec l'outil `get_settings` ; aucun outil ne peut le changer (choix de l'utilisateur, interrupteur de l'en-tête).
 
 Le serveur MCP est livré dans l'app (`Contents/Resources/atelier-mcp`) et s'exécute avec le Node.js d'Electron (`ELECTRON_RUN_AS_NODE`) : rien à installer. Voir [ADR 0003](adr/0003-acces-ia.md).
 
@@ -81,6 +91,7 @@ Contrat commun : [`SUITE.md`](SUITE.md). Côté Tab :
 - thème : `src/styles/atelier-ds/` (copie verbatim) → jetons dérivés dans `src/index.css` ; `useTheme` pose `class="dark"` et `data-theme` ;
 - sélecteur d'apps : `src/lib/suite.ts` + `components/layout/SuiteSwitcher.tsx` ; dans l'app de bureau, ouverture par `shell.openExternal` via l'IPC `suite:open` (http(s) vers 127.0.0.1 / localhost uniquement) ;
 - envoi à Atelier Projets local depuis l'app de bureau : IPC `suite:post`, requête relayée sans en-tête `Origin` (Projets refuse l'origine `null` et `app://atelier`) ; voir `DATAFLOW_SPEC.md` ;
+- route de santé : `desktop/health-server.ts`, `127.0.0.1:4175` uniquement, `GET /api/health` et `GET /` (ramène la fenêtre si c'est une navigation de premier niveau), tout le reste 404, en-tête `Host` vérifié ; port pris → journalisé. Même `/api/health` en dev et en aperçu par le greffon Vite `healthPlugin`. L'adresse de Tab lui-même (4175) ouverte depuis Tab ramène sa fenêtre (`suite-launch.ts`, option `self`) : ni `open -b`, ni navigateur ;
 - IPC : chaque canal du processus principal n'accepte que les messages de l'interface (`event.senderFrame.url` sous `app://atelier/`, `desktop/ipc-guard.ts`) ; `data:save` revalide l'état reçu (`parseAppState` de `src/storage/format.ts`) et toute écriture disque est confinée à son dossier (`desktop/safe-path.ts`).
 
 ## Décisions
