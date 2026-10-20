@@ -12,7 +12,10 @@ export type SuiteAppId = 'viz' | 'tab' | 'projets'
 
 export interface SuiteApp {
   id: SuiteAppId
+  /** Nom accessible (« Atelier Viz »). */
   name: string
+  /** Nom court affiché dans la marque « atelier_Viz » (docs/SUITE.md §1.6). */
+  short: string
   description: string
   /** Adresse ouverte par le sélecteur. */
   url: string
@@ -42,6 +45,7 @@ export const SUITE_APPS: readonly SuiteApp[] = [
   {
     id: 'viz',
     name: 'Atelier Viz',
+    short: 'Viz',
     description: 'BI locale : rapports, visuels, IA',
     url: VIZ_URL,
     // L'API de Viz est servie par la même adresse que son interface (FastAPI).
@@ -50,6 +54,7 @@ export const SUITE_APPS: readonly SuiteApp[] = [
   {
     id: 'tab',
     name: 'Atelier Tab',
+    short: 'Tab',
     description: 'Tableur et base de données typée',
     url: TAB_URL,
     healthUrl: null,
@@ -57,6 +62,7 @@ export const SUITE_APPS: readonly SuiteApp[] = [
   {
     id: 'projets',
     name: 'Atelier Projets',
+    short: 'Projets',
     description: 'Projets agiles, Git, temps passé',
     url: PROJETS_URL,
     healthUrl: `${PROJETS_API_URL}/api/health`,
@@ -96,8 +102,8 @@ export async function checkHealth(
 }
 
 /**
- * Ouvre une application de la suite : navigateur par défaut via `shell.openExternal`
- * dans l'app de bureau, nouvel onglet dans le navigateur.
+ * Ouvre une application de la suite : dans l'app de bureau, le processus principal ouvre
+ * l'application installée (sinon le navigateur par défaut) ; dans un navigateur, nouvel onglet.
  */
 export function openSuiteApp(app: SuiteApp): void {
   const desktop = getDesktopApi()

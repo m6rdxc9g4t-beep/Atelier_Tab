@@ -8,7 +8,7 @@
  * bloquent jamais l'affichage du menu.
  */
 import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
-import { BarChart3, Check, KanbanSquare, LayoutGrid, Table2 } from 'lucide-react'
+import { BarChart3, CalendarCheck, Check, LayoutGrid, Table2 } from 'lucide-react'
 import {
   checkHealth,
   CURRENT_APP,
@@ -22,7 +22,7 @@ import { cn } from '@/lib/cn'
 const ICONS: Record<SuiteAppId, typeof Table2> = {
   viz: BarChart3,
   tab: Table2,
-  projets: KanbanSquare,
+  projets: CalendarCheck,
 }
 
 type Health = SuiteStatus | 'checking'
@@ -177,17 +177,15 @@ export function SuiteSwitcher() {
                 }}
                 className="flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-left hover:bg-surface-hover focus-visible:bg-surface-hover"
               >
-                <span
-                  className={cn(
-                    'grid size-9 shrink-0 place-items-center rounded-md',
-                    current ? 'bg-accent text-accent-ink' : 'bg-surface-sunken text-accent',
-                  )}
-                >
-                  <Icon size={18} aria-hidden />
+                <span className="atelier-brand__tile atelier-brand__tile--sm" aria-hidden="true">
+                  <Icon />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="flex items-center gap-2 font-semibold text-ink">
-                    {app.name}
+                  <span className="flex items-center gap-2 text-ink">
+                    <span className="atelier-brand__name atelier-brand__name--sm">
+                      <span className="atelier-brand__prefix">atelier_</span>
+                      {app.short}
+                    </span>
                     {state && (
                       <span
                         data-status={HEALTH_STATUS[state]}

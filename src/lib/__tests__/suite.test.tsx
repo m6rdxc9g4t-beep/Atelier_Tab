@@ -19,6 +19,8 @@ describe('module suite (SUITE.md §2–3)', () => {
       ['projets', 'Atelier Projets', 'http://127.0.0.1:4174', 'http://127.0.0.1:3000/api/health'],
     ])
     expect(HEALTH_TIMEOUT_MS).toBe(1500)
+    // Marque commune (SUITE.md §1.6) : « atelier_Viz »…
+    expect(SUITE_APPS.map((a) => a.short)).toEqual(['Viz', 'Tab', 'Projets'])
   })
 
   it('réponse opaque = en marche, erreur réseau = arrêtée (no-cors)', async () => {
