@@ -15,7 +15,7 @@ describe('module suite (SUITE.md §2–3)', () => {
     expect(CURRENT_APP).toBe('tab')
     expect(SUITE_APPS.map((a) => [a.id, a.name, a.url, a.healthUrl])).toEqual([
       ['viz', 'Atelier Viz', 'http://127.0.0.1:8000', 'http://127.0.0.1:8000/api/health'],
-      ['tab', 'Atelier Tab', 'http://127.0.0.1:4175', null],
+      ['tab', 'Atelier Tab', 'http://127.0.0.1:4175', 'http://127.0.0.1:4175/api/health'],
       ['projets', 'Atelier Projets', 'http://127.0.0.1:4174', 'http://127.0.0.1:3000/api/health'],
     ])
     expect(HEALTH_TIMEOUT_MS).toBe(1500)
@@ -74,7 +74,8 @@ describe('sélecteur « Suite Atelier »', () => {
     const items = screen.getAllByRole('menuitemradio')
     expect(items.map((i) => i.getAttribute('aria-label'))).toEqual([
       'Atelier Viz — Arrêtée',
-      'Atelier Tab (application courante)',
+      // L'app courante est toujours « en marche », sans être sondée (SUITE.md §3).
+      'Atelier Tab (application courante) — En marche',
       'Atelier Projets — En marche',
     ])
     expect(items[1]?.getAttribute('aria-checked')).toBe('true')

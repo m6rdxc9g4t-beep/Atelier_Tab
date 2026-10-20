@@ -4,8 +4,11 @@ import {
   assembleData,
   DataFileError,
   parseIndexFile,
+  parseAppState,
+  parsePreferencesFile,
   parseTableFile,
   serializeData,
+  serializePreferences,
   tableIdFromPath,
 } from '../format'
 
@@ -149,5 +152,54 @@ describe('projet cible Atelier Projets (integrations.atelierProjets.projectId)',
     expect(read({ webhookUrl: 'https://a.example', lastExport: { at: 1 } })).toEqual({
       webhookUrl: 'https://a.example',
     })
+  })
+})
+
+describe('mode « En ligne » hors du dossier de données (SUITE.md §5.1)', () => {
+  const base = { workspaces: {}, projects: {} }
+  const index = (extra: Record<string, unknown>) => JSON.stringify({ ...base, ...extra })
+
+  it('atelier.json ne contient jamais le mode « En ligne »', () => {
+    const data = createDemoData()
+    data.preferences = { onlineMode: true }
+    const text = serializeData(data).get('atelier.json')!
+    expect(JSON.parse(text)).not.toHaveProperty('preferences')
+    expect(text).not.toMatch(/online/i)
+  })
+
+  it('migration tolérante : une ancienne valeur dans atelier.json est lue sans erreur mais ignorée', () => {
+    for (const preferences of [{ onlineMode: true }, { online_mode: true }, 'oui', 42, null, []]) {
+      const parsed = parseIndexFile(index({ preferences }))
+      // L'app repart hors ligne.
+      expect(assembleData(parsed, {}).preferences).toEqual({ onlineMode: false })
+    }
+  })
+
+  it('l’état reçu de l’interface (data:save) ne peut pas passer en ligne', () => {
+    const data = createDemoData()
+    data.preferences = { onlineMode: true }
+    expect(parseAppState(JSON.parse(JSON.stringify(data))).preferences).toEqual({
+      onlineMode: false,
+    })
+  })
+
+  it('fichier de préférences : seul `true` exact passe en ligne ; absent ou abîmé → hors ligne', () => {
+    expect(parsePreferencesFile(serializePreferences({ onlineMode: true }))).toEqual({
+      onlineMode: true,
+    })
+    expect(parsePreferencesFile(serializePreferences({ onlineMode: false }))).toEqual({
+      onlineMode: false,
+    })
+    for (const text of [
+      null,
+      '',
+      '{ cassé',
+      'true',
+      '[]',
+      '{"onlineMode":"true"}',
+      '{"onlineMode":1}',
+    ]) {
+      expect(parsePreferencesFile(text)).toEqual({ onlineMode: false })
+    }
   })
 })

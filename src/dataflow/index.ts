@@ -24,6 +24,11 @@ export { toEnrichedCsv } from './transports/csv'
 export {
   sendToWebhook,
   isValidWebhookUrl,
+  isLoopbackUrl,
+  offlineSendMessage,
+  tokenAllowedFor,
+  urlHost,
+  webhookBlockReason,
   type WebhookConfig,
   type WebhookDeps,
   type WebhookFetch,

@@ -55,4 +55,20 @@ describe('openSuiteOrExternal', () => {
     expect(await openSuiteOrExternal('https://github.com', d.deps)).toBe('browser')
     expect(d.calls).toEqual([])
   })
+
+  it("l'adresse de Tab lui-même ramène sa fenêtre, sans open ni navigateur (pas de boucle)", async () => {
+    for (const platform of ['darwin', 'linux']) {
+      const d = deps(platform)
+      const focus = vi.fn()
+      const self = { bundleId: 'fr.atelier.tab', focus }
+      expect(await openSuiteOrExternal('http://127.0.0.1:4175/', { ...d.deps, self })).toBe('self')
+      expect(focus).toHaveBeenCalledOnce()
+      expect(d.calls).toEqual([])
+      expect(d.openExternal).not.toHaveBeenCalled()
+      // Les autres apps restent ouvertes normalement.
+      expect(await openSuiteOrExternal('http://127.0.0.1:8000', { ...d.deps, self })).not.toBe(
+        'self',
+      )
+    }
+  })
 })

@@ -11,7 +11,7 @@
  * une ligne absente de `rowOrder` est ajoutée à la fin, une référence orpheline est ignorée.
  */
 import { z } from 'zod'
-import type { AppData, Table } from '@/types/domain'
+import type { AppData, AppPreferences, Table } from '@/types/domain'
 
 export const DATA_FORMAT = 'atelier_tab'
 export const DATA_FORMAT_VERSION = 1
@@ -156,6 +156,36 @@ const atelierProjetsSchema = z.object({
   lastExport: exportLogSchema.optional().catch(undefined),
 })
 
+/** Réglages par défaut : hors ligne (docs/SUITE.md §5.1). */
+export const DEFAULT_PREFERENCES = { onlineMode: false } as const
+
+/**
+ * Fichier des préférences de l'utilisateur (mode « En ligne »), rangé **hors du dossier de
+ * données**, à côté du fichier de secrets (docs/SUITE.md §5.1) : le dossier ~/Atelier_Tab est
+ * modifiable par les IA, le mode en ligne ne doit pas l'être.
+ */
+export const PREFERENCES_FILE = 'preferences.json'
+
+/**
+ * Lit le fichier de préférences. Lecture prudente : fichier absent, JSON cassé ou valeur qui
+ * n'est pas exactement `true` → hors ligne.
+ */
+export function parsePreferencesFile(text: string | null): AppPreferences {
+  if (text === null) return { ...DEFAULT_PREFERENCES }
+  try {
+    const raw = JSON.parse(text) as unknown
+    if (typeof raw !== 'object' || raw === null) return { ...DEFAULT_PREFERENCES }
+    return { onlineMode: (raw as { onlineMode?: unknown }).onlineMode === true }
+  } catch {
+    return { ...DEFAULT_PREFERENCES }
+  }
+}
+
+/** Contenu du fichier de préférences. */
+export function serializePreferences(prefs: AppPreferences): string {
+  return JSON.stringify({ onlineMode: prefs.onlineMode === true }, null, 2) + '\n'
+}
+
 export const indexFileSchema = z.object({
   format: z.literal(DATA_FORMAT).optional(),
   version: z.literal(DATA_FORMAT_VERSION).optional(),
@@ -174,6 +204,9 @@ export const indexFileSchema = z.object({
   integrations: z
     .object({ atelierProjets: atelierProjetsSchema.default({}) })
     .default({ atelierProjets: {} }),
+  // Ancien emplacement du mode « En ligne » (avant docs/SUITE.md §5.1 durci) : accepté à la
+  // lecture mais **ignoré** — l'app repart hors ligne ; le réglage vit dans `PREFERENCES_FILE`.
+  preferences: z.unknown().optional(),
 })
 
 /**
@@ -219,6 +252,7 @@ export function serializeData(data: AppData): Map<string, string> {
       projects: data.projects,
       collaborators: data.collaborators,
       integrations: { atelierProjets: integration },
+      // Le mode « En ligne » n'est jamais écrit ici (fichier de préférences, hors du dossier).
     }),
   )
   for (const table of Object.values(data.tables)) files.set(tableFile(table.id), stringify(table))
@@ -379,5 +413,7 @@ export function assembleData(index: IndexFile, tables: Record<string, Table>): A
         Object.entries(index.integrations.atelierProjets).filter(([, v]) => v !== undefined),
       ),
     },
+    // Hors ligne ici ; le FileStore y reporte le fichier de préférences (hors du dossier).
+    preferences: { ...DEFAULT_PREFERENCES },
   }
 }

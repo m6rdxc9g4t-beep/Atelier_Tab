@@ -1,7 +1,7 @@
 /**
  * Sélecteur « Suite Atelier » (docs/SUITE.md §3) : icône grille à gauche du nom de l'app,
  * menu des trois applications (courante cochée), indicateur « en marche / arrêtée » pour
- * celles qui ont une API.
+ * les trois : l'app courante est toujours « en marche », les autres sont sondées.
  *
  * Clavier : Entrée / Espace / ↓ ouvrent le menu, ↑ ↓ Début Fin naviguent, Échap ferme et
  * rend le focus, Tab ou un clic à l'extérieur ferment. Les vérifications de santé ne
@@ -54,7 +54,7 @@ export function SuiteSwitcher() {
     if (!open) return
     let cancelled = false
     for (const app of SUITE_APPS) {
-      if (!app.healthUrl) continue
+      if (app.id === CURRENT_APP) continue
       void checkHealth(app.healthUrl).then((status) => {
         if (!cancelled) setHealth((current) => ({ ...current, [app.id]: status }))
       })
@@ -91,7 +91,7 @@ export function SuiteSwitcher() {
 
   const openMenu = (focus: 'first' | 'last') => {
     const checking: Partial<Record<SuiteAppId, Health>> = {}
-    for (const app of SUITE_APPS) if (app.healthUrl) checking[app.id] = 'checking'
+    for (const app of SUITE_APPS) if (app.id !== CURRENT_APP) checking[app.id] = 'checking'
     setHealth(checking)
     setOpen(true)
     requestAnimationFrame(() => focusItem(focus === 'first' ? 0 : -1))
@@ -157,9 +157,9 @@ export function SuiteSwitcher() {
           </p>
           {SUITE_APPS.map((app, index) => {
             const current = app.id === CURRENT_APP
-            const state = app.healthUrl ? (health[app.id] ?? 'checking') : null
+            const state: Health = current ? 'up' : (health[app.id] ?? 'checking')
             const Icon = ICONS[app.id]
-            const label = `${app.name}${current ? ' (application courante)' : ''}${state ? ` — ${HEALTH_TEXT[state]}` : ''}`
+            const label = `${app.name}${current ? ' (application courante)' : ''} — ${HEALTH_TEXT[state]}`
             return (
               <button
                 key={app.id}
@@ -186,15 +186,13 @@ export function SuiteSwitcher() {
                       <span className="atelier-brand__prefix">atelier_</span>
                       {app.short}
                     </span>
-                    {state && (
-                      <span
-                        data-status={HEALTH_STATUS[state]}
-                        className="flex items-center gap-1 text-[11.5px] font-normal text-muted"
-                      >
-                        <span className="tone-dot size-1.5 rounded-full" aria-hidden />
-                        {HEALTH_TEXT[state]}
-                      </span>
-                    )}
+                    <span
+                      data-status={HEALTH_STATUS[state]}
+                      className="flex items-center gap-1 text-[11.5px] font-normal text-muted"
+                    >
+                      <span className="tone-dot size-1.5 rounded-full" aria-hidden />
+                      {HEALTH_TEXT[state]}
+                    </span>
                   </span>
                   <span className="block truncate text-[12px] text-muted">{app.description}</span>
                 </span>

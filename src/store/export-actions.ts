@@ -15,7 +15,6 @@ import {
   type ValidationReport,
   type WebhookFetch,
 } from '@/dataflow'
-import { isLocalProjetsImportUrl } from '@/lib/local-url'
 import { getDesktopApi, type DesktopApi } from '@/services/desktop'
 import type { ExportMethod } from '@/types/domain'
 import { getSheet, useDataStore } from './index'
@@ -42,17 +41,18 @@ export interface ExportOutcome {
 }
 
 /**
- * App de bureau : l'interface a l'origine `app://atelier`, qu'Atelier Projets n'admet pas
- * (CORS limité à http://127.0.0.1:* et http://localhost:* ; l'origine `null` est refusée,
- * docs/SUITE.md §4.1). Une requête vers la route d'import d'un Atelier Projets local passe
- * donc par le processus principal, qui l'envoie sans en-tête Origin, comme un script local.
- * Toute autre adresse reste un `fetch` normal.
+ * App de bureau : tout envoi webhook passe par le processus principal.
+ * - L'interface a l'origine `app://atelier`, qu'Atelier Projets n'admet pas (CORS limité à
+ *   http://127.0.0.1:* et http://localhost:* ; l'origine `null` est refusée, §4.1) : depuis le
+ *   processus principal, la requête part sans en-tête Origin, comme un script local.
+ * - La politique de contenu de l'interface (`connect-src`) n'admet que cette machine ; un envoi
+ *   https vers l'extérieur, autorisé par l'utilisateur, est donc relayé lui aussi.
+ * - Le processus principal revérifie le mode hors ligne et la règle du jeton (§5.4).
  */
 export function desktopAwareFetch(desktop: DesktopApi | undefined): WebhookFetch | undefined {
   if (!desktop) return undefined
   return async (url, init) => {
-    if (!isLocalProjetsImportUrl(url)) return fetch(url, init)
-    const res = await desktop.postLocal({ url, headers: init.headers, body: init.body })
+    const res = await desktop.postWebhook({ url, headers: init.headers, body: init.body })
     if (res.status === 0) throw new TypeError(res.error ?? 'Serveur injoignable')
     return {
       ok: res.status >= 200 && res.status < 300,
@@ -101,7 +101,11 @@ export async function runExport(
     const fetchVia = desktopAwareFetch(getDesktopApi())
     const res = await sendToWebhook(
       payload,
-      { url: withProjetsParams(webhookUrl, { projectId }), token },
+      {
+        url: withProjetsParams(webhookUrl, { projectId }),
+        token,
+        online: state.preferences?.onlineMode === true,
+      },
       fetchVia ? { fetch: fetchVia } : {},
     )
     outcome = {

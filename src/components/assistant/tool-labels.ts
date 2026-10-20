@@ -39,6 +39,8 @@ export function describeToolCall(
       return `Renommage en « ${text('name')} »`
     case 'evaluate':
       return `Calcul de ${text('formula')}`
+    case 'get_settings':
+      return 'Lecture des réglages (mode en ligne)'
     case 'check_export':
       return `Vérification de l’export de « ${table} »`
     case 'export_table':

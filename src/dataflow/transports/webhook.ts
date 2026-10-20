@@ -6,13 +6,23 @@
  *   en cas de succès, message d'erreur de la cible sinon.
  * - `fetch` et l'attente sont injectables pour les tests (et pour l'app de bureau, qui
  *   relaie la requête par son processus principal).
+ *
+ * Politique réseau (docs/SUITE.md §5.4), appliquée ici quel que soit l'appelant (interface,
+ * assistant, serveur MCP) et revérifiée par le processus principal de l'app de bureau :
+ * - hors ligne, aucun envoi vers une adresse qui n'est pas cette machine (`webhookBlockReason`) ;
+ * - le jeton d'accès n'est envoyé qu'à la route d'import d'Atelier Projets **locale**
+ *   (`tokenAllowedFor`) ;
+ * - les redirections ne sont jamais suivies (une adresse locale ne peut pas renvoyer ailleurs).
  */
+import { isLocalHttpUrl, isLocalProjetsImportUrl } from '@/lib/local-url'
 import type { AtelierPayload } from '../schema/atelier.v2_1'
 import { describeProjetsSummary, parseProjetsSummary, type ProjetsImportSummary } from './projets'
 
 export interface WebhookConfig {
   url: string
   token?: string
+  /** Mode « En ligne » de l'app : hors ligne, seules les adresses de cette machine sont admises. */
+  online: boolean
 }
 
 export interface WebhookResult {
@@ -27,7 +37,7 @@ export interface WebhookResult {
 /** Sous-ensemble de `fetch` utilisé ici (une réponse dont on lit le statut et le texte). */
 export type WebhookFetch = (
   url: string,
-  init: { method: 'POST'; headers: Record<string, string>; body: string },
+  init: { method: 'POST'; headers: Record<string, string>; body: string; redirect: 'error' },
 ) => Promise<{ ok: boolean; status: number; text(): Promise<string> }>
 
 export interface WebhookDeps {
@@ -52,6 +62,37 @@ export function isValidWebhookUrl(url: string): boolean {
   }
 }
 
+/** Adresse de cette machine (127.0.0.1 ou localhost) : jamais bloquée par le mode hors ligne. */
+export function isLoopbackUrl(url: string): boolean {
+  return isLocalHttpUrl(url)
+}
+
+/** Nom d'hôte affichable d'une adresse (pour les messages et les confirmations). */
+export function urlHost(url: string): string {
+  try {
+    return new URL(url).host
+  } catch {
+    return url
+  }
+}
+
+export const offlineSendMessage = (url: string) =>
+  `Mode hors ligne : envoi vers ${urlHost(url)} refusé. Seules les adresses de cet ordinateur (127.0.0.1, localhost) sont autorisées ; activez « En ligne » dans l’en-tête pour envoyer ailleurs.`
+
+/** Raison d'un refus d'envoi (null : envoi admis). */
+export function webhookBlockReason(url: string, online: boolean): string | null {
+  if (!isValidWebhookUrl(url)) {
+    return 'Adresse invalide : utilisez https:// (ou http://127.0.0.1 / http://localhost pour cette machine)'
+  }
+  if (!online && !isLoopbackUrl(url)) return offlineSendMessage(url)
+  return null
+}
+
+/** Le jeton d'accès n'est envoyé qu'à la route d'import d'Atelier Projets locale. */
+export function tokenAllowedFor(url: string): boolean {
+  return isLocalProjetsImportUrl(url)
+}
+
 async function readJson(res: { text(): Promise<string> }): Promise<unknown> {
   try {
     const text = await res.text()
@@ -73,14 +114,8 @@ export async function sendToWebhook(
   config: WebhookConfig,
   deps: WebhookDeps = {},
 ): Promise<WebhookResult> {
-  if (!isValidWebhookUrl(config.url)) {
-    return {
-      ok: false,
-      status: null,
-      attempts: 0,
-      message: 'Adresse invalide : utilisez https:// (ou http://localhost en développement)',
-    }
-  }
+  const blocked = webhookBlockReason(config.url, config.online)
+  if (blocked) return { ok: false, status: null, attempts: 0, message: blocked }
 
   const doFetch: WebhookFetch = deps.fetch ?? ((url, init) => fetch(url, init))
   const sleep = deps.sleep ?? defaultSleep
@@ -91,13 +126,13 @@ export async function sendToWebhook(
     'Idempotency-Key': key,
     'X-Atelier-Schema-Version': payload.schema_version,
   }
-  if (config.token) headers.Authorization = `Bearer ${config.token}`
+  if (config.token && tokenAllowedFor(config.url)) headers.Authorization = `Bearer ${config.token}`
   const body = JSON.stringify(payload)
 
   let last: WebhookResult = { ok: false, status: null, attempts: 0, message: '' }
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      const res = await doFetch(config.url, { method: 'POST', headers, body })
+      const res = await doFetch(config.url, { method: 'POST', headers, body, redirect: 'error' })
       const json = await readJson(res)
       if (res.ok) {
         const summary = parseProjetsSummary(json)

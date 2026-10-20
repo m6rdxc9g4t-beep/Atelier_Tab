@@ -261,7 +261,7 @@ describe('export DataFlow', () => {
     )
   })
 
-  it('envoie au webhook configuré', async () => {
+  const sendTo = async (address: string) => {
     const calls: [string, RequestInit][] = []
     globalThis.fetch = (async (url: string, init: RequestInit) => {
       calls.push([url, init])
@@ -271,14 +271,37 @@ describe('export DataFlow', () => {
     const dialog = await openExport()
     fireEvent.click(within(dialog).getByText('Envoi direct'))
     const url = within(dialog).getByPlaceholderText(/atelier-projets.example/)
-    fireEvent.change(url, { target: { value: 'https://atelier.example/api/import' } })
+    fireEvent.change(url, { target: { value: address } })
     fireEvent.blur(url)
     await act(async () => {
       fireEvent.click(within(dialog).getByRole('button', { name: 'Envoyer à Atelier Projets' }))
     })
-    expect(calls[0]?.[0]).toBe('https://atelier.example/api/import')
+    // Seuls les envois vers l'adresse (l'en-tête interroge aussi Ollama en local).
+    return { dialog, sent: calls.filter(([u]) => u.startsWith(address)) }
+  }
+
+  it('envoie au webhook configuré (en ligne), sans suivre de redirection', async () => {
+    act(() => {
+      useDataStore.getState().setOnlineMode(true)
+    })
+    const { dialog, sent } = await sendTo('https://atelier.example/api/import')
+    expect(sent).toHaveLength(1)
+    expect(sent[0]?.[1].redirect).toBe('error')
     expect(within(dialog).getByRole('status').textContent).toMatch(/3 lignes envoyées/)
     expect(screen.getByText(/envoi direct configuré/)).toBeTruthy()
+  })
+
+  it('hors ligne : refuse une adresse extérieure, même depuis l’interface (SUITE.md §5.4)', async () => {
+    const { dialog, sent } = await sendTo('https://atelier.example/api/import')
+    expect(
+      within(dialog).getByText(
+        /Hors ligne : l’envoi vers une adresse hors de cet ordinateur est refusé/,
+      ),
+    ).toBeTruthy()
+    expect(sent).toEqual([])
+    expect(within(dialog).getByRole('status').textContent).toMatch(
+      /Mode hors ligne : envoi vers atelier\.example refusé/,
+    )
   })
 })
 
