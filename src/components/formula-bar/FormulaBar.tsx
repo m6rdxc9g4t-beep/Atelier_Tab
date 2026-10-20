@@ -56,9 +56,9 @@ export function FormulaBar({ table, onCommit }: { table: Table; onCommit: () => 
   }
 
   return (
-    <div className="flex h-10 shrink-0 items-center gap-2 border-b border-line px-3">
+    <div className="flex h-10 shrink-0 items-center gap-2 px-3 pt-2.5">
       <div
-        className="flex h-7 w-36 shrink-0 items-center gap-1.5 rounded-md border border-line bg-surface-sunken px-2"
+        className="flex h-7 w-36 shrink-0 items-center gap-1.5 rounded-md border border-line-strong bg-field px-2"
         title={field ? `${address ?? ''} · ${field.label}` : undefined}
       >
         <span className="font-mono text-[12px] font-semibold text-ink">{address ?? '—'}</span>
@@ -98,8 +98,8 @@ export function FormulaBar({ table, onCommit }: { table: Table; onCommit: () => 
           }
           aria-label="Barre de formules"
           className={cn(
-            'h-7 w-full rounded-md border border-transparent bg-transparent px-2 outline-none placeholder:text-faint',
-            'focus:border-focus focus:bg-surface-raised',
+            'h-7 w-full rounded-md border border-line-strong bg-field px-2 outline-none placeholder:text-faint',
+            'focus:border-focus focus:shadow-focus',
             isFormula(shown) ? 'font-mono text-[12.5px] text-transparent caret-ink' : 'text-ink',
             inputError && 'border-danger',
           )}

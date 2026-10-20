@@ -147,7 +147,7 @@ export function SuiteSwitcher() {
           role="menu"
           aria-label="Suite Atelier"
           onKeyDown={onMenuKey}
-          className="absolute top-full left-0 z-40 mt-2 w-80 rounded-lg border border-line bg-surface-raised p-1.5 shadow-lg shadow-black/10 dark:shadow-glow-strong"
+          className="absolute top-full left-0 z-40 mt-2 w-80 rounded-lg border border-edge bg-surface-raised p-1.5 shadow-glow-strong"
         >
           <p
             className="px-2.5 pt-1 pb-1.5 text-[11px] font-semibold tracking-wide text-muted uppercase"

@@ -101,7 +101,7 @@ function ColumnHeader({
                 if (e.key === 'Enter') rename(e.currentTarget.value)
                 if (e.key === 'Escape') setRenaming(false)
               }}
-              className="min-w-0 flex-1 rounded border border-accent bg-surface px-1 text-ink outline-none"
+              className="min-w-0 flex-1 rounded border border-accent bg-field px-1 text-ink outline-none"
             />
           ) : (
             <span

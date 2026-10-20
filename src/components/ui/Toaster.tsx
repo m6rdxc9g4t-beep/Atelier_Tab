@@ -15,7 +15,7 @@ export function Toaster() {
           <div
             key={n.id}
             role="status"
-            className="pointer-events-auto flex items-start gap-2 rounded-lg border border-line bg-surface-raised px-3 py-2 shadow-lg shadow-black/10 dark:shadow-glow-strong"
+            className="pointer-events-auto flex items-start gap-2 rounded-lg border border-edge bg-surface-raised px-3 py-2 shadow-glow-strong"
           >
             <Icon
               size={15}

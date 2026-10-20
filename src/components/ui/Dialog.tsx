@@ -56,7 +56,7 @@ export function Dialog({
         aria-label={title}
         tabIndex={-1}
         className={cn(
-          'flex max-h-[min(860px,calc(100dvh-2rem))] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-line bg-surface-raised bg-[image:var(--atelier-glass)] shadow-2xl shadow-black/20 outline-none dark:shadow-glow-strong',
+          'flex max-h-[min(860px,calc(100dvh-2rem))] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-edge bg-surface-raised shadow-glow-strong outline-none',
           className,
         )}
       >

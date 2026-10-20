@@ -55,21 +55,24 @@ export const OPEN_PAGE = `<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Atelier Tab</title>
 <style>
-  /* Page autonome (aucune ressource chargée) : valeurs recopiées du design system
-     (src/styles/atelier-ds/light.css, dark.css) et de la marque (atelier-brand.css). */
-  :root { color-scheme: light dark; --bg-main: #F8FAFC; --bg-surface: #FFFFFF; --text-primary: #0F172A;
-    --text-muted: #64748B; --border-color: #E2E8F0; --tile-from: #38bdf8; --tile-to: #0369a1; }
+  /* Page autonome (aucune ressource chargée) : charte « néon monochrome » (docs/SUITE.md §1.7),
+     valeurs des jetons --atelier-* de styles/atelier-brand/atelier-brand.css calculées pour le vert
+     de Tab (#21A366) et recopiées ici en clair et en sombre. */
+  :root { color-scheme: light dark; --bg-main: #F2F7F5; --bg-surface: #FFFFFF; --text-primary: #1C2A26;
+    --text-muted: #576C6C; --border-color: #89C8A2; --signature: #21A366; --tile-bg: #E8F4EC;
+    --tile-ink: #235C40; --glow: rgb(33 163 102 / 0.42); }
   @media (prefers-color-scheme: dark) {
-    :root { --bg-main: #06111F; --bg-surface: #0A1B2E; --text-primary: #E6F7FF; --text-muted: #8DB4CC;
-      --border-color: #17405C; }
+    :root { --bg-main: #0A0E0F; --bg-surface: #101616; --text-primary: #EBF2F0; --text-muted: #8DA7A2;
+      --border-color: #207B4F; --tile-bg: #162821; --tile-ink: #59B481; --glow: rgb(33 163 102 / 0.55); }
   }
   body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: var(--bg-main);
     color: var(--text-primary); font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
   main { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 32px 40px;
-    border: 1px solid var(--border-color); border-radius: 16px; background: var(--bg-surface); }
+    border: 1px solid var(--border-color); border-radius: 16px; background: var(--bg-surface);
+    box-shadow: 0 0 18px -2px var(--glow); }
   .brand { display: flex; align-items: center; gap: 10px; font-size: 20px; }
   .tile { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px;
-    background: linear-gradient(135deg, var(--tile-from), var(--tile-to)); color: #fff; }
+    background: var(--tile-bg); color: var(--tile-ink); box-shadow: inset 0 0 0 1px var(--signature), 0 0 14px -4px var(--signature); }
   .prefix { color: var(--text-muted); }
   strong { font-weight: 700; }
   p { margin: 0; color: var(--text-muted); }

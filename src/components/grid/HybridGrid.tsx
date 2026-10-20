@@ -151,7 +151,7 @@ export function HybridGrid({ table, plain }: HybridGridProps) {
       aria-rowcount={table.rowOrder.length}
       tabIndex={0}
       onKeyDown={onKeyDown}
-      className="relative min-h-0 flex-1 overflow-auto outline-none"
+      className="relative m-3 mt-2.5 min-h-0 flex-1 overflow-auto rounded-xl border border-edge bg-surface shadow-glow outline-none"
     >
       <div style={{ width: totalWidth, minWidth: '100%' }} className="flex min-h-full flex-col">
         <GridHeader
