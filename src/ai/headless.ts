@@ -18,7 +18,7 @@ export interface HeadlessSession {
 
 /** Appelant et options de l'hôte (l'appelant est obligatoire : il décide des confirmations). */
 export type HeadlessOptions = Pick<ToolHost, 'caller'> &
-  Partial<Pick<ToolHost, 'confirm' | 'webhookFetch'>>
+  Partial<Pick<ToolHost, 'confirm' | 'webhookFetch' | 'readEvents' | 'ledger'>>
 
 export function createHeadlessSession(
   initial: AppData,

@@ -46,6 +46,9 @@ describe('définitions', () => {
       'check_export',
       'configure_export',
       'export_table',
+      'query_table',
+      'atelier_manifest',
+      'atelier_events',
     ])
     const setCells = schemas.find((s) => s.name === 'set_cells')!
     expect(setCells.parameters).toMatchObject({ type: 'object', required: ['table', 'cells'] })
