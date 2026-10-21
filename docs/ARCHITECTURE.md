@@ -60,7 +60,7 @@ Les opérations structurelles (`engine/table/table-ops.ts`) réécrivent les for
 
 ## IA
 
-`src/ai/tools.ts` définit 16 outils (schémas Zod convertis en JSON Schema) qui agissent sur un `DataStore` à travers ses actions : mêmes conversions de saisie, mêmes réécritures de formules, même moteur que l'interface.
+`src/ai/tools.ts` définit 19 outils (schémas Zod convertis en JSON Schema) qui agissent sur un `DataStore` à travers ses actions : mêmes conversions de saisie, mêmes réécritures de formules, même moteur que l'interface.
 
 ```text
 Claude Code ──stdio──▶ atelier-mcp (desktop/mcp-server.ts)
@@ -96,6 +96,29 @@ Contrat commun : [`SUITE.md`](SUITE.md). Côté Tab :
 - envois webhook depuis l'app de bureau : IPC `webhook:post` (`desktop/suite-relay.ts`), requête relayée sans en-tête `Origin` (Projets refuse l'origine `null` et `app://atelier`), avec la politique réseau de SUITE.md §5.4 revérifiée (hors ligne : cette machine seulement ; jeton seulement vers Atelier Projets local ; `redirect: 'error'`) ; voir `DATAFLOW_SPEC.md` ;
 - route de santé : `desktop/health-server.ts`, `127.0.0.1:4175` uniquement, `GET /api/health` et `GET /` (ramène la fenêtre si c'est une navigation de premier niveau, par `show()` / `focus()` seulement, sans voler le premier plan : `desktop/window-focus.ts`), tout le reste 404, en-tête `Host` vérifié ; port pris → journalisé. Même `/api/health` en dev et en aperçu par le greffon Vite `healthPlugin`. L'adresse de Tab lui-même (4175) ouverte depuis Tab ramène sa fenêtre (`suite-launch.ts`, option `self`) : ni `open -b`, ni navigateur ;
 - IPC : chaque canal du processus principal n'accepte que les messages de l'interface (`event.senderFrame.url` sous `app://atelier/`, `desktop/ipc-guard.ts`) ; `data:save` revalide l'état reçu (`parseAppState` de `src/storage/format.ts`) et toute écriture disque est confinée à son dossier (`desktop/safe-path.ts`).
+
+## Nœud Atelier (Atelier Nexus)
+
+Contrat `atelier-node/1` (docs/SUITE.md §7, [ADR 0004](adr/0004-noeud-atelier.md)). Tab n'a pas d'API HTTP : Nexus l'enchaîne par le serveur MCP et lit les fichiers du nœud.
+
+```text
+                 SnapshotWriter (exports/<id>.json)
+app de bureau ─┐        │ instantané écrit / supprimé
+serveur MCP ───┴────────▼
+               NodeJournal (desktop/atelier-node.ts) ── verrou exports/_atelier/.lock
+                  ├─ manifest.json     buildManifest(toolSchemas()), au démarrage
+                  ├─ index.json        { contract, tables: [{ table_id, name, project, workspace, revision, rows, updated_at }] }
+                  ├─ events.jsonl      tab.table.changed / tab.table.deleted, seq croissant, 1 000 lignes
+                  ├─ idempotency.json  clés idempotency_key (30 j, 1 000 clés, 4 Mo)
+                  └─ state.json        interne : dernier seq, révision + empreinte de chaque table
+```
+
+- **Pur** : `src/ai/atelier-node.ts` (manifeste, sélection d'une page d'événements, empreinte canonique d'une entrée, registre d'idempotence en mémoire) et `src/dataflow/atelier-table.ts` (enveloppe DataFlow → `atelier-table/1`, comme l'aplatit Viz : `_ligne`, `_id`, puis une colonne par champ, valeur `computed`, erreurs → `null`, `key` snake_case sans accent unique ; filtres et pagination).
+- **Outils** : `atelier_manifest` (sans argument), `atelier_events` `{ since?, limit? ≤ 500, types? }` (lu par `ToolHost.readEvents` : fichier dans le serveur MCP, IPC `atelier:events` dans l'app), `query_table` `{ table, columns?, filters?, offset?, limit? ≤ 1000 }`. Lecture seule : jamais de confirmation. Erreurs avec code machine (`ToolResult.code` : `NOT_FOUND`, `VALIDATION`, `IDEMPOTENCY_KEY_REUSED`, `CONFLICT`, `UNAVAILABLE`), renvoyé par MCP en `structuredContent: { detail, code }` et en fin de texte.
+- **Révision** : `SnapshotWriter` signale au journal les instantanés qu'il vient d'écrire ou de supprimer ; le journal **relit l'instantané sur disque sous le verrou** et compare son empreinte (SHA-256 de `snapshotFingerprint`, horodatage exclu) à celle de la dernière révision. Même contenu publié par l'app puis par le serveur MCP : une seule révision. `revision` et `seq` sont relus du disque (maximum de `state.json`, `index.json`, `events.jsonl`) : ils ne reculent jamais. Un verrou occupé n'empêche pas l'instantané ; l'index est rattrapé à la publication suivante.
+- **Verrou** : `.lock` créé en exclusif (`wx`) avec `{ pid, host, at, token }` ; périmé si le processus n'existe plus (même machine) ou après 30 s : renommé (une seule reprise gagne) puis supprimé ; libéré seulement si le jeton est le nôtre. Réentrant ; version asynchrone (`withLockAsync`) pour un appel d'outil entier.
+- **Idempotence** (§7.4) : `runTool` compare l'empreinte (outil + entrée validée sans la clé) au registre : même clé + même entrée → réponse rejouée sans exécution ; autre entrée → `IDEMPOTENCY_KEY_REUSED`. Serveur MCP : un appel avec clé s'exécute sous le verrou, de la relecture des données à l'enregistrement de la clé (après les données). Assistant de l'app : registre en mémoire.
+- **Lecteurs** : rien dans `_atelier/` n'est une enveloppe DataFlow ; Viz et Nexus ne lisent que `exports/*.json`. Le nettoyage des instantanés (`SNAPSHOT_NAME`) et la surveillance du dossier (`FileStore.watch`, `atelier.json` et `tables/` seulement) ignorent le sous-dossier ; les exports MCP ne peuvent pas y écrire.
 
 ## Décisions
 

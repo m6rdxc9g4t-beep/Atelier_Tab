@@ -18,7 +18,7 @@ Atelier Tab réunit la liberté de calcul d'Excel (formules, références `A1:C1
 | **Navigation**         | Espaces de travail › Projets › Tables, recherche rapide `Ctrl/Cmd + K`.                                                                                                                                                                                            |
 | **DataFlow**           | Export JSON normalisé (schéma `atelier_projets` v2.1.0), CSV enrichi, envoi direct à Atelier Projets (préréglage local, résumé d'import). Instantanés pour Atelier Viz.                                                                                            |
 | **Persistance**        | App de bureau : fichiers JSON dans `~/Atelier_Tab`, synchronisés en direct. Navigateur : IndexedDB.                                                                                                                                                                |
-| **IA**                 | Serveur MCP pour Claude Code et assistant intégré (Ollama local, ou Claude en ligne) : mêmes 16 outils, mêmes règles que la grille.                                                                                                                                |
+| **IA**                 | Serveur MCP pour Claude Code et assistant intégré (Ollama local, ou Claude en ligne) : mêmes 19 outils, mêmes règles que la grille. Nœud Atelier pour les workflows d'Atelier Nexus.                                                                               |
 
 ## Démarrage
 
@@ -99,6 +99,10 @@ L'assistant voit la table ouverte et la cellule sélectionnée, et chaque action
 | `get_settings`                                 | Lire le mode « En ligne » (lecture seule)                        |
 | `configure_export`                             | Régler l'envoi direct (préréglage Atelier Projets, projet cible) |
 | `check_export`, `export_table`                 | Exporter vers Atelier Projets (JSON, CSV, envoi direct)          |
+| `query_table`                                  | Lignes calculées au format `atelier-table/1` (filtres, pages)    |
+| `atelier_manifest`, `atelier_events`           | Nœud Atelier : manifeste et événements (lecture seule)           |
+
+`add_rows`, `add_column` et `create_table` acceptent `idempotency_key` : rejouer la même clé avec la même entrée renvoie la même réponse sans rien refaire ; avec une autre entrée, l'appel est refusé (`IDEMPOTENCY_KEY_REUSED`).
 
 ### Scripts
 
@@ -131,6 +135,7 @@ Atelier Tab partage avec **Atelier Viz** (BI) et **Atelier Projets** (gestion de
 - **Sélecteur de suite** : icône grille en haut à gauche ; ouvre Atelier Viz, Atelier Projets et Atelier Cuisine (navigateur, ou app installée / navigateur par défaut depuis l'app de bureau) et indique si les apps locales sont en marche ; Tab y est toujours « en marche ». Atelier Cuisine est une app en ligne (`https://atelier-cuisine-iota.vercel.app`, app Mac `fr.ateliercuisine.app`) : jamais sondée, marquée « En ligne ». Pour que les autres apps le voient, l'app de bureau écoute sur `127.0.0.1:4175` (seulement `GET /api/health` → `{"status":"ok","app":"atelier-tab"}` et `GET /`, page « Atelier Tab est ouvert » qui ramène la fenêtre ; aucune donnée) ; `npm run dev` et `npm run preview` répondent aussi sur `/api/health`. Adresses surchargeables : `VITE_ATELIER_VIZ_URL`, `VITE_ATELIER_TAB_URL`, `VITE_ATELIER_PROJETS_URL`, `VITE_ATELIER_PROJETS_API_URL`, `VITE_ATELIER_CUISINE_URL`.
 - **Tab → Projets** : dialogue d'export › Envoi direct › préréglage **Atelier Projets (local)** (`http://127.0.0.1:3000/api/imports/atelier-tab`), projet cible facultatif. Le résumé renvoyé (créés, mis à jour, ignorés, avertissements) s'affiche dans le dialogue. Un réimport met à jour les éléments déjà importés.
 - **Tab → Viz** : l'app de bureau écrit `~/Atelier_Tab/exports/<id de table>.json` (enveloppe DataFlow, valeurs calculées) après chaque enregistrement, et le supprime avec la table. Le connecteur « Atelier Tab » de Viz lit ce dossier.
+- **Nœud Atelier (Atelier Nexus)** — contrat `atelier-node/1` (§7) : Nexus enchaîne Tab dans ses workflows par le serveur MCP. `~/Atelier_Tab/exports/_atelier/` contient `manifest.json` (ce que Tab sait faire, réécrit au démarrage de l'app et du serveur MCP, identique à l'outil `atelier_manifest`), `index.json` (tables publiées et leur révision, qui n'augmente qu'à un vrai changement de contenu) et `events.jsonl` (`tab.table.changed` / `tab.table.deleted`, 1 000 derniers, lus par `atelier_events`). L'app et le serveur MCP y écrivent sous un verrou commun. Voir [ADR 0004](docs/adr/0004-noeud-atelier.md).
 
 ## Architecture
 
