@@ -57,17 +57,69 @@ afterAll(async () => {
   fs.rmSync(configDir, { recursive: true, force: true })
 })
 
+describe('serveur MCP sans données (app jamais ouverte)', () => {
+  it('atelier_manifest et atelier_events répondent ; les autres outils donnent une erreur claire', async () => {
+    const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'atelier-mcp-vide-'))
+    const bare = new Client({ name: 'test', version: '1.0.0' })
+    try {
+      await bare.connect(
+        new StdioClientTransport({
+          command: process.execPath,
+          args: [server],
+          env: {
+            ...process.env,
+            ATELIER_TAB_DATA: empty,
+            ATELIER_TAB_SECRETS: path.join(empty, '..', `${path.basename(empty)}-c`, 's.json'),
+          } as Record<string, string>,
+        }),
+      )
+      const manifest = (await bare.callTool({
+        name: 'atelier_manifest',
+        arguments: {},
+      })) as TextResult
+      expect(manifest.isError).toBeFalsy()
+      expect(JSON.parse(manifest.content[0]!.text)).toMatchObject({ app: 'tab' })
+      expect(fs.existsSync(path.join(empty, 'exports/_atelier/manifest.json'))).toBe(true)
+      const events = (await bare.callTool({ name: 'atelier_events', arguments: {} })) as TextResult
+      expect(JSON.parse(events.content[0]!.text)).toEqual({ events: [], next: 0, oldest: 1 })
+      const read = (await bare.callTool({ name: 'list_tables', arguments: {} })) as TextResult
+      expect(read.isError).toBe(true)
+      expect(read.content[0]?.text).toMatch(/atelier\.json absent/)
+      // Rien n'a été créé hors du sous-dossier du nœud.
+      expect(fs.readdirSync(empty)).toEqual(['exports'])
+    } finally {
+      await bare.close()
+      fs.rmSync(empty, { recursive: true, force: true })
+    }
+  }, 30_000)
+})
+
 describe('serveur MCP', () => {
-  it('se présente avec des instructions et 16 outils', async () => {
+  it('se présente avec des instructions et 19 outils, dont ceux du nœud Atelier', async () => {
     expect(client.getServerVersion()?.name).toBe('atelier-tab')
     expect(client.getInstructions()).toMatch(/list_tables puis read_table/)
     expect(client.getInstructions()).toMatch(/Instantanés lus par Atelier Viz/)
     const { tools } = await client.listTools()
-    expect(tools).toHaveLength(16)
+    expect(tools).toHaveLength(19)
+    expect(tools.map((t) => t.name)).toEqual(
+      expect.arrayContaining(['atelier_manifest', 'atelier_events', 'query_table']),
+    )
+    expect(client.getInstructions()).toMatch(/atelier_manifest/)
     expect(tools.find((t) => t.name === 'set_cells')?.inputSchema.required).toEqual([
       'table',
       'cells',
     ])
+  })
+
+  it('écrit le manifeste au démarrage, identique à l’outil atelier_manifest', async () => {
+    const file = path.join(dir, 'exports/_atelier/manifest.json')
+    const onDisk = JSON.parse(fs.readFileSync(file, 'utf8'))
+    const { json } = await call('atelier_manifest')
+    expect(onDisk).toEqual(json)
+    expect(json).toMatchObject({ contract: 'atelier-node/1', app: 'tab', transport: 'mcp' })
+    const { tools } = await client.listTools()
+    const names = new Set(tools.map((t) => t.name))
+    for (const action of json.actions) expect(names.has(action.mcp_tool)).toBe(true)
   })
 
   it('lit les fichiers du dossier', async () => {
@@ -100,6 +152,57 @@ describe('serveur MCP', () => {
       snapshot.project.records.map((r: { values: { A: { raw: string } } }) => r.values.A.raw),
     ).toContain('Menuiseries')
     expect(snapshot.project.summary_metrics.computed_totals.C).toBe(100500)
+  })
+
+  it('query_table : valeurs calculées au format atelier-table/1', async () => {
+    const { json } = await call('query_table', {
+      table: 'Planning & Lots',
+      columns: ['Lot / Tâche', 'cout_ttc'],
+      filters: [{ column: 'C', op: 'eq', value: 12000 }],
+    })
+    expect(json).toMatchObject({ format: 'atelier-table/1', total: 1, truncated: false })
+    expect(json.rows[0]).toMatchObject({ lot_tache: 'Menuiseries', cout_ttc: 14400 })
+  })
+
+  it('tient index.json et events.jsonl ; atelier_events au format du contrat', async () => {
+    const index = JSON.parse(fs.readFileSync(path.join(dir, 'exports/_atelier/index.json'), 'utf8'))
+    const planning = index.tables.find(
+      (t: { table_id: string }) => t.table_id === 'tbl_planning_lots',
+    )
+    expect(planning).toMatchObject({ revision: 1, rows: 4, name: 'Planning & Lots' })
+    const { json } = await call('atelier_events', { since: 0 })
+    expect(json.oldest).toBe(1)
+    expect(json.events.at(-1)).toMatchObject({
+      type: 'tab.table.changed',
+      subject: { kind: 'table', id: 'tbl_planning_lots' },
+      data: { revision: 1, rows: 4 },
+    })
+    expect(json.next).toBe(json.events.at(-1).seq)
+  })
+
+  it('idempotency_key : rejeu sans doublon, conflit signalé avec son code', async () => {
+    const args = {
+      table: 'Matériaux',
+      rows: [{ A: 'Enduit' }],
+      idempotency_key: 'nexus:run-9:step-1',
+    }
+    const first = await call('add_rows', args)
+    const again = await call('add_rows', args)
+    expect(again.text).toBe(first.text)
+    const t = JSON.parse(fs.readFileSync(path.join(dir, 'tables/tbl_materiaux.json'), 'utf8'))
+    expect(t.rowOrder.filter((id: string) => id === first.json.added[0].id)).toHaveLength(1)
+    expect(t.rowOrder).toHaveLength(4)
+    const ledger = JSON.parse(
+      fs.readFileSync(path.join(dir, 'exports/_atelier/idempotency.json'), 'utf8'),
+    )
+    expect(ledger.entries).toHaveProperty('nexus:run-9:step-1')
+    const reused = (await client.callTool({
+      name: 'add_rows',
+      arguments: { ...args, rows: [{ A: 'Autre' }] },
+    })) as TextResult & { structuredContent?: unknown }
+    expect(reused.isError).toBe(true)
+    expect(reused.structuredContent).toMatchObject({ code: 'IDEMPOTENCY_KEY_REUSED' })
+    expect(reused.content[0]?.text).toMatch(/IDEMPOTENCY_KEY_REUSED/)
   })
 
   it('voit une modification faite à côté (par l’app) au prochain appel', async () => {

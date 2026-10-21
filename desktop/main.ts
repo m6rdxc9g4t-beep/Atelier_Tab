@@ -6,6 +6,8 @@
  *   refléter en direct les modifications faites par Claude Code ou un autre programme.
  * - Instantanés pour Atelier Viz : ~/Atelier_Tab/exports/<tableId>.json, mis à jour après
  *   chaque enregistrement (docs/SUITE.md §4.2).
+ * - Nœud Atelier (§7) : manifeste réécrit au démarrage, index des tables et événements tenus
+ *   à chaque publication dans ~/Atelier_Tab/exports/_atelier/ (`atelier-node.ts`).
  * - Ollama : les requêtes de l'assistant passent par ici (pas de contrainte CORS).
  * - Claude : la CLI Claude Code est lancée ici, isolée, et seulement en ligne
  *   (docs/SUITE.md §5, `claude-cli.ts`) ; les outils restent exécutés par l'interface.
@@ -62,6 +64,9 @@ import { bringToFront } from './window-focus'
 import { guardSender } from './ipc-guard'
 import { resolveInside } from './safe-path'
 import { SnapshotWriter } from './snapshots'
+import { NodeJournal, parseEventsQuery } from './atelier-node'
+import { buildManifest } from '@/ai/atelier-node'
+import { toolSchemas } from '@/ai/tools'
 import { cacheControlFor, uiBuildStamp, uiChangedSinceLastLaunch } from './ui-cache'
 import { buildRelayRequest } from './suite-relay'
 import { openSuiteOrExternal, SUITE_BUNDLES, suiteBundleFor } from './suite-launch'
@@ -88,10 +93,21 @@ protocol.registerSchemesAsPrivileged([
 const dataDir = defaultDataDir()
 const preferencesFile = defaultPreferencesFile()
 const store = new FileStore({ dir: dataDir, secretsFile: defaultSecretsFile(), preferencesFile })
+const journal = new NodeJournal({ dataDir })
 const snapshots = new SnapshotWriter({
   dir: dataDir,
+  journal,
   onError: (e) => console.error('Instantané Atelier Viz :', e),
 })
+
+/** Manifeste du nœud Atelier (docs/SUITE.md §7.1), même contenu que l'outil `atelier_manifest`. */
+function writeNodeManifest() {
+  try {
+    journal.writeManifest(buildManifest(toolSchemas()))
+  } catch (e) {
+    console.error('Manifeste du nœud Atelier :', e)
+  }
+}
 let stopWatching: (() => void) | null = null
 
 /**
@@ -153,6 +169,9 @@ handle('data:save', (_event, json: unknown) => {
   snapshots.schedule(state)
   startWatching()
 })
+
+// Événements du nœud Atelier pour l'assistant de l'app (outil `atelier_events`, lecture seule).
+handle('atelier:events', (_event, query: unknown) => journal.readEvents(parseEventsQuery(query)))
 
 handle('data:reveal', async () => {
   await shell.openPath(dataDir)
@@ -553,6 +572,7 @@ if (!app.requestSingleInstanceLock()) {
   })
 
   void app.whenReady().then(async () => {
+    writeNodeManifest()
     serveDist()
     buildMenu()
     await resetCachesIfUiChanged(uiStamp)

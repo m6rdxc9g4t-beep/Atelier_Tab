@@ -2,6 +2,7 @@
  * Pont vers le processus principal de l'application de bureau (exposé par le preload).
  * Absent dans la version navigateur : `getDesktopApi()` renvoie alors `undefined`.
  */
+import type { EventsQuery, EventsResponse } from '@/ai/atelier-node'
 import type { AppData } from '@/types/domain'
 
 export interface DesktopLoadResult {
@@ -112,6 +113,8 @@ export interface DesktopApi {
   revealDataDir(): Promise<void>
   /** Écrit un fichier d'export dans le dossier exports/ ; renvoie son chemin. */
   saveExport(filename: string, content: string): Promise<string>
+  /** Événements du nœud Atelier (docs/SUITE.md §7.3), lus par le processus principal. */
+  atelierEvents?(query: EventsQuery): Promise<EventsResponse>
   ollama(request: OllamaRequest): Promise<OllamaResponse>
   ollamaCancel(id: string): Promise<void>
   mcpInfo(): Promise<McpInfo>

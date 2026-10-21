@@ -20,6 +20,7 @@ const api: DesktopApi = {
   onDataErrors: (cb) => subscribe<string[]>('data:errors', cb),
   revealDataDir: () => ipcRenderer.invoke('data:reveal'),
   saveExport: (filename, content) => ipcRenderer.invoke('export:save', filename, content),
+  atelierEvents: (query) => ipcRenderer.invoke('atelier:events', query),
   ollama: (request) => ipcRenderer.invoke('ollama:request', request),
   ollamaCancel: (id) => ipcRenderer.invoke('ollama:cancel', id),
   mcpInfo: () => ipcRenderer.invoke('mcp:info'),
