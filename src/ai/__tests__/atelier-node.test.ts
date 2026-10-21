@@ -136,6 +136,9 @@ describe('atelier_events', () => {
     expect(selectEvents(all, { since: 6 })).toEqual({ events: [], next: 6, oldest: 3 })
     expect(selectEvents(all, { since: 2 })).not.toHaveProperty('gap')
     expect(selectEvents(all, { since: 1 })).toMatchObject({ gap: true })
+    // Journal remis à zéro ou remplacé : since au-delà du dernier seq connu.
+    expect(selectEvents(all, { since: 7 })).toMatchObject({ events: [], gap: true })
+    expect(selectEvents([], { since: 0 }, 0)).not.toHaveProperty('gap')
     expect(selectEvents([], {}, 9)).toEqual({ events: [], next: 9, oldest: 10 })
     const typed = selectEvents([ev(1), ev(2, 'tab.table.deleted')], {
       types: ['tab.table.deleted'],

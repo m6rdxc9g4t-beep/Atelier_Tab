@@ -54,7 +54,8 @@ export interface EventsResponse {
  * - `since` exclusif ; sans `since`, les `limit` plus récents (dans l'ordre croissant) ;
  * - `next` = dernier `seq` rendu, sinon `since` (ou le dernier `seq` connu sans `since`) ;
  * - `oldest` = plus ancien `seq` encore gardé (le suivant à venir si le journal est vide) ;
- * - `gap: true` si `since < oldest - 1` : des événements ont été retirés, relire l'état.
+ * - `gap: true` si `since < oldest - 1` (des événements ont été retirés) ou `since > last`
+ *   (journal remis à zéro ou remplacé) : relire l'état.
  */
 export function selectEvents(
   all: readonly NodeEvent[],
@@ -75,7 +76,7 @@ export function selectEvents(
   }
   const next = events.at(-1)?.seq ?? query.since ?? last
   const response: EventsResponse = { events, next, oldest }
-  if (query.since !== undefined && query.since < oldest - 1) response.gap = true
+  if (query.since !== undefined && (query.since < oldest - 1 || query.since > last)) response.gap = true
   return response
 }
 
