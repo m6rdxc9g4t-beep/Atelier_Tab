@@ -1,0 +1,25 @@
+# Fins de ligne (docs/SUITE.md §9.3) : un clone Windows ne doit jamais paraître « modifié »,
+# sinon la mise à jour automatique (§8) recompilerait l'app à chaque lancement.
+* text=auto eol=lf
+
+# Scripts Windows : CRLF (cmd.exe et PowerShell 5.1).
+*.ps1 text eol=crlf
+*.cmd text eol=crlf
+*.bat text eol=crlf
+*.vbs text eol=crlf
+
+# Binaires : jamais convertis.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.icns binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.pdf binary
+*.xlsx binary
+*.zip binary
