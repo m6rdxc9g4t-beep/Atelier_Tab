@@ -4,8 +4,8 @@
  */
 import path from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { FLAG_AFTER_UPDATE, FLAG_SKIP_UPDATE } from '../launcher/decision.cjs'
-import { createLauncher } from '../launcher/main.cjs'
+import { FLAG_AFTER_UPDATE, FLAG_SKIP_UPDATE, FLAG_UPDATE_ONLY } from '../launcher/decision.cjs'
+import { createLauncher, forgetInheritedEnv } from '../launcher/main.cjs'
 import { UpdateError } from '../launcher/update.cjs'
 
 type Deps = Parameters<typeof createLauncher>[0]
@@ -156,6 +156,59 @@ function setup(opts: { plan?: Plan; built?: boolean; argv?: string[]; responses?
 
 beforeEach(() => {
   FakeWindow.all = []
+})
+
+describe('lanceur : mise à jour seule (CI Windows, §9.5)', () => {
+  it('met à jour sans fenêtre ni verrou d’instance, puis s’arrête avec le code 0', async () => {
+    const { launcher, app, updater, requireMain, logLines } = setup({
+      argv: ['C:\\Atelier_Tab\\Atelier_Tab.exe', FLAG_UPDATE_ONLY],
+    })
+    app.lock = false // fenêtre de l'app ouverte : la mise à jour seule a lieu quand même
+    expect(launcher.start()).toBe('update-only')
+    await vi.waitFor(() => expect(app.exits).toEqual([0]))
+    expect(updater.update).toHaveBeenCalledOnce()
+    expect(updater.planUpdate).not.toHaveBeenCalled()
+    expect(requireMain).not.toHaveBeenCalled()
+    expect(FakeWindow.all).toHaveLength(0)
+    expect(app.relaunches).toEqual([])
+    expect(logLines).toContain('Mise à jour seule : terminée (build).')
+  })
+
+  it('rien à refaire → code 0 et journal explicite', async () => {
+    const { launcher, app, updater, logLines } = setup({ argv: ['/app', FLAG_UPDATE_ONLY] })
+    updater.update.mockResolvedValueOnce({ steps: [], reasons: [] })
+    launcher.start()
+    await vi.waitFor(() => expect(app.exits).toEqual([0]))
+    expect(logLines).toContain('Mise à jour seule : rien à refaire.')
+  })
+
+  it('échec → code 1, message dans le journal', async () => {
+    const { launcher, app, updater, logLines } = setup({ argv: ['/app', FLAG_UPDATE_ONLY] })
+    updater.update.mockRejectedValueOnce(new UpdateError('« npm run build » a échoué (code 2).'))
+    launcher.start()
+    await vi.waitFor(() => expect(app.exits).toEqual([1]))
+    expect(logLines.at(-1)).toContain('échec — « npm run build » a échoué')
+  })
+})
+
+describe('lanceur : variables héritées (§9.4)', () => {
+  it('ELECTRON_RUN_AS_NODE, ELECTRON_NO_ASAR, NODE_OPTIONS et NODE_ENV oubliés, le reste gardé', () => {
+    const env: NodeJS.ProcessEnv = {
+      ELECTRON_RUN_AS_NODE: '1',
+      ELECTRON_NO_ASAR: '1',
+      NODE_OPTIONS: '--require C:\\x.js',
+      NODE_ENV: 'production',
+      ATELIER_TAB_DATA: '/Users/f/Atelier_Tab',
+      PATH: '/usr/bin',
+    }
+    expect(forgetInheritedEnv(env).sort()).toEqual([
+      'ELECTRON_NO_ASAR',
+      'ELECTRON_RUN_AS_NODE',
+      'NODE_ENV',
+      'NODE_OPTIONS',
+    ])
+    expect(env).toEqual({ ATELIER_TAB_DATA: '/Users/f/Atelier_Tab', PATH: '/usr/bin' })
+  })
 })
 
 describe('lanceur : décision au démarrage', () => {

@@ -1,0 +1,135 @@
+name: App Windows
+
+on:
+  push:
+    branches: [feat/windows]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: true
+
+# docs/SUITE.md §9.5 : tests, compilation, installation par install.ps1 dans un profil temporaire
+# (chemin avec espace et accent), lanceur en mode « mise à jour seule », serveur MCP livré,
+# démarrage réel, réparation (PowerShell 7) et désinstallation (Windows PowerShell 5.1).
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Le clone ne paraît pas modifié (core.autocrlf=true, .gitattributes, §9.3)
+        run: |
+          git config core.autocrlf
+          $etat = git status --porcelain
+          if ($etat) { $etat; throw 'Le clone Windows paraît modifié : vérifier .gitattributes.' }
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - name: npm test
+        run: npm test -- --reporter=default --reporter=json --outputFile.json=vitest-resultats.json
+      - name: Tests en échec (annotation)
+        if: failure()
+        run: node scripts/ci-test-failures.mjs vitest-resultats.json
+      - run: npm run build
+      - run: npm run build:desktop
+
+      - name: Profil temporaire (APPDATA, LOCALAPPDATA, USERPROFILE)
+        run: |
+          $profil = Join-Path $env:RUNNER_TEMP 'profil François'
+          foreach ($d in 'AppData\Roaming', 'AppData\Local', 'Desktop') {
+            New-Item -ItemType Directory -Force -Path (Join-Path $profil $d) | Out-Null
+          }
+          "USERPROFILE=$profil" >> $env:GITHUB_ENV
+          "APPDATA=$profil\AppData\Roaming" >> $env:GITHUB_ENV
+          "LOCALAPPDATA=$profil\AppData\Local" >> $env:GITHUB_ENV
+          "ATELIER_EXE=$profil\AppData\Local\Programs\Atelier_Tab\Atelier_Tab.exe" >> $env:GITHUB_ENV
+          "ATELIER_JOURNAL=$profil\AppData\Local\Atelier_Tab\Logs\mise-a-jour.log" >> $env:GITHUB_ENV
+
+      - name: Installation (Windows PowerShell 5.1, sans raccourci de Bureau)
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts\windows\install.ps1 -SansBureau
+
+      - name: Vérifier lanceur, raccourci et enregistrement
+        run: |
+          $dest = Split-Path -Parent $env:ATELIER_EXE
+          foreach ($f in 'Atelier_Tab.exe', 'resources\app.asar', 'resources\atelier-repo',
+                         'resources\atelier-mcp.cmd', 'resources\atelier-mcp.cjs', 'resources\icon.ico') {
+            if (-not (Test-Path -LiteralPath (Join-Path $dest $f))) { throw "Manquant : $f" }
+          }
+          $depot = (Get-Content -LiteralPath (Join-Path $dest 'resources\atelier-repo') -Raw).Trim()
+          if ($depot -ne (Get-Location).Path) { throw "atelier-repo : $depot" }
+          $lnk = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Atelier\Atelier Tab.lnk'
+          if (-not (Test-Path -LiteralPath $lnk)) { throw 'Raccourci du menu Démarrer absent' }
+          $cible = (New-Object -ComObject WScript.Shell).CreateShortcut($lnk).TargetPath
+          if ($cible -ne $env:ATELIER_EXE) { throw "Cible du raccourci : $cible" }
+          if (Test-Path -LiteralPath (Join-Path $env:USERPROFILE 'Desktop\Atelier Tab.lnk')) { throw 'Raccourci de Bureau créé malgré -SansBureau' }
+          $cle = Get-ItemProperty -LiteralPath 'HKCU:\Software\Atelier\Apps\tab'
+          # §9.6 : Lanceur = raccourci .lnk du menu Démarrer.
+          if ($cle.Lanceur -ne $lnk -or $cle.Nom -ne 'Atelier Tab') { throw "Registre : $($cle.Lanceur) / $($cle.Nom)" }
+          Write-Host "OK : $cible"
+
+      - name: Lanceur en mode « mise à jour seule »
+        run: |
+          function Lancer([string]$attendu) {
+            $avant = if (Test-Path -LiteralPath $env:ATELIER_JOURNAL) { @(Get-Content -LiteralPath $env:ATELIER_JOURNAL -Encoding utf8).Count } else { 0 }
+            $p = Start-Process -FilePath $env:ATELIER_EXE -ArgumentList '--atelier-mise-a-jour-seule' -PassThru
+            $null = $p.Handle
+            if (-not $p.WaitForExit(900000)) { $p.Kill(); throw 'Délai dépassé' }
+            $lignes = @(Get-Content -LiteralPath $env:ATELIER_JOURNAL -Encoding utf8 | Select-Object -Skip $avant)
+            $lignes | ForEach-Object { Write-Host "  $_" }
+            if ($p.ExitCode -ne 0) { throw "Code de sortie $($p.ExitCode)" }
+            if (-not ($lignes -match [regex]::Escape($attendu))) { throw "Attendu dans le journal : $attendu" }
+          }
+          # 1. Juste après l'installation : rien à refaire (fins de ligne, même état que le terminal).
+          Lancer 'Mise à jour seule : rien à refaire.'
+          # 2. Modification locale : le lanceur trouve Node.js et recompile.
+          Add-Content -LiteralPath README.md -Value ''
+          Lancer 'Mise à jour seule : terminée (build).'
+          # 3. Second lancement : rien n'est refait.
+          Lancer 'Mise à jour seule : rien à refaire.'
+
+      - name: Serveur MCP livré (atelier-mcp.cmd ; exe + atelier-mcp.cjs comme Claude Code)
+        run: |
+          $res = Join-Path (Split-Path -Parent $env:ATELIER_EXE) 'resources'
+          node scripts/check-mcp.mjs (Join-Path $res 'atelier-mcp.cmd')
+          if ($LASTEXITCODE) { throw 'atelier-mcp.cmd' }
+          $donnees = New-Item -ItemType Directory -Force -Path (Join-Path $env:RUNNER_TEMP 'mcp données')
+          $env:ELECTRON_RUN_AS_NODE = '1'
+          node scripts/check-mcp.mjs $env:ATELIER_EXE $donnees.FullName -- (Join-Path $res 'atelier-mcp.cjs')
+          if ($LASTEXITCODE) { throw 'Atelier_Tab.exe atelier-mcp.cjs' }
+
+      - name: Démarrer l'application (lancement direct, sans mise à jour)
+        run: |
+          $p = Start-Process -FilePath $env:ATELIER_EXE -PassThru
+          Start-Sleep -Seconds 15
+          if ($p.HasExited) { throw "L'application s'est arrêtée au démarrage (code $($p.ExitCode))." }
+          Get-Process -Name Atelier_Tab -ErrorAction SilentlyContinue | Stop-Process -Force
+          $derniere = (Get-Content -LiteralPath $env:ATELIER_JOURNAL -Encoding utf8)[-1]
+          Write-Host $derniere
+          if ($derniere -notmatch 'À jour : lancement direct\.') { throw 'Le lanceur aurait dû ouvrir l''app sans mise à jour.' }
+          if (-not (Test-Path -LiteralPath (Join-Path $env:USERPROFILE 'Atelier_Tab'))) { throw 'Dossier de données absent' }
+
+      - name: Réparation (PowerShell 7, relance de la commande)
+        run: ./scripts/windows/install.ps1 -SansBureau
+
+      - name: Désinstallation (données conservées)
+        shell: powershell
+        run: |
+          $temoin = Join-Path $env:USERPROFILE 'Atelier_Tab\temoin.txt'
+          Set-Content -LiteralPath $temoin -Value 'données'
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts\windows\install.ps1 -Desinstaller
+          if ($LASTEXITCODE) { throw "Code $LASTEXITCODE" }
+          if (Test-Path -LiteralPath $env:ATELIER_EXE) { throw 'Lanceur encore présent' }
+          if (Test-Path -LiteralPath 'HKCU:\Software\Atelier\Apps\tab') { throw 'Enregistrement encore présent' }
+          if (Test-Path -LiteralPath (Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Atelier\Atelier Tab.lnk')) { throw 'Raccourci encore présent' }
+          if (-not (Test-Path -LiteralPath $temoin)) { throw 'Données supprimées !' }
+          Write-Host 'Désinstallation OK, données conservées.'

@@ -315,11 +315,38 @@ function createLauncher(deps) {
   }
 
   /**
+   * Mise à jour seule, sans fenêtre (`--atelier-mise-a-jour-seule`, CI Windows, docs/SUITE.md §9.5) :
+   * même mise à jour, même verrou et même journal, puis arrêt avec le code 0 (à jour) ou 1 (échec).
+   * Le verrou d'instance n'est pas pris : la fenêtre de l'app peut rester ouverte.
+   */
+  async function runUpdateOnly() {
+    log.write('Mise à jour seule (sans fenêtre).')
+    try {
+      const result = await updater.update(repo, { by: 'app', log, env, home })
+      log.write(
+        result.steps.length > 0
+          ? `Mise à jour seule : terminée (${result.steps.join(' + ')}).`
+          : 'Mise à jour seule : rien à refaire.',
+      )
+      app.exit(0)
+    } catch (error) {
+      log.write(
+        `Mise à jour seule : échec — ${error instanceof Error ? error.message : String(error)}`,
+      )
+      app.exit(1)
+    }
+  }
+
+  /**
    * Décide et lance. Synchrone jusqu'au choix : sans mise à jour, `main.cjs` est chargé avant `ready`.
-   * @returns {'second-instance' | 'main' | 'update' | 'error'}
+   * @returns {'second-instance' | 'main' | 'update' | 'update-only' | 'error'}
    */
   function start() {
     const flags = d.parseFlags(argv)
+    if (flags.updateOnly) {
+      void runUpdateOnly()
+      return 'update-only'
+    }
     if (!app.requestSingleInstanceLock()) {
       // Une fenêtre est déjà ouverte (ou une mise à jour en cours) : elle est ramenée au premier plan.
       app.quit()
@@ -373,8 +400,22 @@ function createLauncher(deps) {
  * @param {{ repo: string }} options
  */
 function start({ repo }) {
+  forgetInheritedEnv(process.env)
   const electron = require('electron')
   return createLauncher({ electron, repo }).start()
 }
 
-module.exports = { createLauncher, start }
+/**
+ * Oublie les variables héritées qui casseraient la relance ou la mise à jour de l'app
+ * (`IGNORED_INHERITED_ENV`, docs/SUITE.md §9.4) : elles ne passent ni à npm, ni à l'app relancée,
+ * ni aux programmes que l'app lance.
+ * @param {NodeJS.ProcessEnv} env
+ * @returns {string[]} Variables retirées.
+ */
+function forgetInheritedEnv(env) {
+  const removed = d.inheritedEnvToIgnore(env)
+  for (const key of removed) delete env[key]
+  return removed
+}
+
+module.exports = { createLauncher, forgetInheritedEnv, start }

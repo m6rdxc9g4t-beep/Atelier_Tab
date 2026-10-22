@@ -56,11 +56,50 @@ La commande construit `Atelier_Tab.app`, compile le dépôt puis copie l'app dan
 - L'app est signée localement (« ad hoc »), sans compte développeur Apple. Elle s'ouvre normalement sur le Mac qui l'a construite ; pour la donner à quelqu'un d'autre, une signature Apple sera nécessaire.
 - `npm run app` lance l'application sans l'installer, pour essayer une modification (développement).
 
+### Installer sur Windows
+
+Windows 10 (21H2 ou plus récent) et Windows 11, x64 et ARM64, pour l'utilisateur courant, **sans droits d'administrateur** (docs/SUITE.md §9).
+
+**Prérequis** — la commande les vérifie et dit quoi installer, sans rien installer elle-même :
+
+```powershell
+winget install --id Git.Git -e
+winget install --id OpenJS.NodeJS.LTS -e   # Node.js 22.12 ou plus récent, avec npm
+```
+
+**Installer** — dans PowerShell (Windows PowerShell 5.1 ou PowerShell 7), depuis le dépôt cloné :
+
+```powershell
+git clone https://github.com/m6rdxc9g4t-beep/atelier-tab.git
+cd atelier-tab
+powershell -ExecutionPolicy Bypass -File scripts\windows\install.ps1
+```
+
+(`npm run app:install` fait la même chose.) La commande compile le dépôt (`npm ci` si besoin), construit le lanceur `Atelier_Tab.exe`, le copie dans `%LOCALAPPDATA%\Programs\Atelier_Tab`, crée les raccourcis **menu Démarrer › Atelier › Atelier Tab** et **Bureau** (`-SansBureau` pour s'en passer), inscrit son raccourci du menu Démarrer pour les autres apps de la suite (`HKCU\Software\Atelier\Apps\tab`, ouvert par l'Explorateur) et connecte Claude Code s'il est installé. Aucune fenêtre de console ne s'ouvre au lancement de l'app.
+
+**Mettre à jour** — `git pull`, puis relancez l'app : comme sur macOS, elle se met à jour toute seule (écran « Mise à jour… », puis ouverture). Journal : `%LOCALAPPDATA%\Atelier_Tab\Logs\mise-a-jour.log` ; en cas d'échec, **Ouvrir quand même avec la version précédente**. La commande d'installation n'est à relancer que si le dépôt change de place ou si Electron change de version ; la relancer **répare** l'installation sans toucher aux données.
+
+**Désinstaller** — retire le lanceur, les raccourcis, l'enregistrement et la connexion à Claude Code, **jamais les données** :
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\windows\install.ps1 -Desinstaller
+```
+
+| Usage                                  | Windows                                                         |
+| -------------------------------------- | --------------------------------------------------------------- |
+| Données (tables, instantanés pour Viz) | `%USERPROFILE%\Atelier_Tab`                                     |
+| Préférences (mode « En ligne »), jeton | `%APPDATA%\Atelier_Tab`                                         |
+| Journal de mise à jour                 | `%LOCALAPPDATA%\Atelier_Tab\Logs\mise-a-jour.log`               |
+| Lanceur                                | `%LOCALAPPDATA%\Programs\Atelier_Tab\Atelier_Tab.exe`           |
+| Serveur MCP (chemin stable)            | `%LOCALAPPDATA%\Programs\Atelier_Tab\resources\atelier-mcp.cmd` |
+
+Node.js est cherché dans le `PATH`, `%ProgramFiles%\nodejs`, nvm-windows, fnm, Volta et `%LOCALAPPDATA%\Programs\nodejs`, en commençant par celui qui a servi à l'installation. L'app étant construite sur votre PC (aucun fichier téléchargé), SmartScreen ne la bloque pas ; elle n'est pas signée.
+
 ### Claude Code et Ollama
 
 Claude Code et un modèle local peuvent lire et modifier toutes les données : tables, lignes, colonnes, formules, export.
 
-**Claude Code** — `npm run app:install` le connecte automatiquement s'il est installé (sinon `npm run ai:connect`, ou menu Fichier › Connecter Claude Code…). Le serveur MCP `atelier-tab` est livré dans l'app (`Contents/Resources/atelier-mcp`) et exécute la version compilée du dépôt, à jour après chaque lancement de l'app ; dans n'importe quelle session :
+**Claude Code** — `npm run app:install` le connecte automatiquement s'il est installé (sinon `npm run ai:connect`, ou menu Fichier › Connecter Claude Code…). Le serveur MCP `atelier-tab` est livré dans l'app (macOS : `Contents/Resources/atelier-mcp` ; Windows : `resources\atelier-mcp.cmd`, Claude Code étant branché directement sur `Atelier_Tab.exe resources\atelier-mcp.cjs`) et exécute la version compilée du dépôt, à jour après chaque lancement de l'app ; dans n'importe quelle session :
 
 > « Ajoute une ligne Menuiseries à 12 000 € HT dans Planning & Lots »
 > « Quel est le total TTC du budget ? »
@@ -77,10 +116,10 @@ Si l'app est ouverte, elle se met à jour en direct. Le dossier `~/Atelier_Tab` 
   ollama pull qwen3:8b
   ```
 
-- **Claude** (app de bureau seulement, mode **En ligne**) : la CLI Claude Code de l'ordinateur (votre abonnement), modèle Sonnet (défaut), Opus ou Haiku. Prérequis : Claude Code installé et `claude auth login`. L'exécutable est cherché dans `CLAUDE_CLI`, le `PATH`, puis `~/.local/bin`, `/opt/homebrew/bin`, `/usr/local/bin`. Dans un navigateur (`npm run dev`), Claude est grisé : « disponible dans l'app de bureau ».
+- **Claude** (app de bureau seulement, mode **En ligne**) : la CLI Claude Code de l'ordinateur (votre abonnement), modèle Sonnet (défaut), Opus ou Haiku. Prérequis : Claude Code installé et `claude auth login`. L'exécutable est cherché dans `CLAUDE_CLI`, le `PATH`, puis `~/.local/bin`, `/opt/homebrew/bin`, `/usr/local/bin` ; sous Windows, `claude.exe` (PATH, `%USERPROFILE%\.local\bin`) ou une installation npm (`claude.cmd` de `%APPDATA%\npm`, lancée en `node.exe …\cli.js`, jamais par `cmd.exe`). Dans un navigateur (`npm run dev`), Claude est grisé : « disponible dans l'app de bureau ».
 - **Auto** : Claude si l'app est en ligne et Claude disponible, sinon Ollama. Chaque réponse indique le moteur utilisé (« via Claude · Sonnet »).
 
-**Hors ligne / En ligne** — interrupteur de l'en-tête, **hors ligne par défaut**, mémorisé **hors du dossier de données** (que les IA peuvent modifier), dans `preferences.json` à côté du fichier de secrets (macOS : `~/Library/Application Support/Atelier_Tab/`, Linux : `~/.config/Atelier_Tab/`). Hors ligne, rien ne part vers Claude (choix grisé, requête refusée) et aucun envoi webhook ne quitte la machine, par aucun chemin (interface comprise). Seul l'utilisateur change ce mode : l'outil `get_settings` le lit, aucun outil ne l'écrit, et une ancienne valeur `preferences.onlineMode` restée dans `atelier.json` est ignorée (l'app repart hors ligne). Les pastilles « Ollama » et « Claude » de l'en-tête montrent l'état des moteurs (info-bulle : détail et version de la CLI).
+**Hors ligne / En ligne** — interrupteur de l'en-tête, **hors ligne par défaut**, mémorisé **hors du dossier de données** (que les IA peuvent modifier), dans `preferences.json` à côté du fichier de secrets (macOS : `~/Library/Application Support/Atelier_Tab/`, Windows : `%APPDATA%\Atelier_Tab\`, Linux : `~/.config/Atelier_Tab/`). Hors ligne, rien ne part vers Claude (choix grisé, requête refusée) et aucun envoi webhook ne quitte la machine, par aucun chemin (interface comprise). Seul l'utilisateur change ce mode : l'outil `get_settings` le lit, aucun outil ne l'écrit, et une ancienne valeur `preferences.onlineMode` restée dans `atelier.json` est ignorée (l'app repart hors ligne). Les pastilles « Ollama » et « Claude » de l'en-tête montrent l'état des moteurs (info-bulle : détail et version de la CLI).
 
 **Ce qui est envoyé** : avec Ollama, rien ne quitte l'ordinateur. Avec Claude, la demande et les cellules que l'assistant lit avec ses outils (contenu des tables). La CLI est lancée isolée (`--safe-mode`, `--tools ""`, sans MCP ni commandes, sans session enregistrée, dossier temporaire vide, environnement en liste blanche, délai de 180 s puis arrêt forcé, sortie bornée à 4 Mo) : Claude n'a aucun outil, il répond en JSON contraint et c'est l'app qui exécute l'outil demandé, par ses actions habituelles (8 tours au plus par demande). Aucune donnée en argument de ligne de commande : le contexte et le contenu des tables passent par l'entrée standard.
 
@@ -112,21 +151,21 @@ L'assistant voit la table ouverte et la cellule sélectionnée, et chaque action
 
 ### Scripts
 
-| Commande              | Rôle                                                         |
-| --------------------- | ------------------------------------------------------------ |
-| `npm run dev`         | Serveur de développement Vite (http://127.0.0.1:5175)        |
-| `npm run build`       | Vérification des types puis build de production dans `dist/` |
-| `npm run preview`     | Sert le build de production (http://127.0.0.1:4175)          |
-| `npm test`            | Tests unitaires (Vitest)                                     |
-| `npm run test:watch`  | Tests en mode surveillance                                   |
-| `npm run lint`        | ESLint                                                       |
-| `npm run typecheck`   | TypeScript strict, sans émission                             |
-| `npm run format`      | Prettier                                                     |
-| `npm run ai:connect`  | Enregistre le serveur MCP dans Claude Code                   |
-| `npm run mcp`         | Lance le serveur MCP depuis le dépôt (développement)         |
-| `npm run app`         | Lance l'app de bureau depuis le dépôt (développement)        |
-| `npm run app:install` | Installe l'app (lanceur du dépôt) dans Applications (macOS)  |
-| `npm run app:update`  | Met à jour la compilation de l'app depuis le terminal        |
+| Commande              | Rôle                                                                              |
+| --------------------- | --------------------------------------------------------------------------------- |
+| `npm run dev`         | Serveur de développement Vite (http://127.0.0.1:5175)                             |
+| `npm run build`       | Vérification des types puis build de production dans `dist/`                      |
+| `npm run preview`     | Sert le build de production (http://127.0.0.1:4175)                               |
+| `npm test`            | Tests unitaires (Vitest)                                                          |
+| `npm run test:watch`  | Tests en mode surveillance                                                        |
+| `npm run lint`        | ESLint                                                                            |
+| `npm run typecheck`   | TypeScript strict, sans émission                                                  |
+| `npm run format`      | Prettier                                                                          |
+| `npm run ai:connect`  | Enregistre le serveur MCP dans Claude Code                                        |
+| `npm run mcp`         | Lance le serveur MCP depuis le dépôt (développement)                              |
+| `npm run app`         | Lance l'app de bureau depuis le dépôt (développement)                             |
+| `npm run app:install` | Installe l'app (lanceur du dépôt) : Applications (macOS), `install.ps1` (Windows) |
+| `npm run app:update`  | Met à jour la compilation de l'app depuis le terminal                             |
 
 ## Suite Atelier
 

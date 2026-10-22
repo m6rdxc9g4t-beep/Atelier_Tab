@@ -82,24 +82,67 @@ function isNodeModulesBin(dir: string): boolean {
 }
 
 /**
+ * Lancement de la CLI : `command` puis `prefix`, puis les arguments du contrat. POSIX et
+ * `claude.exe` : `{ command: <claude>, prefix: [] }` ; Windows, `claude.cmd` installé par npm :
+ * `{ command: <node.exe>, prefix: [<…\@anthropic-ai\claude-code\cli.js>] }` (docs/SUITE.md §9.6).
+ */
+export interface ClaudeLaunch {
+  command: string
+  prefix: string[]
+}
+
+/** Chemin de la CLI (POSIX, `claude.exe`) ou lancement résolu (Windows, installation npm). */
+export type ClaudeExecutable = string | ClaudeLaunch
+
+/** Forme commune : une chaîne est lancée telle quelle, sans argument en tête. */
+export function toLaunch(executable: ClaudeExecutable): ClaudeLaunch {
+  return typeof executable === 'string' ? { command: executable, prefix: [] } : executable
+}
+
+/** Valeur de PATH (clé `Path` sous Windows, casse indifférente). */
+function pathValue(env: Record<string, string | undefined>): string {
+  if (env.PATH !== undefined) return env.PATH
+  const key = Object.keys(env).find((k) => k.toUpperCase() === 'PATH')
+  return (key ? env[key] : undefined) ?? ''
+}
+
+/**
+ * Windows : `claude.cmd` d'une installation npm (`%APPDATA%\npm`) résolu en
+ * `node.exe …\node_modules\@anthropic-ai\claude-code\cli.js` — `node.exe` à côté du `.cmd`,
+ * sinon le premier du PATH (chemins absolus). Ne se résout pas → null (refusé) : jamais de
+ * lancement par cmd.exe, qui réinterpréterait le prompt et le schéma JSON.
+ */
+function resolveNpmShim(cmd: string, pathDirs: string[], deps: FindDeps): ClaudeLaunch | null {
+  const w = path.win32
+  const cli = w.join(w.dirname(cmd), 'node_modules', '@anthropic-ai', 'claude-code', 'cli.js')
+  if (!deps.isExecutable(cli)) return null
+  const node = [w.dirname(cmd), ...pathDirs]
+    .map((dir) => w.join(dir, 'node.exe'))
+    .find((f) => deps.isExecutable(f))
+  return node ? { command: node, prefix: [cli] } : null
+}
+
+/**
  * `CLAUDE_CLI` (chemin absolu, sinon refusé), sinon le `PATH` — entrées relatives et dossiers
  * `node_modules/.bin` ignorés —, puis `~/.local/bin/claude`, `/opt/homebrew/bin/claude`,
  * `/usr/local/bin/claude` : une app lancée depuis le Finder n'hérite pas du `PATH` du terminal.
  * Le chemin rendu est toujours absolu.
+ *
+ * Windows (docs/SUITE.md §9.6) : `claude.exe` (installateur natif), dans le PATH puis
+ * `%USERPROFILE%\.local\bin` ; un `claude.cmd` installé par npm (PATH, `%APPDATA%\npm`) est résolu
+ * en `node.exe cli.js` (`resolveNpmShim`), refusé s'il ne se résout pas. Aucun autre fichier.
  */
-export function findClaudeExecutable(deps: FindDeps): string | null {
-  const p = deps.platform === 'win32' ? path.win32 : path.posix
+export function findClaudeExecutable(deps: FindDeps): ClaudeExecutable | null {
+  if (deps.platform === 'win32') return findClaudeWindows(deps)
+  const p = path.posix
   const explicit = deps.env.CLAUDE_CLI?.trim()
   if (explicit) return p.isAbsolute(explicit) && deps.isExecutable(explicit) ? explicit : null
-  const names = deps.platform === 'win32' ? ['claude.exe', 'claude'] : ['claude']
   const dirs = (deps.env.PATH ?? '')
     .split(p.delimiter)
     .filter((dir) => dir && p.isAbsolute(dir) && !isNodeModulesBin(dir))
   for (const dir of dirs) {
-    for (const name of names) {
-      const file = p.join(dir, name)
-      if (deps.isExecutable(file)) return file
-    }
+    const file = p.join(dir, 'claude')
+    if (deps.isExecutable(file)) return file
   }
   const fallbacks = [
     p.join(deps.homedir, '.local', 'bin', 'claude'),
@@ -107,6 +150,36 @@ export function findClaudeExecutable(deps: FindDeps): string | null {
     '/usr/local/bin/claude',
   ]
   return fallbacks.find((f) => p.isAbsolute(f) && deps.isExecutable(f)) ?? null
+}
+
+function findClaudeWindows(deps: FindDeps): ClaudeExecutable | null {
+  const w = path.win32
+  const absolute = (f: string) => /^(?:[A-Za-z]:\\|\\\\)/.test(f) && w.isAbsolute(f)
+  const pathDirs = pathValue(deps.env)
+    .split(';')
+    .map((d) => d.trim().replace(/^"(.*)"$/, '$1'))
+    .filter((dir) => dir && absolute(dir) && !isNodeModulesBin(dir))
+  /** Un candidat : `.exe` tel quel, `.cmd` résolu, autre chose refusé. */
+  const accept = (file: string): ClaudeExecutable | null => {
+    if (!absolute(file) || !deps.isExecutable(file)) return null
+    const ext = w.extname(file).toLowerCase()
+    if (ext === '.exe') return file
+    if (ext === '.cmd') return resolveNpmShim(file, pathDirs, deps)
+    return null
+  }
+  const explicit = deps.env.CLAUDE_CLI?.trim()
+  if (explicit) return accept(explicit)
+  const appData = Object.entries(deps.env).find(([k]) => k.toUpperCase() === 'APPDATA')?.[1]
+  const candidates = [
+    ...pathDirs.flatMap((dir) => [w.join(dir, 'claude.exe'), w.join(dir, 'claude.cmd')]),
+    w.join(deps.homedir, '.local', 'bin', 'claude.exe'),
+    ...(appData ? [w.join(appData, 'npm', 'claude.cmd')] : []),
+  ]
+  for (const file of candidates) {
+    const found = accept(file)
+    if (found) return found
+  }
+  return null
 }
 
 /** Fichier exécutable ordinaire (pas un dossier). */
@@ -262,25 +335,64 @@ export const ENV_WHITELIST: ReadonlySet<string> = new Set([
 ])
 
 /**
+ * Windows (docs/SUITE.md §9.6) : variables ajoutées à la liste de §5.3, sous ces noms (le PATH
+ * s'y appelle `Path`). Toujours rien d'autre.
+ */
+export const WINDOWS_ENV_WHITELIST: readonly string[] = [
+  'USERPROFILE',
+  'HOMEDRIVE',
+  'HOMEPATH',
+  'USERNAME',
+  'APPDATA',
+  'LOCALAPPDATA',
+  'SystemRoot',
+  'SystemDrive',
+  'windir',
+  'ComSpec',
+  'PATHEXT',
+  'TEMP',
+  'TMP',
+  'ProgramData',
+]
+
+/** Noms des variables admises pour une plateforme (hors `LC_*`), tels qu'ils sont transmis. */
+export function envWhitelistFor(platform: string): string[] {
+  const base = [...ENV_WHITELIST]
+  if (platform !== 'win32') return base
+  return [...base.map((k) => (k === 'PATH' ? 'Path' : k)), ...WINDOWS_ENV_WHITELIST]
+}
+
+/**
  * Environnement du sous-processus, en **liste blanche** : `HOME`, `USER`, `LOGNAME`, `PATH`,
  * `SHELL`, `LANG`, `LC_*`, `TMPDIR`, `TZ`, `CLAUDE_CONFIG_DIR`, plus
- * `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`. Rien d'autre (ni `ANTHROPIC_*`, ni
- * `CLAUDE_CODE_USE_BEDROCK/VERTEX`, ni secret de l'app). Le dossier de l'exécutable passe en
- * tête du `PATH` : une CLI installée par npm trouve `node` même lancée depuis le Finder.
+ * `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` ; sous Windows, en plus, les variables système de
+ * `WINDOWS_ENV_WHITELIST` (casse indifférente à la lecture, noms canoniques à l'écriture, `Path`).
+ * Rien d'autre (ni `ANTHROPIC_*`, ni `CLAUDE_CODE_USE_BEDROCK/VERTEX`, ni secret de l'app). Le
+ * dossier de l'exécutable passe en tête du `PATH` : une CLI installée par npm trouve `node` même
+ * lancée depuis le Finder.
  */
 export function isolatedEnv(
   env: NodeJS.ProcessEnv | Record<string, string | undefined>,
   executable?: string,
+  platform: string = process.platform,
 ): Record<string, string> {
+  const win = platform === 'win32'
+  const p = win ? path.win32 : path.posix
+  const allowed = envWhitelistFor(platform)
+  const canonical = new Map(allowed.map((k) => [win ? k.toUpperCase() : k, k]))
   const out: Record<string, string> = {}
   for (const [k, v] of Object.entries(env)) {
     if (v === undefined) continue
-    if (ENV_WHITELIST.has(k) || /^LC_[A-Z_]+$/.test(k)) out[k] = v
+    const name = canonical.get(win ? k.toUpperCase() : k)
+    if (name) out[name] = v
+    else if (/^LC_[A-Z_]+$/.test(k)) out[k] = v
   }
-  if (executable && path.isAbsolute(executable)) {
-    const dir = path.dirname(executable)
-    const rest = (out.PATH ?? '').split(path.delimiter).filter((d) => d && d !== dir)
-    out.PATH = [dir, ...rest].join(path.delimiter)
+  const pathKey = win ? 'Path' : 'PATH'
+  if (executable && p.isAbsolute(executable)) {
+    const dir = p.dirname(executable)
+    const same = (d: string) => (win ? d.toLowerCase() === dir.toLowerCase() : d === dir)
+    const rest = (out[pathKey] ?? '').split(p.delimiter).filter((d) => d && !same(d))
+    out[pathKey] = [dir, ...rest].join(p.delimiter)
   }
   out.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = '1'
   return out
@@ -469,8 +581,10 @@ export const spawnRunner: Runner = (file, args, options) =>
 
 export interface ClaudeCliOptions {
   runner: Runner
-  /** Chemin de la CLI, ou null si introuvable (relu à chaque vérification). */
-  findExecutable(): string | null
+  /** CLI (chemin ou lancement résolu), ou null si introuvable (relu à chaque vérification). */
+  findExecutable(): ClaudeExecutable | null
+  /** Plateforme (défaut : `process.platform`) : environnement et garde-fous Windows. */
+  platform?: string
   /** Mode « En ligne » de l'app (relu dans le fichier de préférences à chaque appel). */
   isOnline(): boolean
   env?: NodeJS.ProcessEnv
@@ -482,7 +596,7 @@ export interface ClaudeCliOptions {
 
 interface CachedStatus {
   at: number
-  executable: string | null
+  executable: ClaudeExecutable | null
   available: boolean
   detail: string | null
   version?: string
@@ -504,18 +618,31 @@ export class ClaudeCli {
 
   /** Lance la CLI isolée dans un dossier temporaire vide, supprimé ensuite. */
   private async run(
-    executable: string,
+    executable: ClaudeExecutable,
     args: readonly string[],
     input: string | undefined,
     timeoutMs: number,
     signal?: AbortSignal,
   ): Promise<RunResult> {
+    const platform = this.opts.platform ?? process.platform
+    const launch = toLaunch(executable)
+    // Garde-fou (§9.6) : jamais de script cmd.exe, qui réinterpréterait le prompt et le schéma.
+    if (platform === 'win32' && /\.(?:cmd|bat)$/i.test(launch.command)) {
+      return {
+        code: null,
+        stdout: '',
+        stderr: '',
+        timedOut: false,
+        aborted: false,
+        error: 'lancement par cmd.exe refusé',
+      }
+    }
     const cwd = fs.mkdtempSync(path.join(this.opts.tmpRoot ?? os.tmpdir(), 'atelier-tab-claude-'))
     try {
-      return await this.opts.runner(executable, args, {
+      return await this.opts.runner(launch.command, [...launch.prefix, ...args], {
         ...(input !== undefined ? { input } : {}),
         cwd,
-        env: isolatedEnv(this.opts.env ?? process.env, executable),
+        env: isolatedEnv(this.opts.env ?? process.env, launch.command, platform),
         timeoutMs,
         ...(signal ? { signal } : {}),
       })

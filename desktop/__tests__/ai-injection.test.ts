@@ -80,7 +80,10 @@ async function scenario(options: { online: boolean; answer: boolean; localPreset
 
 describe('table piégée : aucun envoi sans confirmation (SUITE.md §5.4)', () => {
   it('en ligne, l’utilisateur refuse : rien ne part, l’adresse n’est pas modifiée', async () => {
-    const { asked, sent, events, chats, snapshot } = await scenario({ online: true, answer: false })
+    const { asked, sent, events, chats, snapshot } = await scenario({
+      online: true,
+      answer: false,
+    })
     // Le modèle piégé a bien tenté les deux étapes de l'exfiltration…
     const tools = events.flatMap((e) => (e.type === 'tool_call' ? [e.name] : []))
     expect(tools).toEqual(['read_table', 'configure_export', 'export_table'])

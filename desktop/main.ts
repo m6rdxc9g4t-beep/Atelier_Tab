@@ -18,7 +18,7 @@
  * - Interface : politique de contenu (`connect-src` limité à cette machine, `csp.ts`).
  * - Suite Atelier : ouverture des autres applications ; route de santé sur 127.0.0.1:4175 (§3).
  */
-import { execFile } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -70,6 +70,7 @@ import { toolSchemas } from '@/ai/tools'
 import { cacheControlFor, uiBuildStamp, uiChangedSinceLastLaunch } from './ui-cache'
 import { buildRelayRequest } from './suite-relay'
 import { openSuiteOrExternal, SUITE_BUNDLES, suiteBundleFor } from './suite-launch'
+import { claudeMcpAddCommand, mcpServerCommand } from './launcher/decision.cjs'
 
 /** Nom affiché (menus, titre, boîtes de dialogue). Le dossier de données reste ~/Atelier_Tab. */
 const APP_NAME = 'Atelier Tab'
@@ -192,14 +193,38 @@ handle('export:save', (_event, filename: unknown, content: unknown) => {
 // Suite Atelier
 // ---------------------------------------------------------------------------
 
-// Ouvre une autre application de la suite : l'app de bureau installée (macOS, `open -b`),
-// sinon le navigateur par défaut (docs/SUITE.md §3). Surface IPC volontairement étroite :
+// Ouvre une autre application de la suite : l'app de bureau installée (macOS `open -b` ; Windows :
+// raccourci inscrit dans HKCU\Software\Atelier\Apps, ouvert par explorer.exe), sinon le navigateur par défaut
+// (docs/SUITE.md §3, §9.4), avec un environnement minimal. Surface IPC volontairement étroite :
 // http(s) vers 127.0.0.1 / localhost, ou une app en ligne de la suite reconnue par
 // `suiteBundleFor` (Atelier Cuisine : https, hôte exact). Aucune requête n'y est faite.
 // L'adresse de Tab lui-même (4175) ramène sa fenêtre : ni `open -b`, ni navigateur.
 const openSuiteUrl = (url: string) =>
   openSuiteOrExternal(url, {
-    execFile,
+    execFile: (file, args, options, callback) =>
+      execFile(file, args, { ...options, encoding: 'utf8' }, (error, stdout) =>
+        callback(error, stdout),
+      ),
+    spawnDetached: (file, args, { env, windowsHide }) =>
+      new Promise((resolve) => {
+        try {
+          // Console masquée (.cmd) : pas de processus détaché, qui ouvrirait une console à lui.
+          const child = spawn(file, args, {
+            env,
+            windowsHide,
+            detached: !windowsHide,
+            stdio: 'ignore',
+          })
+          child.once('error', () => resolve(false))
+          child.once('spawn', () => {
+            child.unref()
+            resolve(true)
+          })
+        } catch {
+          resolve(false)
+        }
+      }),
+    exists: (file) => fs.existsSync(file),
     openExternal: (u) => shell.openExternal(u),
     platform: process.platform,
     self: { bundleId: SUITE_BUNDLES['4175'] ?? 'fr.atelier.tab', focus: focusMainWindow },
@@ -339,13 +364,27 @@ handle('claude:cancel', (_event, id: unknown) => claude.cancel(id))
 // ---------------------------------------------------------------------------
 
 function mcpInfo(): McpInfo {
-  const launcher = app.isPackaged
-    ? path.join(process.resourcesPath, 'atelier-mcp')
-    : path.join(__dirname, '..', 'desktop', 'bin', 'atelier-mcp-dev')
-  return {
-    launcher,
-    claudeCommand: `claude mcp add --scope user atelier-tab -- "${launcher}"`,
-  }
+  // App installée : serveur livré dans les ressources (macOS `atelier-mcp` ; Windows
+  // `Atelier_Tab.exe resources\atelier-mcp.cjs`, chemin stable `resources\atelier-mcp.cmd`).
+  // Développement : serveur compilé du dépôt.
+  const server = app.isPackaged
+    ? mcpServerCommand({
+        platform: process.platform,
+        resourcesPath: process.resourcesPath,
+        exePath: process.execPath,
+      })
+    : process.platform === 'win32'
+      ? {
+          file: path.join(__dirname, 'atelier-mcp.mjs'),
+          command: 'node',
+          args: [path.join(__dirname, 'atelier-mcp.mjs')],
+          env: {},
+        }
+      : (() => {
+          const file = path.join(__dirname, '..', 'desktop', 'bin', 'atelier-mcp-dev')
+          return { file, command: file, args: [], env: {} }
+        })()
+  return { launcher: server.file, claudeCommand: claudeMcpAddCommand(server) }
 }
 
 handle('mcp:info', () => mcpInfo())

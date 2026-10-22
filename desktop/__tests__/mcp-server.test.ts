@@ -216,7 +216,7 @@ describe('serveur MCP', () => {
 
   it('exporte dans le dossier exports/', async () => {
     const { json } = await call('export_table', { table: 'Planning & Lots', format: 'csv' })
-    expect(json.file).toMatch(/exports\/atelier_projets_planning-lots_.*\.csv$/)
+    expect(json.file).toMatch(/exports[\\/]atelier_projets_planning-lots_.*\.csv$/)
     expect(fs.readFileSync(json.file, 'utf8')).toContain('Menuiseries')
   })
 

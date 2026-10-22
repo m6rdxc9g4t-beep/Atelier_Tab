@@ -161,8 +161,8 @@ describe('mode « En ligne » hors du dossier de données (SUITE.md §5.1)', () 
   it('à côté du fichier de secrets, hors du dossier de données', () => {
     const saved = { ...process.env }
     try {
-      process.env.ATELIER_TAB_SECRETS = '/conf/Atelier_Tab/secrets.json'
-      expect(defaultPreferencesFile()).toBe('/conf/Atelier_Tab/preferences.json')
+      process.env.ATELIER_TAB_SECRETS = path.join('/conf', 'Atelier_Tab', 'secrets.json')
+      expect(defaultPreferencesFile()).toBe(path.join('/conf', 'Atelier_Tab', 'preferences.json'))
       delete process.env.ATELIER_TAB_SECRETS
       expect(path.dirname(defaultPreferencesFile())).toBe(path.dirname(defaultSecretsFile()))
       expect(defaultPreferencesFile().startsWith(path.join(os.homedir(), 'Atelier_Tab'))).toBe(
