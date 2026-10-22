@@ -317,8 +317,8 @@ describe('requête venue de l’interface', () => {
   })
 
   it('environnement en liste blanche exacte (SUITE.md §5.3), dossier de l’exécutable en tête du PATH', () => {
-    // Séparateur du PATH de la plateforme (`;` sous Windows).
-    const D = path.delimiter
+    // Règles POSIX (Windows : test dédié plus haut).
+    const D = ':'
     const env = isolatedEnv(
       {
         PATH: ['/usr/bin', '/bin'].join(D),
@@ -342,6 +342,7 @@ describe('requête venue de l’interface', () => {
         GITHUB_TOKEN: 'ghp_x',
       },
       '/opt/homebrew/bin/claude',
+      'darwin',
     )
     expect(env).toEqual({
       PATH: ['/opt/homebrew/bin', '/usr/bin', '/bin'].join(D),
@@ -358,10 +359,10 @@ describe('requête venue de l’interface', () => {
       CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
     })
     // Déjà en tête (ou ailleurs dans le PATH) : pas de doublon.
-    expect(isolatedEnv({ PATH: ['/usr/bin', '/opt/x'].join(D) }, '/opt/x/claude').PATH).toBe(
-      ['/opt/x', '/usr/bin'].join(D),
-    )
-    expect(isolatedEnv({}, '/opt/x/claude').PATH).toBe('/opt/x')
+    expect(
+      isolatedEnv({ PATH: ['/usr/bin', '/opt/x'].join(D) }, '/opt/x/claude', 'darwin').PATH,
+    ).toBe(['/opt/x', '/usr/bin'].join(D))
+    expect(isolatedEnv({}, '/opt/x/claude', 'darwin').PATH).toBe('/opt/x')
   })
 
   it('lit l’objet résultat final', () => {
@@ -639,7 +640,12 @@ describe('ClaudeCli avec un vrai sous-processus (fausse CLI)', () => {
       expect(c.hasApiKey).toBe(false)
       // Liste blanche exacte (le sous-processus Node ajoute parfois quelques variables à lui).
       const keys = (c.envKeys as string[]).filter(
-        (k) => !/^(__CF_USER_TEXT_ENCODING|PWD|SHLVL|_)$/.test(k) && !k.startsWith('='),
+        (k) =>
+          !/^(__CF_USER_TEXT_ENCODING|PWD|SHLVL|_)$/.test(k) &&
+          !k.startsWith('=') &&
+          // Windows : libuv recopie toujours ces variables de session dans l'environnement du
+          // sous-processus (identité de la session, aucune donnée de l'app).
+          !(process.platform === 'win32' && /^(LOGONSERVER|USERDOMAIN)$/i.test(k)),
       )
       for (const k of keys) {
         expect(
