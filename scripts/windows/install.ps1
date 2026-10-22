@@ -14,8 +14,8 @@
   3. construit le lanceur (electron-builder, dossier release\win-unpacked) et le copie dans
      %LOCALAPPDATA%\Programs\Atelier_Tab ;
   4. crée les raccourcis « Atelier Tab » : menu Démarrer (dossier « Atelier ») et Bureau ;
-  5. enregistre l'app dans HKCU\Software\Atelier\Apps\tab (Lanceur, Nom) pour les autres apps de
-     la suite (§9.4) ;
+  5. inscrit l'app dans HKCU\Software\Atelier\Apps\tab pour les autres apps de la suite (§9.4,
+     §9.6) : Lanceur = raccourci .lnk du menu Démarrer (ouvert par explorer.exe), Nom ;
   6. connecte Claude Code au serveur MCP livré, s'il est installé.
 
   L'app installée est un lanceur : elle exécute le code de ce dépôt. Après un « git pull », il
@@ -282,11 +282,12 @@ if ($SansBureau) {
 }
 
 # ---------------------------------------------------------------------------
-# Enregistrement pour les autres apps de la suite (§9.4).
+# Inscription pour les autres apps de la suite (§9.4, §9.6) : Lanceur = raccourci du menu
+# Démarrer, que les autres apps ouvrent par explorer.exe.
 # ---------------------------------------------------------------------------
 
 if (-not (Test-Path -LiteralPath $CleRegistre)) { New-Item -Path $CleRegistre -Force | Out-Null }
-New-ItemProperty -LiteralPath $CleRegistre -Name 'Lanceur' -Value $Exe -PropertyType String -Force | Out-Null
+New-ItemProperty -LiteralPath $CleRegistre -Name 'Lanceur' -Value $RaccourciMenu -PropertyType String -Force | Out-Null
 New-ItemProperty -LiteralPath $CleRegistre -Name 'Nom' -Value $NomAffiche -PropertyType String -Force | Out-Null
 Write-Ok 'Enregistrée pour la Suite Atelier (HKCU\Software\Atelier\Apps\tab).'
 

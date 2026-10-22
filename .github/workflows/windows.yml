@@ -73,7 +73,8 @@ jobs:
           if ($cible -ne $env:ATELIER_EXE) { throw "Cible du raccourci : $cible" }
           if (Test-Path -LiteralPath (Join-Path $env:USERPROFILE 'Desktop\Atelier Tab.lnk')) { throw 'Raccourci de Bureau créé malgré -SansBureau' }
           $cle = Get-ItemProperty -LiteralPath 'HKCU:\Software\Atelier\Apps\tab'
-          if ($cle.Lanceur -ne $env:ATELIER_EXE -or $cle.Nom -ne 'Atelier Tab') { throw "Registre : $($cle.Lanceur) / $($cle.Nom)" }
+          # §9.6 : Lanceur = raccourci .lnk du menu Démarrer.
+          if ($cle.Lanceur -ne $lnk -or $cle.Nom -ne 'Atelier Tab') { throw "Registre : $($cle.Lanceur) / $($cle.Nom)" }
           Write-Host "OK : $cible"
 
       - name: Lanceur en mode « mise à jour seule »

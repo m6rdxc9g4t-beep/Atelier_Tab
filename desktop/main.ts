@@ -194,7 +194,7 @@ handle('export:save', (_event, filename: unknown, content: unknown) => {
 // ---------------------------------------------------------------------------
 
 // Ouvre une autre application de la suite : l'app de bureau installée (macOS `open -b` ; Windows :
-// lanceur enregistré dans HKCU\Software\Atelier\Apps), sinon le navigateur par défaut
+// raccourci inscrit dans HKCU\Software\Atelier\Apps, ouvert par explorer.exe), sinon le navigateur par défaut
 // (docs/SUITE.md §3, §9.4), avec un environnement minimal. Surface IPC volontairement étroite :
 // http(s) vers 127.0.0.1 / localhost, ou une app en ligne de la suite reconnue par
 // `suiteBundleFor` (Atelier Cuisine : https, hôte exact). Aucune requête n'y est faite.
@@ -224,6 +224,7 @@ const openSuiteUrl = (url: string) =>
           resolve(false)
         }
       }),
+    exists: (file) => fs.existsSync(file),
     openExternal: (u) => shell.openExternal(u),
     platform: process.platform,
     self: { bundleId: SUITE_BUNDLES['4175'] ?? 'fr.atelier.tab', focus: focusMainWindow },

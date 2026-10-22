@@ -4,8 +4,11 @@
  * Une adresse d'app de la suite (127.0.0.1 / localhost, port connu ; ou l'adresse en ligne
  * d'Atelier Cuisine, https) ouvre l'application installée :
  * - macOS : `/usr/bin/open -b <identifiant>` (liste fermée, sans shell) ;
- * - Windows : lanceur enregistré par l'app dans `HKCU\Software\Atelier\Apps\<viz|tab|projets>`
- *   (valeur `Lanceur`), lu par PowerShell (sortie en UTF-8 : chemins accentués), démarré sans shell.
+ * - Windows (§9.6) : lanceur inscrit par l'app dans `HKCU\Software\Atelier\Apps\<viz|tab|projets>`
+ *   (valeur `Lanceur` = raccourci `.lnk` du menu Démarrer), lu par PowerShell (sortie UTF-8 : chemins
+ *   accentués), puis **toujours** ouvert par le shell : `explorer.exe "<Lanceur>"`, sans cmd.exe.
+ *   L'Explorateur démarre l'app avec son propre environnement de session ; le chemin n'est jamais
+ *   exécuté directement, quelle que soit son extension.
  * Si elle n'est pas installée (ou sous Linux), l'adresse part dans le navigateur par défaut.
  *
  * Environnement propre (§9.4) : l'app ouverte ne reçoit aucune variable de Tab, seulement un
@@ -70,8 +73,10 @@ export interface SuiteLaunchDeps {
   platform: string
   /** Environnement de l'app, d'où est tiré l'environnement minimal (défaut : `process.env`). */
   env?: Record<string, string | undefined>
-  /** Windows : démarrage du lanceur lu dans le registre. */
+  /** Windows : démarrage d'`explorer.exe` sur le lanceur lu dans le registre. */
   spawnDetached?: SpawnDetachedFn
+  /** Windows : le lanceur inscrit existe-t-il encore ? (défaut : oui) */
+  exists?: (file: string) => boolean
   /**
    * Identifiant de l'app qui appelle (Tab : `fr.atelier.tab`) et moyen de ramener sa fenêtre.
    * Une adresse qui désigne l'app elle-même (ex. `http://127.0.0.1:4175`) ramène la fenêtre
@@ -87,22 +92,22 @@ export const SUITE_WINDOWS_KEYS: Readonly<Record<string, string>> = {
   'local.atelier-projets.desktop': 'projets',
 }
 
-/** Variables transmises à une autre app de la suite (§9.4) : utilisateur, dossiers, langue, fuseau. */
+/**
+ * Variables transmises à une autre app de la suite (§9.4, liste de §9.6) : utilisateur, dossiers,
+ * langue, fuseau. Noms comparés sans tenir compte de la casse (Windows).
+ */
 const MINIMAL_ENV_KEYS = [
   'HOME',
-  'USER',
-  'LOGNAME',
-  'LANG',
-  'LANGUAGE',
-  'TZ',
-  'TMPDIR',
-  // Windows : profil, dossiers système et de l'utilisateur, interpréteur de commandes.
   'USERPROFILE',
-  'USERNAME',
   'HOMEDRIVE',
   'HOMEPATH',
-  'APPDATA',
-  'LOCALAPPDATA',
+  'USER',
+  'USERNAME',
+  'USERDOMAIN',
+  'LOGNAME',
+  'LANG',
+  'TZ',
+  'TMPDIR',
   'TEMP',
   'TMP',
   'SYSTEMROOT',
@@ -110,6 +115,8 @@ const MINIMAL_ENV_KEYS = [
   'WINDIR',
   'COMSPEC',
   'PATHEXT',
+  'APPDATA',
+  'LOCALAPPDATA',
   'PROGRAMDATA',
   'PROGRAMFILES',
   'PROGRAMFILES(X86)',
@@ -120,14 +127,16 @@ const MINIMAL_ENV_KEYS = [
 const POSIX_SYSTEM_PATH = '/usr/bin:/bin:/usr/sbin:/sbin'
 
 /**
- * Environnement minimal passé à une autre app de la suite (docs/SUITE.md §9.4) : liste blanche
- * (`MINIMAL_ENV_KEYS`, `LC_*`) et PATH système. Aucune variable de Tab (`ATELIER_*`), d'Electron
- * (`ELECTRON_*`), de Node.js (`NODE_*`), de Python (`PYTHON*`) ni de base (`DATABASE_URL`).
- * Windows : PATH de la session nettoyé (entrées absolues, sans `node_modules\.bin`).
+ * Environnement minimal passé à une autre app de la suite (docs/SUITE.md §9.4, §9.6) : liste
+ * blanche (`MINIMAL_ENV_KEYS`, `LC_*`) et PATH système. Aucune variable de Tab (`ATELIER_*`),
+ * d'Electron (`ELECTRON_*`), de Node.js (`NODE_*`), de Python (`PYTHON*`) ni de base
+ * (`DATABASE_URL`). Windows : `systemPath` = PATH machine + utilisateur lu dans le registre ; à
+ * défaut, PATH de la session nettoyé (entrées absolues, sans `node_modules\.bin`).
  */
 export function minimalEnv(
   env: Record<string, string | undefined>,
   platform: string,
+  systemPath?: string | null,
 ): Record<string, string> {
   const out: Record<string, string> = {}
   for (const [key, value] of Object.entries(env)) {
@@ -137,7 +146,7 @@ export function minimalEnv(
   }
   out.PATH =
     platform === 'win32'
-      ? cleanPathEntries((envPathValue(env) ?? '').split(';'), 'win32').join(';')
+      ? cleanPathEntries((systemPath || envPathValue(env) || '').split(';'), 'win32').join(';')
       : POSIX_SYSTEM_PATH
   return out
 }
@@ -161,19 +170,24 @@ function systemRoot(env: Record<string, string | undefined>): string {
 }
 
 /**
- * Script PowerShell qui lit `Lanceur` dans `HKCU\Software\Atelier\Apps\<clé>` : texte fixe, la
- * clé arrive par la variable `ATELIER_CLE_APP` (jamais dans la commande), sortie en UTF-8.
+ * Script PowerShell (texte fixe) : `Lanceur` de `HKCU\Software\Atelier\Apps\<clé>` — la clé arrive
+ * par la variable `ATELIER_CLE_APP`, jamais dans la commande — et PATH machine + utilisateur du
+ * registre (§9.6), en JSON UTF-8.
  */
 export const REGISTRY_SCRIPT = [
   "$ErrorActionPreference = 'Stop'",
   '[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false',
   "$cle = 'HKCU:\\Software\\Atelier\\Apps\\' + $env:ATELIER_CLE_APP",
-  "$valeur = (Get-ItemProperty -LiteralPath $cle -Name 'Lanceur').Lanceur",
-  '[Console]::Out.Write([string]$valeur)',
+  "$lanceur = [string](Get-ItemProperty -LiteralPath $cle -Name 'Lanceur').Lanceur",
+  "$chemin = @([Environment]::GetEnvironmentVariable('Path', 'Machine'), [Environment]::GetEnvironmentVariable('Path', 'User')) -join ';'",
+  '[Console]::Out.Write((ConvertTo-Json -Compress -InputObject @{ lanceur = $lanceur; path = $chemin }))',
 ].join('; ')
 
-/** Lit le lanceur enregistré par une app de la suite (Windows), ou null. */
-function readRegisteredLauncher(appKey: string, deps: SuiteLaunchDeps): Promise<string | null> {
+/** Lit le lanceur inscrit par une app de la suite (Windows) et le PATH du registre, ou null. */
+function readRegisteredLauncher(
+  appKey: string,
+  deps: SuiteLaunchDeps,
+): Promise<{ launcher: string; systemPath: string } | null> {
   if (!/^[a-z]+$/.test(appKey)) return Promise.resolve(null)
   const env = deps.env ?? process.env
   const powershell = path.win32.join(
@@ -194,8 +208,7 @@ function readRegisteredLauncher(appKey: string, deps: SuiteLaunchDeps): Promise<
           windowsHide: true,
           timeout: 15_000,
         },
-        (error, stdout) =>
-          resolve(error ? null : (stdout ?? '').replace(/^\uFEFF/, '').trim() || null),
+        (error, stdout) => resolve(error ? null : parseRegistryOutput(stdout ?? '')),
       )
     } catch {
       resolve(null)
@@ -203,48 +216,47 @@ function readRegisteredLauncher(appKey: string, deps: SuiteLaunchDeps): Promise<
   })
 }
 
-/**
- * Commande qui démarre un lanceur enregistré (Windows), sans shell : `.exe` tel quel, `.vbs` /
- * `.js` / `.wsf` par `wscript.exe`, `.cmd` / `.bat` par `cmd.exe /d /c` (console masquée ; chemin
- * refusé s'il contient un caractère que cmd interpréterait). Autre chose, chemin relatif ou
- * suspect : null (navigateur).
- */
-export function windowsLaunchCommand(
-  launcher: string,
-  env: Record<string, string | undefined>,
-): { file: string; args: string[]; windowsHide: boolean } | null {
-  if (!path.win32.isAbsolute(launcher) || !/^(?:[A-Za-z]:\\|\\\\)/.test(launcher)) return null
-  // Caractères de contrôle et guillemets : jamais un chemin légitime.
-  // eslint-disable-next-line no-control-regex
-  if (/["\u0000-\u001f]/.test(launcher)) return null
-  const ext = path.win32.extname(launcher).toLowerCase()
-  const system32 = path.win32.join(systemRoot(env), 'System32')
-  if (ext === '.exe') return { file: launcher, args: [], windowsHide: false }
-  if (ext === '.vbs' || ext === '.js' || ext === '.wsf')
-    return { file: path.win32.join(system32, 'wscript.exe'), args: [launcher], windowsHide: false }
-  if (ext === '.cmd' || ext === '.bat') {
-    if (/[%!^&|<>()]/.test(launcher)) return null
+/** Sortie JSON du script : `{ lanceur, path }` (BOM toléré), ou null. */
+export function parseRegistryOutput(
+  stdout: string,
+): { launcher: string; systemPath: string } | null {
+  try {
+    const value = JSON.parse(stdout.replace(/^\uFEFF/, '').trim()) as unknown
+    if (typeof value !== 'object' || value === null) return null
+    const { lanceur, path: systemPath } = value as Record<string, unknown>
+    if (typeof lanceur !== 'string' || lanceur.trim() === '') return null
     return {
-      file: path.win32.join(system32, 'cmd.exe'),
-      args: ['/d', '/c', launcher],
-      windowsHide: true,
+      launcher: lanceur.trim(),
+      systemPath: typeof systemPath === 'string' ? systemPath : '',
     }
+  } catch {
+    return null
   }
-  return null
 }
 
-/** Windows : démarre l'app enregistrée dans le registre ; vrai si elle a été lancée. */
+/**
+ * Lanceur inscrit utilisable (§9.6) : chemin absolu Windows, sans guillemet, virgule (séparateur
+ * des options d'explorer.exe) ni caractère de contrôle. Son extension n'importe pas : il est
+ * toujours ouvert par l'Explorateur, jamais exécuté.
+ */
+export function isUsableLauncher(launcher: string): boolean {
+  if (!/^(?:[A-Za-z]:\\|\\\\)/.test(launcher) || !path.win32.isAbsolute(launcher)) return false
+  // eslint-disable-next-line no-control-regex
+  return !/[",\u0000-\u001f]/.test(launcher)
+}
+
+/** Windows : ouvre l'app inscrite par `explorer.exe "<Lanceur>"` ; vrai si c'est parti. */
 async function openRegistered(bundleId: string, deps: SuiteLaunchDeps): Promise<boolean> {
   const appKey = SUITE_WINDOWS_KEYS[bundleId]
   if (!appKey || !deps.spawnDetached) return false
-  const launcher = await readRegisteredLauncher(appKey, deps)
-  if (!launcher) return false
+  const found = await readRegisteredLauncher(appKey, deps)
+  if (!found || !isUsableLauncher(found.launcher)) return false
+  // Lanceur introuvable (app désinstallée, raccourci supprimé) : navigateur.
+  if (!(deps.exists ?? (() => true))(found.launcher)) return false
   const env = deps.env ?? process.env
-  const command = windowsLaunchCommand(launcher, env)
-  if (!command) return false
-  return deps.spawnDetached(command.file, command.args, {
-    env: minimalEnv(env, 'win32'),
-    windowsHide: command.windowsHide,
+  return deps.spawnDetached(path.win32.join(systemRoot(env), 'explorer.exe'), [found.launcher], {
+    env: minimalEnv(env, 'win32', found.systemPath),
+    windowsHide: false,
   })
 }
 

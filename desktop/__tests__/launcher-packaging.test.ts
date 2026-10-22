@@ -252,7 +252,8 @@ describe('installation Windows (scripts/windows/install.ps1, §9.1)', () => {
     expect(ps1).toContain("Join-Path $env:LOCALAPPDATA 'Programs'")
     expect(ps1).toContain("'Microsoft\\Windows\\Start Menu\\Programs\\Atelier'")
     expect(ps1).toContain("$CleRegistre = 'HKCU:\\Software\\Atelier\\Apps\\tab'")
-    expect(ps1).toContain("-Name 'Lanceur'")
+    // §9.6 : Lanceur = raccourci .lnk du menu Démarrer, jamais l'exécutable.
+    expect(ps1).toContain("-Name 'Lanceur' -Value $RaccourciMenu")
     expect(ps1).toContain("-Name 'Nom'")
     expect(ps1).toContain('icon.ico')
     expect(ps1).toContain('desktop\\launcher\\cli.cjs')

@@ -4,7 +4,8 @@ import {
   openSuiteOrExternal,
   REGISTRY_SCRIPT,
   suiteBundleFor,
-  windowsLaunchCommand,
+  isUsableLauncher,
+  parseRegistryOutput,
   type ExecFileFn,
   type SpawnDetachedFn,
 } from '../suite-launch'
@@ -173,16 +174,23 @@ describe('environnement minimal (§9.4)', () => {
   })
 })
 
-describe('Windows : lanceur enregistré dans HKCU\\Software\\Atelier\\Apps (§9.4)', () => {
+describe('Windows : raccourci inscrit, ouvert par explorer.exe (§9.4, §9.6)', () => {
   const WIN_ENV = {
     SystemRoot: 'C:\\Windows',
     USERPROFILE: 'C:\\Users\\François',
-    Path: 'C:\\Windows\\system32',
+    USERDOMAIN: 'PC',
+    Path: 'C:\\depot\\node_modules\\.bin;C:\\Windows\\system32',
     ATELIER_TAB_DATA: 'C:\\Users\\François\\Atelier_Tab',
     ELECTRON_RUN_AS_NODE: '1',
+    NODE_OPTIONS: '--inspect',
   }
+  const SYSTEM_PATH =
+    'C:\\Windows\\system32;C:\\Windows;C:\\Users\\François\\AppData\\Local\\Microsoft\\WindowsApps'
 
-  function winDeps(registry: Record<string, string | null>, spawnOk = true) {
+  function winDeps(
+    registry: Record<string, string>,
+    opts: { exists?: boolean; spawnOk?: boolean } = {},
+  ) {
     const reads: { file: string; args: readonly string[]; env: Record<string, string> }[] = []
     const spawned: {
       file: string
@@ -193,66 +201,85 @@ describe('Windows : lanceur enregistré dans HKCU\\Software\\Atelier\\Apps (§9.
     const execFile: ExecFileFn = (file, args, options, callback) => {
       reads.push({ file, args, env: options.env })
       const value = registry[options.env.ATELIER_CLE_APP ?? '']
-      if (value === null || value === undefined) callback(new Error('clé absente'))
-      else callback(null, `\uFEFF${value}\r\n`)
+      if (value === undefined) callback(new Error('clé absente'))
+      else callback(null, `\uFEFF${JSON.stringify({ lanceur: value, path: SYSTEM_PATH })}\r\n`)
     }
     const spawnDetached: SpawnDetachedFn = async (file, args, options) => {
       spawned.push({ file, args, ...options })
-      return spawnOk
+      return opts.spawnOk ?? true
     }
     const openExternal = vi.fn(async () => undefined)
     return {
       reads,
       spawned,
       openExternal,
-      deps: { execFile, spawnDetached, openExternal, platform: 'win32', env: WIN_ENV },
+      deps: {
+        execFile,
+        spawnDetached,
+        exists: () => opts.exists ?? true,
+        openExternal,
+        platform: 'win32',
+        env: WIN_ENV,
+      },
     }
   }
 
-  it('lit le lanceur par PowerShell (script fixe, clé en variable) et le démarre sans shell', async () => {
-    const exe =
-      'C:\\Users\\François Pichon\\AppData\\Local\\Programs\\Atelier_Projets\\Atelier_Projets.exe'
-    const d = winDeps({ projets: exe })
-    expect(await openSuiteOrExternal('http://127.0.0.1:4174/#/gantt', d.deps)).toBe('app')
-    expect(d.reads).toHaveLength(1)
+  const LNK =
+    'C:\\Users\\François Pichon\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Atelier\\Atelier Viz.lnk'
+
+  it('lit le raccourci par PowerShell (script fixe, clé en variable) et l’ouvre par explorer.exe', async () => {
+    const d = winDeps({ viz: LNK })
+    expect(await openSuiteOrExternal('http://127.0.0.1:8000', d.deps)).toBe('app')
     const read = d.reads[0]!
     expect(read.file).toBe('C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe')
     const encoded = read.args[read.args.indexOf('-EncodedCommand') + 1] ?? ''
     expect(Buffer.from(encoded, 'base64').toString('utf16le')).toBe(REGISTRY_SCRIPT)
-    expect(read.env.ATELIER_CLE_APP).toBe('projets')
+    expect(read.env.ATELIER_CLE_APP).toBe('viz')
     expect(read.env.ELECTRON_RUN_AS_NODE).toBeUndefined()
     expect(d.spawned).toEqual([
       {
-        file: exe,
-        args: [],
+        file: 'C:\\Windows\\explorer.exe',
+        args: [LNK],
         windowsHide: false,
+        // Environnement minimal, PATH machine + utilisateur du registre.
         env: {
           SystemRoot: 'C:\\Windows',
           USERPROFILE: 'C:\\Users\\François',
-          PATH: 'C:\\Windows\\system32',
+          USERDOMAIN: 'PC',
+          PATH: SYSTEM_PATH,
         },
       },
     ])
     expect(d.openExternal).not.toHaveBeenCalled()
   })
 
-  it('app non enregistrée, lanceur inutilisable ou échec du démarrage → navigateur', async () => {
-    const registries: Record<string, string>[] = [
-      {},
-      { viz: 'lanceur.exe' },
-      { viz: 'C:\\x\\viz.ps1' },
-    ]
-    for (const registry of registries) {
-      const d = winDeps(registry)
-      expect(await openSuiteOrExternal('http://127.0.0.1:8000', d.deps)).toBe('browser')
-      expect(d.spawned).toEqual([])
-      expect(d.openExternal).toHaveBeenCalledWith('http://127.0.0.1:8000')
+  it('quelle que soit l’extension (.lnk, .exe, .cmd, .vbs) : explorer.exe, jamais d’exécution directe', async () => {
+    for (const launcher of [LNK, 'C:\\A b\\projets.exe', 'C:\\x\\nexus.cmd', 'C:\\x\\viz.vbs']) {
+      const d = winDeps({ projets: launcher })
+      expect(await openSuiteOrExternal('http://127.0.0.1:4174/#/gantt', d.deps)).toBe('app')
+      expect(d.spawned.map((s) => [s.file, ...s.args])).toEqual([
+        ['C:\\Windows\\explorer.exe', launcher],
+      ])
     }
-    const failing = winDeps({ viz: 'C:\\x\\viz.exe' }, false)
-    expect(await openSuiteOrExternal('http://127.0.0.1:8000', failing.deps)).toBe('browser')
   })
 
-  it('Atelier Cuisine (pas d’app Windows) et adresses hors suite : navigateur, registre jamais lu', async () => {
+  it('pas inscrite, introuvable, chemin suspect ou échec : navigateur', async () => {
+    const cases: [Record<string, string>, { exists?: boolean; spawnOk?: boolean }][] = [
+      [{}, {}],
+      [{ viz: LNK }, { exists: false }],
+      [{ viz: 'Atelier Viz.lnk' }, {}],
+      [{ viz: 'C:\\x\\"y".lnk' }, {}],
+      [{ viz: 'C:\\a,b\\viz.lnk' }, {}],
+      [{ viz: LNK }, { spawnOk: false }],
+    ]
+    for (const [registry, opts] of cases) {
+      const d = winDeps(registry, opts)
+      expect(await openSuiteOrExternal('http://127.0.0.1:8000', d.deps)).toBe('browser')
+      expect(d.openExternal).toHaveBeenCalledWith('http://127.0.0.1:8000')
+    }
+  })
+
+  it('Atelier Cuisine et adresses hors suite : navigateur, registre jamais lu', async () => {
     const d = winDeps({})
     expect(await openSuiteOrExternal('https://atelier-cuisine-iota.vercel.app', d.deps)).toBe(
       'browser',
@@ -261,23 +288,13 @@ describe('Windows : lanceur enregistré dans HKCU\\Software\\Atelier\\Apps (§9.
     expect(d.reads).toEqual([])
   })
 
-  it('commande de démarrage selon le type de lanceur', () => {
-    const env = { SystemRoot: 'C:\\Windows' }
-    expect(windowsLaunchCommand('C:\\A b\\viz.vbs', env)).toEqual({
-      file: 'C:\\Windows\\System32\\wscript.exe',
-      args: ['C:\\A b\\viz.vbs'],
-      windowsHide: false,
+  it('sortie du registre : JSON, BOM toléré ; lanceur vide → rien', () => {
+    expect(parseRegistryOutput('\uFEFF{"lanceur":"C:\\\\a.lnk","path":"C:\\\\W"}')).toEqual({
+      launcher: 'C:\\a.lnk',
+      systemPath: 'C:\\W',
     })
-    expect(windowsLaunchCommand('C:\\Users\\Fr ançois\\nexus.cmd', env)).toEqual({
-      file: 'C:\\Windows\\System32\\cmd.exe',
-      args: ['/d', '/c', 'C:\\Users\\Fr ançois\\nexus.cmd'],
-      windowsHide: true,
-    })
-    // cmd.exe interpréterait ces caractères : refusé.
-    expect(windowsLaunchCommand('C:\\A&B\\x.cmd', env)).toBeNull()
-    expect(windowsLaunchCommand('C:\\%PATH%\\x.bat', env)).toBeNull()
-    expect(windowsLaunchCommand('C:\\x\\"y".exe', env)).toBeNull()
-    expect(windowsLaunchCommand('relatif\\x.exe', env)).toBeNull()
-    expect(windowsLaunchCommand('C:\\x\\y.lnk', env)).toBeNull()
+    expect(parseRegistryOutput('{"lanceur":"","path":""}')).toBeNull()
+    expect(parseRegistryOutput('pas du JSON')).toBeNull()
+    expect(isUsableLauncher('\\\\serveur\\partage\\x.lnk')).toBe(true)
   })
 })
