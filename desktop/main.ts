@@ -18,7 +18,7 @@
  * - Interface : politique de contenu (`connect-src` limité à cette machine, `csp.ts`).
  * - Suite Atelier : ouverture des autres applications ; route de santé sur 127.0.0.1:4175 (§3).
  */
-import { execFile } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -192,14 +192,37 @@ handle('export:save', (_event, filename: unknown, content: unknown) => {
 // Suite Atelier
 // ---------------------------------------------------------------------------
 
-// Ouvre une autre application de la suite : l'app de bureau installée (macOS, `open -b`),
-// sinon le navigateur par défaut (docs/SUITE.md §3). Surface IPC volontairement étroite :
+// Ouvre une autre application de la suite : l'app de bureau installée (macOS `open -b` ; Windows :
+// lanceur enregistré dans HKCU\Software\Atelier\Apps), sinon le navigateur par défaut
+// (docs/SUITE.md §3, §9.4), avec un environnement minimal. Surface IPC volontairement étroite :
 // http(s) vers 127.0.0.1 / localhost, ou une app en ligne de la suite reconnue par
 // `suiteBundleFor` (Atelier Cuisine : https, hôte exact). Aucune requête n'y est faite.
 // L'adresse de Tab lui-même (4175) ramène sa fenêtre : ni `open -b`, ni navigateur.
 const openSuiteUrl = (url: string) =>
   openSuiteOrExternal(url, {
-    execFile,
+    execFile: (file, args, options, callback) =>
+      execFile(file, args, { ...options, encoding: 'utf8' }, (error, stdout) =>
+        callback(error, stdout),
+      ),
+    spawnDetached: (file, args, { env, windowsHide }) =>
+      new Promise((resolve) => {
+        try {
+          // Console masquée (.cmd) : pas de processus détaché, qui ouvrirait une console à lui.
+          const child = spawn(file, args, {
+            env,
+            windowsHide,
+            detached: !windowsHide,
+            stdio: 'ignore',
+          })
+          child.once('error', () => resolve(false))
+          child.once('spawn', () => {
+            child.unref()
+            resolve(true)
+          })
+        } catch {
+          resolve(false)
+        }
+      }),
     openExternal: (u) => shell.openExternal(u),
     platform: process.platform,
     self: { bundleId: SUITE_BUNDLES['4175'] ?? 'fr.atelier.tab', focus: focusMainWindow },
