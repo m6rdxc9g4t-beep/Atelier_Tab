@@ -41,3 +41,11 @@ Contraintes propres à Tab :
 - `npm run app:install` n'est à relancer que si le dépôt change de place ou si Electron change de version. `npm run app:update` fait la mise à jour depuis le terminal (même logique).
 - L'app construite par la CI pointe vers le dépôt de la CI : elle ne se distribue plus (l'archive téléchargeable est retirée). La distribution à d'autres personnes demanderait un empaquetage complet et signé (ADR 0002).
 - Si Electron change de version dans le lockfile, l'app continue avec la sienne jusqu'au prochain `npm run app:install` (avertissement dans le journal et sur l'écran de démarrage).
+
+## Complément (Windows, docs/SUITE.md §9)
+
+- Même lanceur et mêmes décisions sous Windows : `decision.cjs` connaît les chemins, le PATH et les gestionnaires de Node.js de Windows ; `Atelier_Tab.exe` (electron-builder, cible `dir`) est installé par `scripts/windows/install.ps1` dans `%LOCALAPPDATA%\Programs\Atelier_Tab`. Pas d'installateur NSIS : il faudrait le signer, et l'installation doit de toute façon pointer vers ce dépôt.
+- npm est lancé par `node.exe npm-cli.js` (aucun `.cmd`, donc aucun shell) ; remplacements réessayés quand un fichier est occupé ; journal `%LOCALAPPDATA%\Atelier_Tab\Logs\mise-a-jour.log`.
+- `node_modules` est mis de côté avant `npm ci` et remis en place en cas d'échec (§8.4), sur toutes les plateformes.
+- Mode `--atelier-mise-a-jour-seule` : la mise à jour sans fenêtre, puis un code de sortie (CI Windows).
+- Serveur MCP Windows : `resources\atelier-mcp.cmd` (chemin stable) → `Atelier_Tab.exe resources\atelier-mcp.cjs` avec `ELECTRON_RUN_AS_NODE=1`. Claude Code est branché directement sur l'exécutable (`--env ELECTRON_RUN_AS_NODE=1`) : il ne passe pas par `cmd.exe`.

@@ -148,6 +148,28 @@ npm run app:update (desktop/launcher/cli.cjs) : même mise à jour depuis le ter
 - Le lanceur charge le processus principal compilé avant `ready` (protocole `app://atelier` privilégié) : une mise à jour se termine donc par une relance de l'app, jamais par un chargement tardif. `app.isPackaged` reste vrai : `mcpInfo()` désigne toujours `Contents/Resources/atelier-mcp`. Après une mise à jour, `ui-cache.ts` vide le cache de l'interface (empreinte d'`index.html`).
 - Tests : `desktop/__tests__/launcher-decision.test.ts` (pur), `launcher-update.test.ts` (faux dépôt git + faux npm : première mise à jour, commit, lockfile, modification locale, échecs, verrou, lancements simultanés), `launcher-main.test.ts` (faux Electron : lancement direct, écran, relance, choix après échec), `launcher-packaging.test.ts` (configuration electron-builder, écran de démarrage, script `atelier-mcp` exécuté).
 
+### Windows
+
+Contrat : docs/SUITE.md §9. Même lanceur, même logique de décision ; seuls changent les emplacements, la recherche des outils et l'installation.
+
+```text
+scripts/windows/install.ps1 (npm run app:install) : prérequis → desktop/launcher/cli.cjs (première mise à jour)
+  → npm run app:build (electron-builder --dir : release/win-unpacked) → %LOCALAPPDATA%\Programs\Atelier_Tab
+  → raccourcis (menu Démarrer › Atelier, Bureau) → HKCU\Software\Atelier\Apps\tab (Lanceur, Nom) → Claude Code
+Atelier_Tab.exe (application graphique : aucune console) ─ resources\app.asar : stub.cjs → dépôt (comme sur macOS)
+resources\atelier-mcp.cmd ─▶ Atelier_Tab.exe resources\atelier-mcp.cjs (ELECTRON_RUN_AS_NODE=1)
+                            ─▶ <dépôt>\dist-desktop\atelier-mcp.mjs
+Atelier_Tab.exe --atelier-mise-a-jour-seule : mise à jour sans fenêtre, puis code de sortie (CI)
+```
+
+- **Lanceur** : l'exécutable d'electron-builder (cible `dir`, sans installateur NSIS ni signature), copié dans `%LOCALAPPDATA%\Programs\Atelier_Tab`. C'est une application graphique Windows : aucun `.vbs` ni `wscript` n'est nécessaire pour éviter la console, et l'icône (`build/icon.ico`) est celle de la fenêtre, de la barre des tâches et des raccourcis. Electron est copié avec l'app, comme sur macOS (un `npm ci` peut vider `node_modules` pendant que l'app tourne).
+- **Emplacements** : `appDirs` (`decision.cjs`) est la seule source des dossiers hors données — macOS inchangé, Windows `%APPDATA%\Atelier_Tab` (préférences, secrets) et `%LOCALAPPDATA%\Atelier_Tab\Logs` (journal), Linux XDG. Données : `%USERPROFILE%\Atelier_Tab` (`os.homedir()`), ou `ATELIER_TAB_DATA`.
+- **Outils** : PATH Windows (`;`, guillemets, casse, clé `Path`) ; Node.js dans le dossier retenu, PATH, `%NVM_SYMLINK%`, `%ProgramFiles%\nodejs`, `%LOCALAPPDATA%\Programs\nodejs`, fnm, nvm-windows, Volta ; git dans PATH puis Git for Windows. npm est lancé par `node.exe …\node_modules\npm\bin\npm-cli.js` — jamais `npm.cmd`, qui imposerait `cmd.exe` et une ligne de commande à échapper. Sous-processus sans console (`windowsHide`, pas de `detached`), arrêtés par `taskkill /T`.
+- **Fichiers verrouillés** : un fichier ouvert ne se renomme pas sous Windows (antivirus compris). Les renommages de `dist/`, `dist-desktop/` et `node_modules` sont réessayés (`renameWithRetry`) ; l'ancienne compilation n'est supprimée qu'ensuite et, si elle ne peut pas l'être, au remplacement suivant ; un remplacement impossible remet tout en place et le lancement suivant recommence. La mise à jour a lieu avant que l'app charge ces fichiers (le verrou d'instance empêche qu'elle tourne déjà) ; le serveur MCP ne garde aucun fichier ouvert après son chargement.
+- **Fins de ligne** : `.gitattributes` (`eol=lf`, scripts Windows en CRLF, binaires) : un clone Windows ne paraît jamais modifié, sinon chaque lancement recompilerait.
+- **Variables héritées** (§9.4) : au lancement, `ELECTRON_RUN_AS_NODE`, `ELECTRON_NO_ASAR`, `NODE_OPTIONS` et `NODE_ENV` sont oubliées (relance, `npm ci` ou compilation cassés sinon) ; `ATELIER_TAB_DATA` reste la variable de Tab. Pour ouvrir une autre app, `suite-launch.ts` lit son lanceur dans `HKCU\Software\Atelier\Apps\<app>` par PowerShell (script fixe, clé en variable, sortie UTF-8) et le démarre sans shell avec un environnement minimal (`minimalEnv`, aussi utilisé par `open -b` sur macOS).
+- **CI** : `.github/workflows/windows.yml` (§9.5) — tests, compilations, `install.ps1 -SansBureau` dans un profil temporaire au chemin accentué, lanceur en mode « mise à jour seule » (rien à refaire, recompilation après une modification locale, puis plus rien), serveur MCP (`.cmd` et exécutable), démarrage réel, réparation sous PowerShell 7, désinstallation qui garde les données.
+
 ## Décisions
 
 Les choix structurants sont consignés dans [`adr/`](adr/).
