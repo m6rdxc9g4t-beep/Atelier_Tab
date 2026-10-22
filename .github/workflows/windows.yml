@@ -34,7 +34,11 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run typecheck
-      - run: npm test
+      - name: npm test
+        run: npm test -- --reporter=default --reporter=json --outputFile.json=vitest-resultats.json
+      - name: Tests en échec (annotation)
+        if: failure()
+        run: node scripts/ci-test-failures.mjs vitest-resultats.json
       - run: npm run build
       - run: npm run build:desktop
 

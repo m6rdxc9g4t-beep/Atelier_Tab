@@ -34,3 +34,4 @@ dist-desktop
 dist-launcher
 # Mise à jour automatique (ADR 0005) : tampon, verrou, compilation en cours
 .mise-a-jour
+vitest-resultats.json
