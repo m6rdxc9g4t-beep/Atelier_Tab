@@ -8,6 +8,10 @@ import {
   FLAG_SKIP_UPDATE,
   LOGIN_PATH_COMMAND,
   appDirs,
+  claudeMcpAddArgs,
+  claudeMcpAddCommand,
+  mcpServerCommand,
+  windowsInstallDir,
   candidateGitDirs,
   candidateNodeDirs,
   candidateNodeDirsWin32,
@@ -353,6 +357,63 @@ describe('Node.js et git sous Windows (§9.3)', () => {
   it('PATH : clé Path de Windows lue et remplacée sans doublon de casse', () => {
     expect(envPathValue({ Path: 'C:\\a' })).toBe('C:\\a')
     expect(withPath({ Path: 'C:\\a', X: '1' }, 'C:\\b')).toEqual({ X: '1', PATH: 'C:\\b' })
+  })
+})
+
+describe('serveur MCP livré et Claude Code', () => {
+  it('macOS : script atelier-mcp, commande inchangée', () => {
+    const server = mcpServerCommand({
+      platform: 'darwin',
+      resourcesPath: '/Applications/Atelier_Tab.app/Contents/Resources',
+      exePath: '/Applications/Atelier_Tab.app/Contents/MacOS/Atelier_Tab',
+    })
+    expect(server.file).toBe('/Applications/Atelier_Tab.app/Contents/Resources/atelier-mcp')
+    expect(claudeMcpAddArgs(server)).toEqual([
+      'mcp',
+      'add',
+      '--scope',
+      'user',
+      'atelier-tab',
+      '--',
+      '/Applications/Atelier_Tab.app/Contents/Resources/atelier-mcp',
+    ])
+    expect(claudeMcpAddCommand(server)).toBe(
+      'claude mcp add --scope user atelier-tab -- "/Applications/Atelier_Tab.app/Contents/Resources/atelier-mcp"',
+    )
+  })
+
+  it('Windows : %LOCALAPPDATA%\\Programs\\Atelier_Tab, exe + atelier-mcp.cjs, ELECTRON_RUN_AS_NODE', () => {
+    const dir = windowsInstallDir({
+      home: 'C:\\Users\\François Pichon',
+      env: { LOCALAPPDATA: 'C:\\Users\\François Pichon\\AppData\\Local' },
+    })
+    expect(dir).toBe('C:\\Users\\François Pichon\\AppData\\Local\\Programs\\Atelier_Tab')
+    const server = mcpServerCommand({
+      platform: 'win32',
+      resourcesPath: `${dir}\\resources`,
+      exePath: `${dir}\\Atelier_Tab.exe`,
+    })
+    expect(server).toEqual({
+      file: `${dir}\\resources\\atelier-mcp.cmd`,
+      command: `${dir}\\Atelier_Tab.exe`,
+      args: [`${dir}\\resources\\atelier-mcp.cjs`],
+      env: { ELECTRON_RUN_AS_NODE: '1' },
+    })
+    // `--env` jamais suivi du nom du serveur (Claude Code le lirait comme une variable).
+    const args = claudeMcpAddArgs(server)
+    expect(args.slice(0, 9)).toEqual([
+      'mcp',
+      'add',
+      '--env',
+      'ELECTRON_RUN_AS_NODE=1',
+      '--transport',
+      'stdio',
+      '--scope',
+      'user',
+      'atelier-tab',
+    ])
+    expect(args.slice(9)).toEqual(['--', server.command, ...server.args])
+    expect(claudeMcpAddCommand(server)).toContain(`-- "${dir}\\Atelier_Tab.exe" "${dir}`)
   })
 })
 

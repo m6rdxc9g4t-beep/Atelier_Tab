@@ -21,9 +21,9 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "app": "npm run build && npm run build:desktop && node scripts/ensure-electron.mjs && electron .",
-    "app:build": "node scripts/build-launcher.mjs && electron-builder --mac --dir",
+    "app:build": "node scripts/build-launcher.mjs && electron-builder --dir",
     "app:update": "node desktop/launcher/cli.cjs",
-    "app:install": "npm run app:build && node scripts/install-mac.mjs",
+    "app:install": "node scripts/app-install.mjs",
     "build:desktop": "node scripts/build-desktop.mjs",
     "ai:connect": "node scripts/connect-claude.mjs",
     "mcp": "npm run build:desktop && node dist-desktop/atelier-mcp.mjs"
@@ -104,6 +104,26 @@
       ],
       "icon": "build/icon.png",
       "category": "Office"
+    },
+    "win": {
+      "target": [
+        "dir"
+      ],
+      "icon": "build/icon.ico",
+      "extraResources": [
+        {
+          "from": "desktop/bin/atelier-mcp.cmd",
+          "to": "atelier-mcp.cmd"
+        },
+        {
+          "from": "desktop/bin/atelier-mcp.cjs",
+          "to": "atelier-mcp.cjs"
+        },
+        {
+          "from": "build/icon.ico",
+          "to": "icon.ico"
+        }
+      ]
     },
     "extraResources": [
       {

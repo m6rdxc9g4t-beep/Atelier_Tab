@@ -1,6 +1,8 @@
 /**
  * Vérifie qu'un lanceur MCP répond : liste ses outils et lit une table.
- * Usage : node scripts/check-mcp.mjs <lanceur> [dossier de données]
+ * Usage : node scripts/check-mcp.mjs <lanceur> [dossier de données] [-- arguments du lanceur…]
+ * Windows : le lanceur peut être un `.cmd` (`resources\atelier-mcp.cmd`, lancé comme le ferait un
+ * client MCP) ou `Atelier_Tab.exe` suivi de `-- resources\atelier-mcp.cjs` (avec ELECTRON_RUN_AS_NODE=1).
  */
 import { mkdtempSync, readFileSync } from 'node:fs'
 import os from 'node:os'
@@ -8,10 +10,15 @@ import path from 'node:path'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 
+const argv = process.argv.slice(2)
+const sep = argv.indexOf('--')
+const launcherArgs = sep >= 0 ? argv.slice(sep + 1) : []
 const [launcher, dataDir = mkdtempSync(path.join(os.tmpdir(), 'atelier-check-'))] =
-  process.argv.slice(2)
+  sep >= 0 ? argv.slice(0, sep) : argv
 if (!launcher) {
-  console.error('Usage : node scripts/check-mcp.mjs <lanceur> [dossier de données]')
+  console.error(
+    'Usage : node scripts/check-mcp.mjs <lanceur> [dossier de données] [-- arguments du lanceur…]',
+  )
   process.exit(2)
 }
 
@@ -19,7 +26,7 @@ const client = new Client({ name: 'check-mcp', version: '1.0.0' })
 await client.connect(
   new StdioClientTransport({
     command: launcher,
-    args: [],
+    args: launcherArgs,
     env: { ...process.env, ATELIER_TAB_DATA: dataDir },
   }),
 )

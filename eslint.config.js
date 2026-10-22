@@ -21,7 +21,7 @@ export default defineConfig([
   },
   {
     // Lanceur de l'app installée : CommonJS exécuté tel quel (ADR 0005).
-    files: ['desktop/launcher/*.cjs'],
+    files: ['desktop/launcher/*.cjs', 'desktop/bin/*.cjs'],
     extends: [js.configs.recommended],
     languageOptions: {
       sourceType: 'commonjs',

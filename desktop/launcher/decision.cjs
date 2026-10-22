@@ -625,8 +625,85 @@ function tailLines(text, count) {
     .join('\n')
 }
 
+// ---------------------------------------------------------------------------
+// Installation Windows et serveur MCP livré
+// ---------------------------------------------------------------------------
+
+/**
+ * Dossier d'installation du lanceur sous Windows (docs/SUITE.md §9.1) :
+ * `%LOCALAPPDATA%\Programs\Atelier_Tab` (installation pour l'utilisateur, sans droits
+ * d'administrateur). L'exécutable est `Atelier_Tab.exe`, le serveur MCP dans `resources\`.
+ * @param {{ home: string, env: Record<string, string | undefined> }} input
+ */
+function windowsInstallDir({ home, env }) {
+  const local = env.LOCALAPPDATA || path.win32.join(home, 'AppData', 'Local')
+  return path.win32.join(local, 'Programs', 'Atelier_Tab')
+}
+
+/**
+ * Serveur MCP livré avec l'app installée (ADR 0005) :
+ * - macOS / Linux : script `atelier-mcp` des ressources (il lance le Node.js d'Electron) ;
+ * - Windows : `Atelier_Tab.exe resources\atelier-mcp.cjs` avec `ELECTRON_RUN_AS_NODE=1`, lancé
+ *   sans shell ; `resources\atelier-mcp.cmd` fait de même pour les outils qui attendent un seul
+ *   fichier (Nexus : `TAB_MCP_COMMAND`).
+ * `file` est le chemin stable à documenter ; `command` + `args` + `env`, ce que lance un client MCP.
+ * @param {{ platform: string, resourcesPath: string, exePath: string }} input
+ * @returns {{ file: string, command: string, args: string[], env: Record<string, string> }}
+ */
+function mcpServerCommand({ platform, resourcesPath, exePath }) {
+  if (isWin(platform)) {
+    return {
+      file: path.win32.join(resourcesPath, 'atelier-mcp.cmd'),
+      command: exePath,
+      args: [path.win32.join(resourcesPath, 'atelier-mcp.cjs')],
+      env: { ELECTRON_RUN_AS_NODE: '1' },
+    }
+  }
+  const file = path.posix.join(resourcesPath, 'atelier-mcp')
+  return { file, command: file, args: [], env: {} }
+}
+
+/**
+ * Arguments de `claude mcp add` (portée « user ») pour le serveur MCP livré. Avec des variables,
+ * `--env` n'est jamais suivi du nom du serveur (Claude Code le lirait comme une autre variable).
+ * @param {{ command: string, args: string[], env: Record<string, string> }} server
+ * @returns {string[]}
+ */
+function claudeMcpAddArgs(server) {
+  const env = Object.entries(server.env).flatMap(([k, v]) => ['--env', `${k}=${v}`])
+  return [
+    'mcp',
+    'add',
+    ...env,
+    ...(env.length > 0 ? ['--transport', 'stdio'] : []),
+    '--scope',
+    'user',
+    'atelier-tab',
+    '--',
+    server.command,
+    ...server.args,
+  ]
+}
+
+/**
+ * Commande `claude mcp add …` à copier dans un terminal (affichée par l'app et le README) : chaque
+ * argument du serveur entre guillemets (chemins avec espaces), valable dans PowerShell, cmd et zsh.
+ * @param {{ command: string, args: string[], env: Record<string, string> }} server
+ */
+function claudeMcpAddCommand(server) {
+  const args = claudeMcpAddArgs(server)
+  const sep = args.indexOf('--')
+  return ['claude', ...args.slice(0, sep + 1), ...args.slice(sep + 1).map((a) => `"${a}"`)].join(
+    ' ',
+  )
+}
+
 module.exports = {
   BUILD_DIRS,
+  claudeMcpAddArgs,
+  claudeMcpAddCommand,
+  mcpServerCommand,
+  windowsInstallDir,
   FLAG_UPDATE_ONLY,
   IGNORED_INHERITED_ENV,
   appDirs,

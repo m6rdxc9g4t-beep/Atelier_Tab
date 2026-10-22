@@ -70,6 +70,7 @@ import { toolSchemas } from '@/ai/tools'
 import { cacheControlFor, uiBuildStamp, uiChangedSinceLastLaunch } from './ui-cache'
 import { buildRelayRequest } from './suite-relay'
 import { openSuiteOrExternal, SUITE_BUNDLES, suiteBundleFor } from './suite-launch'
+import { claudeMcpAddCommand, mcpServerCommand } from './launcher/decision.cjs'
 
 /** Nom affiché (menus, titre, boîtes de dialogue). Le dossier de données reste ~/Atelier_Tab. */
 const APP_NAME = 'Atelier Tab'
@@ -362,13 +363,27 @@ handle('claude:cancel', (_event, id: unknown) => claude.cancel(id))
 // ---------------------------------------------------------------------------
 
 function mcpInfo(): McpInfo {
-  const launcher = app.isPackaged
-    ? path.join(process.resourcesPath, 'atelier-mcp')
-    : path.join(__dirname, '..', 'desktop', 'bin', 'atelier-mcp-dev')
-  return {
-    launcher,
-    claudeCommand: `claude mcp add --scope user atelier-tab -- "${launcher}"`,
-  }
+  // App installée : serveur livré dans les ressources (macOS `atelier-mcp` ; Windows
+  // `Atelier_Tab.exe resources\atelier-mcp.cjs`, chemin stable `resources\atelier-mcp.cmd`).
+  // Développement : serveur compilé du dépôt.
+  const server = app.isPackaged
+    ? mcpServerCommand({
+        platform: process.platform,
+        resourcesPath: process.resourcesPath,
+        exePath: process.execPath,
+      })
+    : process.platform === 'win32'
+      ? {
+          file: path.join(__dirname, 'atelier-mcp.mjs'),
+          command: 'node',
+          args: [path.join(__dirname, 'atelier-mcp.mjs')],
+          env: {},
+        }
+      : (() => {
+          const file = path.join(__dirname, '..', 'desktop', 'bin', 'atelier-mcp-dev')
+          return { file, command: file, args: [], env: {} }
+        })()
+  return { launcher: server.file, claudeCommand: claudeMcpAddCommand(server) }
 }
 
 handle('mcp:info', () => mcpInfo())

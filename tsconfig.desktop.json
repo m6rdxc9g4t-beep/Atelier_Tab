@@ -25,5 +25,5 @@
     "allowJs": true,
     "checkJs": true
   },
-  "include": ["desktop/**/*.ts", "desktop/launcher/*.cjs"]
+  "include": ["desktop/**/*.ts", "desktop/launcher/*.cjs", "desktop/bin/*.cjs"]
 }
