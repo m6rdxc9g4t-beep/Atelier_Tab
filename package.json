@@ -21,7 +21,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "app": "npm run build && npm run build:desktop && node scripts/ensure-electron.mjs && electron .",
-    "app:build": "npm run build && npm run build:desktop && electron-builder --mac --dir",
+    "app:build": "node scripts/build-launcher.mjs && electron-builder --mac --dir",
+    "app:update": "node desktop/launcher/cli.cjs",
     "app:install": "npm run app:build && node scripts/install-mac.mjs",
     "build:desktop": "node scripts/build-desktop.mjs",
     "ai:connect": "node scripts/connect-claude.mjs",
@@ -76,12 +77,13 @@
       "buildResources": "build"
     },
     "files": [
-      "dist/**/*",
-      "dist-desktop/main.cjs",
-      "dist-desktop/preload.cjs",
+      "desktop/launcher/stub.cjs",
       "package.json",
       "!node_modules/**/*"
     ],
+    "extraMetadata": {
+      "main": "desktop/launcher/stub.cjs"
+    },
     "asar": true,
     "afterPack": "scripts/adhoc-sign.cjs",
     "mac": {
@@ -105,8 +107,8 @@
     },
     "extraResources": [
       {
-        "from": "dist-desktop/atelier-mcp.mjs",
-        "to": "atelier-mcp.mjs"
+        "from": "dist-launcher/atelier-repo",
+        "to": "atelier-repo"
       },
       {
         "from": "desktop/bin/atelier-mcp",

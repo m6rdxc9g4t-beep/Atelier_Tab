@@ -10,9 +10,12 @@ on:
       - 'build/**'
       - 'package.json'
       - 'package-lock.json'
+      - 'vite.config.ts'
       - '.github/workflows/desktop.yml'
   workflow_dispatch:
 
+# L'app installée est un lanceur qui exécute le code du dépôt (ADR 0005) : elle ne se distribue pas
+# telle quelle (elle pointe vers ce dépôt), d'où l'absence d'archive à télécharger.
 jobs:
   build-macos:
     runs-on: macos-latest
@@ -23,17 +26,30 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Construire Atelier_Tab.app
+      - name: Construire le lanceur Atelier_Tab.app
         run: npm run app:build
+      - name: Première mise à jour (compilation du dépôt)
+        run: npm run app:update
+      - name: Mise à jour après une modification locale, puis retour au commit
+        run: |
+          echo "" >> README.md
+          npm run app:update | tee maj.log
+          grep -q "compilé" maj.log
+          git checkout README.md
+          npm run app:update | tee maj.log
+          grep -q "compilé" maj.log
+          npm run app:update | tee maj.log
+          grep -q "déjà à jour" maj.log
       - name: Vérifier la signature ad hoc
         run: |
           APP=$(ls -d release/mac*/Atelier_Tab.app | head -1)
           echo "APP=$APP" >> "$GITHUB_ENV"
           codesign --verify --deep --strict --verbose=2 "$APP"
           codesign -dv "$APP" 2>&1 | grep -E 'Signature=adhoc|Identifier'
-      - name: Vérifier le serveur MCP livré dans l'app
+          grep -qxF "$(pwd -P)" "$APP/Contents/Resources/atelier-repo"
+      - name: Vérifier le serveur MCP livré dans l'app (celui du dépôt)
         run: node scripts/check-mcp.mjs "$APP/Contents/Resources/atelier-mcp"
-      - name: Démarrer l'application
+      - name: Démarrer l'application (lancement direct, sans mise à jour)
         run: |
           "$APP/Contents/MacOS/Atelier_Tab" > app.log 2>&1 &
           PID=$!
@@ -42,11 +58,8 @@ jobs:
             echo "L'application s'est arrêtée au démarrage :"; cat app.log; exit 1
           fi
           kill "$PID"
+          LOG_FILE="$HOME/Library/Logs/Atelier_Tab/mise-a-jour.log"
+          if ! tail -1 "$LOG_FILE" | grep -q "À jour : lancement direct."; then
+            echo "Le lanceur aurait dû ouvrir l'app sans mise à jour :"; cat "$LOG_FILE"; exit 1
+          fi
           echo "Démarrage OK"
-      - name: Archiver l'application
-        run: ditto -c -k --keepParent "$APP" Atelier_Tab-macos.zip
-      - uses: actions/upload-artifact@v4
-        with:
-          name: Atelier_Tab-macos
-          path: Atelier_Tab-macos.zip
-          retention-days: 7
