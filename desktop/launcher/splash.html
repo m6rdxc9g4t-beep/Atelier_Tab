@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="fr" data-atelier-app="tab">
+  <head>
+    <meta charset="utf-8" />
+    <!-- Page locale de l'écran de démarrage (desktop/launcher/main.cjs) : ni réseau, ni pont, ni IPC. -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src 'self' 'unsafe-inline'; font-src 'self'; script-src 'unsafe-inline'"
+    />
+    <title>Atelier Tab</title>
+    <link rel="stylesheet" href="../../src/styles/atelier-brand/atelier-brand.css" />
+    <script>
+      // Thème du système (docs/SUITE.md §1.5 : classe `dark` et `data-theme`).
+      ;(function () {
+        var root = document.documentElement
+        var dark = matchMedia('(prefers-color-scheme: dark)').matches
+        root.classList.toggle('dark', dark)
+        root.setAttribute('data-theme', dark ? 'dark' : 'light')
+      })()
+    </script>
+    <style>
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+      }
+      body {
+        display: grid;
+        place-items: center;
+        background: var(--atelier-backdrop), var(--atelier-bg);
+        background-attachment: fixed;
+        color: var(--atelier-text);
+        font:
+          14px/1.5 ui-sans-serif,
+          system-ui,
+          -apple-system,
+          'SF Pro Text',
+          'Segoe UI',
+          Roboto,
+          sans-serif;
+        -webkit-user-select: none;
+        user-select: none;
+      }
+      main {
+        width: min(480px, calc(100% - 48px));
+        text-align: center;
+      }
+      h1 {
+        margin: 16px 0 2px;
+        font-family: var(--atelier-brand-font, inherit);
+        font-size: 20px;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+      }
+      .title {
+        margin: 0;
+        font-weight: 600;
+      }
+      .step {
+        margin: 6px 0 0;
+        color: var(--atelier-muted);
+        font-size: 12px;
+        min-height: 1.5em;
+      }
+      .detail {
+        margin: 2px 0 0;
+        min-height: 1.5em;
+      }
+      .hint {
+        margin: 12px 0 0;
+        color: var(--atelier-muted);
+        font-size: 12px;
+      }
+      .ring {
+        width: 34px;
+        height: 34px;
+        margin: 0 auto;
+        border-radius: 50%;
+        border: 3px solid var(--atelier-line);
+        border-top-color: var(--atelier-signature);
+        box-shadow: var(--atelier-signature-glow, none);
+        animation: spin 0.9s linear infinite;
+      }
+      [data-phase='error'] .ring,
+      [data-phase='done'] .ring {
+        animation: none;
+        border-color: var(--atelier-signature);
+      }
+      [data-phase='error'] .ring {
+        border-color: var(--atelier-line);
+      }
+      pre {
+        display: none;
+        max-height: 110px;
+        overflow: auto;
+        margin: 12px 0 0;
+        padding: 8px 10px;
+        text-align: left;
+        font:
+          11px/1.4 ui-monospace,
+          'SF Mono',
+          Menlo,
+          monospace;
+        white-space: pre-wrap;
+        word-break: break-word;
+        border: 1px solid var(--atelier-line);
+        border-radius: 8px;
+        background: var(--atelier-field, transparent);
+        -webkit-user-select: text;
+        user-select: text;
+      }
+      [data-phase='error'] pre.filled {
+        display: block;
+      }
+      .log {
+        margin: 8px 0 0;
+        color: var(--atelier-muted);
+        font-size: 11px;
+        word-break: break-all;
+        -webkit-user-select: text;
+        user-select: text;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .ring {
+          animation-duration: 3s;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main id="splash" data-phase="progress">
+      <div class="ring" aria-hidden="true"></div>
+      <h1>ATELIER TAB</h1>
+      <p class="title" id="title" role="status">Démarrage…</p>
+      <p class="step" id="step"></p>
+      <p class="detail" id="detail"></p>
+      <p class="hint" id="hint"></p>
+      <pre id="tail"></pre>
+      <p class="log" id="log"></p>
+    </main>
+    <script>
+      // Appelé par le lanceur (executeJavaScript) ; textes posés en textContent, jamais en HTML.
+      window.atelierSplash = function (state) {
+        var set = function (id, text) {
+          document.getElementById(id).textContent = text || ''
+        }
+        document.getElementById('splash').setAttribute('data-phase', state.phase || 'progress')
+        set('title', state.title)
+        set('step', state.step)
+        set('detail', state.detail)
+        set('hint', state.hint)
+        set('tail', state.tail)
+        var tail = document.getElementById('tail')
+        tail.className = state.tail ? 'filled' : ''
+        tail.scrollTop = tail.scrollHeight
+        set('log', state.log ? 'Journal : ' + state.log : '')
+      }
+    </script>
+  </body>
+</html>
