@@ -112,6 +112,8 @@ function runGit(git, repo, args) {
       stdio: ['ignore', 'pipe', 'ignore'],
       timeout: 20_000,
       maxBuffer: 64 * 1024 * 1024,
+      // Windows : git.exe lancé depuis l'app (graphique) ouvrirait une console à chaque lancement.
+      windowsHide: true,
     })
   } catch {
     return null
