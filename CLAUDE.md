@@ -38,6 +38,7 @@ Lancer les quatre vérifications avant tout commit.
 - **Mode en ligne** (§5.1) : `preferences.json` à côté du fichier de secrets, **hors** du dossier de données ; écrit seulement par le processus principal (IPC `prefs:set-online`, interrupteur de l'en-tête). Jamais dans `atelier.json` (une ancienne valeur y est ignorée). Aucun outil d'IA ne passe en ligne.
 - Route de santé (`desktop/health-server.ts`) : `127.0.0.1` seulement, deux routes, aucune donnée ; la fenêtre revient par `show()` / `focus()` (`desktop/window-focus.ts`), jamais `app.focus({ steal: true })`.
 - `desktop/` est du code Node (processus principal Electron, accès disque, serveur MCP), construit par `npm run build:desktop` dans `dist-desktop/`.
+- **Mise à jour automatique** (docs/SUITE.md §8, ADR 0005) : l'app installée est un lanceur du dépôt ; après un `git pull`, la relancer suffit. `desktop/launcher/*.cjs` n'est **jamais compilé** (CommonJS + JSDoc, vérifié par `checkJs`) : n'y importer que Node et Electron ; décisions pures dans `decision.cjs` (testées). `stub.cjs` est figé dans l'app : le modifier impose `npm run app:install`. Tout nouveau fichier compilé indispensable s'ajoute à `BUILD_OUTPUTS` ; un nouveau dossier de sortie, à `BUILD_DIRS` avec sa variable `ATELIER_TAB_*_DIR`. Jamais de `git pull` automatique ni d'écriture hors de `node_modules/`, `dist*/` et `.mise-a-jour/` ; le serveur MCP ne déclenche jamais de mise à jour.
 
 ## Suite Atelier
 

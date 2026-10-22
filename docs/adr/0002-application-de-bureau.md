@@ -30,3 +30,4 @@ Atelier_Tab doit pouvoir s'ouvrir comme une application Mac, d'un double-clic, s
 - L'app pèse ~250 Mo ; acceptable pour un outil personnel.
 - Pour distribuer l'app à d'autres personnes : compte Apple Developer, signature Developer ID et notarisation (configuration electron-builder à compléter).
 - Si la taille devient un problème, la migration vers Tauri ne touche que `electron/` et les scripts : l'interface reste la même.
+- Depuis l'[ADR 0005](0005-mise-a-jour-automatique.md), l'app installée est un lanceur qui exécute le code du dépôt et se met à jour toute seule après un `git pull`.

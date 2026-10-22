@@ -1,12 +1,38 @@
 #!/bin/sh
-# Serveur MCP d'Atelier_Tab, livré dans l'application.
-# Exécute le serveur avec le Node.js embarqué dans l'app : rien d'autre à installer.
+# Serveur MCP d'Atelier_Tab, livré dans l'application :
 #   macOS : Atelier_Tab.app/Contents/Resources/atelier-mcp
 #   Linux : <dossier de l'app>/resources/atelier-mcp
+# L'app installée est un lanceur (ADR 0005) : le serveur exécuté est celui du dépôt
+# (dist-desktop/atelier-mcp.mjs), dont le chemin est dans atelier-repo, à côté de ce script. Il est
+# compilé par la mise à jour automatique au lancement de l'app ; ce script n'en déclenche jamais.
+# Node.js : celui embarqué dans l'app (ELECTRON_RUN_AS_NODE), rien d'autre à installer.
 DIR="$(cd "$(dirname "$0")" && pwd)"
 if [ -x "$DIR/../MacOS/Atelier_Tab" ]; then
   BIN="$DIR/../MacOS/Atelier_Tab"
 else
   BIN="$DIR/../atelier-tab"
 fi
-ELECTRON_RUN_AS_NODE=1 exec "$BIN" "$DIR/atelier-mcp.mjs" "$@"
+
+REPO=""
+if [ -f "$DIR/atelier-repo" ]; then
+  REPO="$(cat "$DIR/atelier-repo")"
+fi
+SERVER="$REPO/dist-desktop/atelier-mcp.mjs"
+
+# Remplacement de la compilation en cours (renommage) : un court délai de grâce.
+if [ -n "$REPO" ] && [ ! -f "$SERVER" ]; then
+  sleep 1
+fi
+
+if [ -z "$REPO" ]; then
+  echo "Atelier_Tab : chemin du dépôt absent de l'application ($DIR/atelier-repo)." >&2
+  echo "Depuis le dépôt, relancez : npm run app:install" >&2
+  exit 1
+fi
+if [ ! -f "$SERVER" ]; then
+  echo "Atelier_Tab : le serveur MCP n'est pas compilé ($SERVER)." >&2
+  echo "Ouvrez Atelier_Tab une fois (mise à jour automatique), ou lancez « npm run app:update » dans le dépôt $REPO." >&2
+  exit 1
+fi
+
+ELECTRON_RUN_AS_NODE=1 exec "$BIN" "$SERVER" "$@"

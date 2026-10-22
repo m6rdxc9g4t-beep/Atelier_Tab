@@ -20,7 +20,10 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "erasableSyntaxOnly": true,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+    /* Lanceur de l'app installée (desktop/launcher/*.cjs) : CommonJS jamais compilé, vérifié ici. */
+    "allowJs": true,
+    "checkJs": true
   },
-  "include": ["desktop/**/*.ts"]
+  "include": ["desktop/**/*.ts", "desktop/launcher/*.cjs"]
 }

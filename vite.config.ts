@@ -21,6 +21,8 @@ export default defineConfig({
     },
   },
   // Ports de la Suite Atelier (docs/SUITE.md §2) : échec explicite en cas de conflit.
+  // Sortie : `dist/` ; la mise à jour automatique de l'app compile à côté puis remplace (ADR 0005).
+  build: { outDir: process.env.ATELIER_TAB_DIST_DIR || 'dist', emptyOutDir: true },
   server: { host: '127.0.0.1', port: 5175, strictPort: true },
   preview: { host: '127.0.0.1', port: 4175, strictPort: true },
   test: {

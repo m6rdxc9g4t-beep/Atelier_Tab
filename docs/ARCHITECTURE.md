@@ -85,7 +85,7 @@ Moteurs de l'assistant (docs/SUITE.md §5) :
 - Mode « En ligne » : **hors du dossier de données**, dans `preferences.json` à côté du fichier de secrets (`defaultPreferencesFile()`, `desktop/file-store.ts`). Écrit seulement par le processus principal (IPC `prefs:set-online`, appelé par l'interrupteur de l'en-tête via `setOnlineModeByUser`), lu par le `FileStore` (app et serveur MCP) et relu à chaque appel de Claude et chaque envoi webhook. Lecture prudente : absent, abîmé ou autre chose que `true` → hors ligne. Une ancienne valeur `preferences.onlineMode` dans `atelier.json` est acceptée à la lecture mais ignorée (et n'est plus écrite) ; une valeur reprise d'IndexedDB aussi (`withoutOnlineMode`). Le serveur MCP refuse d'exporter un fichier sur les préférences ou les secrets.
 - Politique de contenu de l'interface (`desktop/csp.ts`, en-tête posé par le protocole `app://`) : `connect-src 'self' http://127.0.0.1:* http://localhost:*`, scripts de l'app plus le script de thème d'`index.html` par empreinte SHA-256, ni cadre, ni objet, ni formulaire.
 
-Le serveur MCP est livré dans l'app (`Contents/Resources/atelier-mcp`) et s'exécute avec le Node.js d'Electron (`ELECTRON_RUN_AS_NODE`) : rien à installer. Voir [ADR 0003](adr/0003-acces-ia.md).
+Le serveur MCP est livré dans l'app (`Contents/Resources/atelier-mcp`) et s'exécute avec le Node.js d'Electron (`ELECTRON_RUN_AS_NODE`) : rien à installer. Ce script lance `dist-desktop/atelier-mcp.mjs` **du dépôt** (voir [Application de bureau](#application-de-bureau--mise-à-jour-automatique)). Voir [ADR 0003](adr/0003-acces-ia.md).
 
 ## Suite Atelier
 
@@ -119,6 +119,34 @@ serveur MCP ───┴────────▼
 - **Verrou** : `.lock` créé en exclusif (`wx`) avec `{ pid, host, at, token }` ; périmé si le processus n'existe plus (même machine) ou après 30 s : renommé (une seule reprise gagne) puis supprimé ; libéré seulement si le jeton est le nôtre. Réentrant ; version asynchrone (`withLockAsync`) pour un appel d'outil entier.
 - **Idempotence** (§7.4) : `runTool` compare l'empreinte (outil + entrée validée sans la clé) au registre : même clé + même entrée → réponse rejouée sans exécution ; autre entrée → `IDEMPOTENCY_KEY_REUSED`. Serveur MCP : un appel avec clé s'exécute sous le verrou, de la relecture des données à l'enregistrement de la clé (après les données). Assistant de l'app : registre en mémoire.
 - **Lecteurs** : rien dans `_atelier/` n'est une enveloppe DataFlow ; Viz et Nexus ne lisent que `exports/*.json`. Le nettoyage des instantanés (`SNAPSHOT_NAME`) et la surveillance du dossier (`FileStore.watch`, `atelier.json` et `tables/` seulement) ignorent le sous-dossier ; les exports MCP ne peuvent pas y écrire.
+
+## Application de bureau : mise à jour automatique
+
+Contrat : docs/SUITE.md §8, [ADR 0005](adr/0005-mise-a-jour-automatique.md). L'app installée est un **lanceur** : après un `git pull`, il suffit de la relancer.
+
+```text
+Atelier_Tab.app (Electron du dépôt, copié ; npm run app:install)
+  app.asar : desktop/launcher/stub.cjs ─ lit Contents/Resources/atelier-repo (chemin du dépôt)
+     │
+     ▼  dépôt
+desktop/launcher/main.cjs ── avant `ready`, ≈ 30 ms : planUpdate (update.cjs → decision.cjs)
+     │                         HEAD + fichiers modifiés + package-lock.json  vs  .mise-a-jour/tampon.json
+     ├─ à jour ──────────────▶ require(dist-desktop/main.cjs)  (processus principal habituel)
+     └─ à refaire ──▶ écran « Mise à jour… » (splash.html, sans IPC)
+                       verrou .mise-a-jour/verrou → npm ci ? → npm run build + build:desktop
+                       dans .mise-a-jour/compilation/ → renommage de dist/ et dist-desktop/ → tampon
+                       ├─ succès → app.relaunch (--atelier-apres-mise-a-jour) → chemin « à jour »
+                       └─ échec → journal + « Ouvrir quand même avec la version précédente »
+                                  (relance --atelier-sans-mise-a-jour), Réessayer, Quitter
+
+Contents/Resources/atelier-mcp ──▶ <dépôt>/dist-desktop/atelier-mcp.mjs (Node d'Electron ; jamais de mise à jour)
+npm run app:update (desktop/launcher/cli.cjs) : même mise à jour depuis le terminal
+```
+
+- `desktop/launcher/` est du CommonJS **jamais compilé** (il déclenche la compilation), vérifié par `tsc` (`checkJs`, JSDoc) et ESLint : `decision.cjs` (pur : que refaire, verrou périmé, dossiers où chercher Node.js, drapeaux de relance), `update.cjs` (état du dépôt, verrou, recherche de `node` / `npm` / `git` depuis le Finder, exécution, remplacement), `main.cjs` (Electron injecté), `stub.cjs` (seul fichier de l'app, stable), `cli.cjs`.
+- Sorties de compilation paramétrables : `ATELIER_TAB_DIST_DIR` (`vite.config.ts`) et `ATELIER_TAB_DESKTOP_DIR` (`scripts/build-desktop.mjs`). Sans elles, `npm run build` et `npm run app` écrivent comme avant dans `dist/` et `dist-desktop/`.
+- Le lanceur charge le processus principal compilé avant `ready` (protocole `app://atelier` privilégié) : une mise à jour se termine donc par une relance de l'app, jamais par un chargement tardif. `app.isPackaged` reste vrai : `mcpInfo()` désigne toujours `Contents/Resources/atelier-mcp`. Après une mise à jour, `ui-cache.ts` vide le cache de l'interface (empreinte d'`index.html`).
+- Tests : `desktop/__tests__/launcher-decision.test.ts` (pur), `launcher-update.test.ts` (faux dépôt git + faux npm : première mise à jour, commit, lockfile, modification locale, échecs, verrou, lancements simultanés), `launcher-main.test.ts` (faux Electron : lancement direct, écran, relance, choix après échec), `launcher-packaging.test.ts` (configuration electron-builder, écran de démarrage, script `atelier-mcp` exécuté).
 
 ## Décisions
 
