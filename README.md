@@ -42,19 +42,25 @@ npm install
 npm run app:install
 ```
 
-La commande construit `Atelier_Tab.app` puis la copie dans **Applications**. Elle est ensuite accessible depuis le Launchpad, Spotlight (⌘ Espace) ou le Dock. Relancer `npm run app:install` après un `git pull` met l'application à jour.
+La commande construit `Atelier_Tab.app`, compile le dépôt puis copie l'app dans **Applications** (une ancienne version est d'abord quittée puis remplacée). Elle est ensuite accessible depuis le Launchpad, Spotlight (⌘ Espace) ou le Dock.
+
+**Après un `git pull`, relancez simplement l'app** : elle se met à jour toute seule. L'app installée exécute le code du dépôt ; au lancement, si le dépôt a changé (nouveau commit, modification locale, `package-lock.json`), un écran « Mise à jour… » affiche l'étape en cours (`npm ci` si les dépendances ont changé, puis compilation), puis l'app s'ouvre. Sinon elle s'ouvre directement. Jamais de `git pull` automatique ; vos données ne sont pas touchées.
+
+- En cas d'échec (réseau, erreur de compilation), l'écran l'explique, donne le journal (`~/Library/Logs/Atelier_Tab/mise-a-jour.log`) et propose **Ouvrir quand même avec la version précédente** : la compilation précédente n'est remplacée qu'après une compilation réussie. Le lancement suivant réessaie.
+- `npm run app:install` n'est à relancer que si le dépôt change de place ou si Electron change de version. `npm run app:update` fait la même mise à jour depuis le terminal.
+- Node.js et npm sont cherchés comme dans un terminal (PATH du shell de connexion, `~/.homebrew/bin`, `/opt/homebrew/bin`, `/usr/local/bin`, nvm), en commençant par ceux utilisés pour `npm run app:install`. Détails : [ADR 0005](docs/adr/0005-mise-a-jour-automatique.md).
 
 - Les données sont dans le dossier **`~/Atelier_Tab`** (menu Fichier › Ouvrir le dossier des données) : un fichier `atelier.json` et un fichier par table dans `tables/`. Au premier lancement, les données d'une version précédente sont reprises automatiquement.
 - `~/Atelier_Tab/exports/` reçoit un instantané par table (`<id de table>.json`), lu par Atelier Viz ; voir [Suite Atelier](#suite-atelier).
 - Le nom affiché est « Atelier Tab » ; les noms techniques restent `Atelier_Tab.app`, `~/Atelier_Tab` et le paquet `atelier-tab`.
 - L'app est signée localement (« ad hoc »), sans compte développeur Apple. Elle s'ouvre normalement sur le Mac qui l'a construite ; pour la donner à quelqu'un d'autre, une signature Apple sera nécessaire.
-- `npm run app` lance l'application sans l'installer, pour essayer une modification.
+- `npm run app` lance l'application sans l'installer, pour essayer une modification (développement).
 
 ### Claude Code et Ollama
 
 Claude Code et un modèle local peuvent lire et modifier toutes les données : tables, lignes, colonnes, formules, export.
 
-**Claude Code** — `npm run app:install` le connecte automatiquement s'il est installé (sinon `npm run ai:connect`, ou menu Fichier › Connecter Claude Code…). Le serveur MCP `atelier-tab` est livré dans l'app ; dans n'importe quelle session :
+**Claude Code** — `npm run app:install` le connecte automatiquement s'il est installé (sinon `npm run ai:connect`, ou menu Fichier › Connecter Claude Code…). Le serveur MCP `atelier-tab` est livré dans l'app (`Contents/Resources/atelier-mcp`) et exécute la version compilée du dépôt, à jour après chaque lancement de l'app ; dans n'importe quelle session :
 
 > « Ajoute une ligne Menuiseries à 12 000 € HT dans Planning & Lots »
 > « Quel est le total TTC du budget ? »
@@ -106,18 +112,21 @@ L'assistant voit la table ouverte et la cellule sélectionnée, et chaque action
 
 ### Scripts
 
-| Commande             | Rôle                                                         |
-| -------------------- | ------------------------------------------------------------ |
-| `npm run dev`        | Serveur de développement Vite (http://127.0.0.1:5175)        |
-| `npm run build`      | Vérification des types puis build de production dans `dist/` |
-| `npm run preview`    | Sert le build de production (http://127.0.0.1:4175)          |
-| `npm test`           | Tests unitaires (Vitest)                                     |
-| `npm run test:watch` | Tests en mode surveillance                                   |
-| `npm run lint`       | ESLint                                                       |
-| `npm run typecheck`  | TypeScript strict, sans émission                             |
-| `npm run format`     | Prettier                                                     |
-| `npm run ai:connect` | Enregistre le serveur MCP dans Claude Code                   |
-| `npm run mcp`        | Lance le serveur MCP depuis le dépôt (développement)         |
+| Commande              | Rôle                                                         |
+| --------------------- | ------------------------------------------------------------ |
+| `npm run dev`         | Serveur de développement Vite (http://127.0.0.1:5175)        |
+| `npm run build`       | Vérification des types puis build de production dans `dist/` |
+| `npm run preview`     | Sert le build de production (http://127.0.0.1:4175)          |
+| `npm test`            | Tests unitaires (Vitest)                                     |
+| `npm run test:watch`  | Tests en mode surveillance                                   |
+| `npm run lint`        | ESLint                                                       |
+| `npm run typecheck`   | TypeScript strict, sans émission                             |
+| `npm run format`      | Prettier                                                     |
+| `npm run ai:connect`  | Enregistre le serveur MCP dans Claude Code                   |
+| `npm run mcp`         | Lance le serveur MCP depuis le dépôt (développement)         |
+| `npm run app`         | Lance l'app de bureau depuis le dépôt (développement)        |
+| `npm run app:install` | Installe l'app (lanceur du dépôt) dans Applications (macOS)  |
+| `npm run app:update`  | Met à jour la compilation de l'app depuis le terminal        |
 
 ## Suite Atelier
 
