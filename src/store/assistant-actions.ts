@@ -39,13 +39,17 @@ export function answerConfirmation(id: number, allowed: boolean): void {
 
 /** Outils exécutés directement sur le store de l'app : l'interface se met à jour en direct. */
 export function appToolHost(): ToolHost {
-  const webhookFetch = desktopAwareFetch(getDesktopApi())
+  const desktop = getDesktopApi()
+  const webhookFetch = desktopAwareFetch(desktop)
+  const atelierEvents = desktop?.atelierEvents?.bind(desktop)
   return {
     caller: 'assistant',
     confirm: requestConfirmation,
     store: useDataStore,
     getSheet,
     ...(webhookFetch ? { webhookFetch } : {}),
+    // Journal du nœud Atelier : tenu par le processus principal (app de bureau seulement).
+    ...(atelierEvents ? { readEvents: atelierEvents } : {}),
     async saveExport(filename, content, mime) {
       const desktop = getDesktopApi()
       if (desktop) return desktop.saveExport(filename, content)

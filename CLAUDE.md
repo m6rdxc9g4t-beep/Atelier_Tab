@@ -48,6 +48,7 @@ Atelier Tab fait partie de la Suite Atelier (avec Atelier Viz et Atelier Projets
 - Statuts : `src/engine/field-types/workflow-status.ts` (reconnaissance des libellés, préréglage « Statuts Atelier »).
 - Adresses des apps : `src/lib/suite.ts` (sélecteur : Viz, Tab, Projets et Atelier Cuisine, app en ligne jamais sondée, ouverte par `desktop/suite-launch.ts`). Import Projets : `src/dataflow/transports/projets.ts`. Instantanés : `src/dataflow/snapshot.ts` (pur) et `desktop/snapshots.ts` (disque).
 - Ports fixes : 5175 (dev) et 4175 (aperçu), `strictPort`.
+- **Nœud Atelier** (docs/SUITE.md §7, ADR 0004) : manifeste construit par `buildManifest` (`src/ai/atelier-node.ts`) depuis les schémas réels des outils — une nouvelle action de workflow = une entrée `ACTIONS` + un test ; `id` stables. `exports/_atelier/` n'est écrit que par `desktop/atelier-node.ts` (`NodeJournal`), sous son verrou ; jamais d'enveloppe DataFlow dedans. Un outil d'écriture qui **crée** prend `idempotent: true` (champ `idempotency_key`). Les outils de lecture du nœud ne demandent jamais de confirmation.
 
 ## Conventions
 

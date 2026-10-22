@@ -12,6 +12,10 @@
  *   manuels `atelier_projets_…`) ne sont jamais touchés.
  * - `schedule()` regroupe les enregistrements rapprochés (frappe dans la grille) ; `update()`
  *   écrit tout de suite (serveur MCP, fermeture de l'app).
+ * - Nœud Atelier (docs/SUITE.md §7.3) : avec un `journal`, chaque publication met à jour
+ *   `exports/_atelier/index.json` (révision par table, qui n'augmente que si l'empreinte du
+ *   contenu change) et `events.jsonl` (`tab.table.changed` / `tab.table.deleted`). Le
+ *   sous-dossier `_atelier/` n'est jamais pris pour un instantané.
  */
 import fs from 'node:fs'
 import path from 'node:path'
@@ -24,7 +28,9 @@ import {
   snapshotFingerprint,
 } from '@/dataflow/snapshot'
 import { isSafeId, tableFile } from '@/storage/format'
+import type { AtelierPayload } from '@/dataflow/schema/atelier.v2_1'
 import type { AppData } from '@/types/domain'
+import type { NodeJournal } from './atelier-node'
 import { resolveInside } from './safe-path'
 
 export interface SnapshotWriterOptions {
@@ -36,6 +42,8 @@ export interface SnapshotWriterOptions {
   now?: () => Date
   /** Erreurs d'écriture (journal du processus principal). */
   onError?: (error: unknown) => void
+  /** Index et événements du nœud Atelier (`exports/_atelier/`), mis à jour à chaque publication. */
+  journal?: NodeJournal
 }
 
 /** Délai par défaut : une rafale de saisies produit une seule écriture. */
@@ -48,6 +56,14 @@ export class SnapshotWriter {
   private readonly debounceMs: number
   private readonly now: () => Date
   private readonly onError: (error: unknown) => void
+  private readonly journal: NodeJournal | undefined
+  /**
+   * Tables à reporter dans l'index du nœud : instantanés écrits ou supprimés par cet écrivain
+   * (au premier passage, tous ceux qu'il connaît). Le journal relit l'instantané sur disque.
+   */
+  private readonly pendingSync = new Set<string>()
+  /** Premier passage (ou échec précédent) : l'index est resynchronisé même sans écriture. */
+  private needsSync = true
   /** Entrées de la dernière publication, par table (pour ne recalculer que ce qui change). */
   private readonly inputs = new Map<string, string>()
   /** Empreinte de l'instantané sur disque, par table. */
@@ -61,6 +77,7 @@ export class SnapshotWriter {
     this.debounceMs = options.debounceMs ?? SNAPSHOT_DEBOUNCE_MS
     this.now = options.now ?? (() => new Date())
     this.onError = options.onError ?? (() => {})
+    this.journal = options.journal
   }
 
   private abs(relative: string): string {
@@ -134,6 +151,7 @@ export class SnapshotWriter {
       const relative = snapshotFile(tableId)
       this.writeAtomic(relative, serializeSnapshot(payload))
       this.published.set(tableId, fingerprint)
+      this.pendingSync.add(tableId)
       changed.push(relative)
     }
 
@@ -141,7 +159,26 @@ export class SnapshotWriter {
       if (data.tables[tableId]) continue
       changed.push(...this.remove(tableId))
     }
+    this.syncJournal()
     return changed
+  }
+
+  /**
+   * Met à jour l'index et les événements du nœud Atelier. Un échec (verrou occupé…) est
+   * signalé et repris à la publication suivante ; il n'empêche jamais l'instantané.
+   */
+  private syncJournal(): void {
+    if (!this.journal) return
+    if (!this.needsSync && this.pendingSync.size === 0) return
+    try {
+      this.journal.sync(this.pendingSync)
+      this.pendingSync.clear()
+      this.needsSync = false
+    } catch (e) {
+      // Repris à la prochaine publication (verrou occupé trop longtemps…).
+      this.needsSync = true
+      this.onError(e)
+    }
   }
 
   /** Supprime l'instantané d'une table (s'il s'agit bien d'un instantané de cette table). */
@@ -154,6 +191,7 @@ export class SnapshotWriter {
     const text = this.read(relative)
     if (text === null || !isSnapshotOf(text, tableId)) return []
     fs.rmSync(target, { force: true })
+    this.pendingSync.add(tableId)
     return [relative]
   }
 
@@ -178,7 +216,10 @@ export class SnapshotWriter {
       if (text === null || !isSnapshotOf(text, tableId)) continue
       if (!data.tables[tableId] && fs.existsSync(this.abs(tableFile(tableId)))) continue
       try {
-        this.published.set(tableId, snapshotFingerprint(JSON.parse(text)))
+        this.published.set(tableId, snapshotFingerprint(JSON.parse(text) as AtelierPayload))
+        // Premier passage : l'index reprend les instantanés déjà sur disque (sans nouvelle
+        // révision si leur contenu n'a pas changé depuis la dernière synchronisation).
+        this.pendingSync.add(tableId)
       } catch {
         /* illisible : sera réécrit */
       }

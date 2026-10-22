@@ -36,6 +36,14 @@ import {
 } from '@/dataflow'
 import { exportFilename } from '@/dataflow/transports/download'
 import {
+  FILTER_OPS,
+  TableQueryError,
+  flattenPayload,
+  queryAtelierTable,
+  type TableFilter,
+} from '@/dataflow/atelier-table'
+import { buildSnapshotPayload } from '@/dataflow/snapshot'
+import {
   ATELIER_STATUS_PRESET_NAME,
   mergeAtelierStatuses,
   parseUserInput,
@@ -56,8 +64,18 @@ import {
   resolveTable,
   resolveWorkspace,
   rowNumberOf,
+  sameName,
   ToolError,
 } from './resolve'
+import {
+  buildManifest,
+  EVENTS_MAX_LIMIT,
+  inputFingerprint,
+  MemoryLedger,
+  type EventsQuery,
+  type EventsResponse,
+  type IdempotencyLedger,
+} from './atelier-node'
 
 export { ToolError }
 
@@ -95,12 +113,40 @@ export interface ToolHost {
   ): Promise<string>
   /** Transport HTTP du webhook (l'app de bureau relaie les envois vers Atelier Projets local). */
   webhookFetch?: WebhookFetch
+  /**
+   * Journal des événements du nœud Atelier (docs/SUITE.md §7.3) : serveur MCP et app de bureau.
+   * Absent (navigateur) : `atelier_events` répond que le journal n'est pas disponible.
+   */
+  readEvents?(query: EventsQuery): EventsResponse | Promise<EventsResponse>
+  /**
+   * Registre des clés `idempotency_key` (§7.4). Serveur MCP : fichier partagé avec l'app,
+   * lu et écrit sous le verrou du nœud. Absent : registre en mémoire propre à ce store.
+   */
+  ledger?: IdempotencyLedger
+}
+
+/** Codes d'erreur communs du contrat `atelier-node/1` (docs/SUITE.md §7.5). */
+export type ToolErrorCode =
+  'NOT_FOUND' | 'VALIDATION' | 'CONFLICT' | 'IDEMPOTENCY_KEY_REUSED' | 'UNAVAILABLE'
+
+/** Erreur d'un outil du nœud Atelier, avec son code machine (§7.5). */
+export class CodedToolError extends ToolError {
+  readonly code: ToolErrorCode
+  constructor(code: ToolErrorCode, message: string) {
+    super(message)
+    this.code = code
+  }
 }
 
 interface ToolDef<S extends z.ZodType = z.ZodType> {
   name: string
   description: string
   input: S
+  /**
+   * Accepte un champ `idempotency_key` (docs/SUITE.md §7.4) : même clé + même entrée → même
+   * réponse, sans rien réécrire ; même clé + autre entrée → `IDEMPOTENCY_KEY_REUSED`.
+   */
+  idempotent?: boolean
   run(args: z.infer<S>, host: ToolHost): unknown
 }
 
@@ -186,6 +232,20 @@ function freshTable(host: ToolHost, tableId: string): Table {
 }
 
 const NUMERIC: FieldType[] = ['number', 'currency', 'percent', 'formula']
+
+/** Champ `idempotency_key` des outils d'écriture qui créent quelque chose (§7.4). */
+const idempotencyKey = z
+  .string()
+  .min(1)
+  .max(200)
+  .optional()
+  .describe(
+    'Clé d’idempotence (1 à 200 caractères, ex. nexus:<exécution>:<étape>) : rejouer la même clé avec la même entrée renvoie la même réponse sans rien refaire ; avec une autre entrée, l’appel est refusé (IDEMPOTENCY_KEY_REUSED). Conservée 30 jours.',
+  )
+
+/** Taille de page de `query_table`. */
+const QUERY_DEFAULT_LIMIT = 200
+const QUERY_MAX_LIMIT = 1000
 
 /**
  * Confirmation de l'utilisateur pour une action de l'assistant. Sans effet pour un client MCP
@@ -462,7 +522,9 @@ export const TOOLS = [
         .describe(
           'Insérer avant cette ligne (numéro affiché). Par défaut : avant la ligne de total, sinon à la fin.',
         ),
+      idempotency_key: idempotencyKey,
     }),
+    idempotent: true,
     run({ table: ref, rows, before_row }, host) {
       const table = resolveTable(data(host), ref)
       const prepared = rows.map((row) => {
@@ -533,7 +595,9 @@ export const TOOLS = [
         .enum(MAPPING_VALUES)
         .optional()
         .describe('Rôle de la colonne dans atelier_projets'),
+      idempotency_key: idempotencyKey,
     }),
+    idempotent: true,
     run(args, host) {
       const table = resolveTable(data(host), args.table)
       if (args.type === 'formula' && !args.formula) {
@@ -669,7 +733,9 @@ export const TOOLS = [
           }),
         )
         .optional(),
+      idempotency_key: idempotencyKey,
     }),
+    idempotent: true,
     run({ project, name, columns }, host) {
       const p = resolveProject(data(host), project)
       const s = host.store.getState()
@@ -925,6 +991,134 @@ export const TOOLS = [
       }
     },
   }),
+
+  tool({
+    name: 'query_table',
+    description:
+      'Interroge une table et renvoie ses lignes au format atelier-table/1 (docs/SUITE.md §7.2) : valeurs calculées (formules évaluées), colonnes _ligne et _id en tête puis une colonne par champ (key en snake_case sans accent, label, type string|number|date|boolean). Filtres réunis par « et » (eq, ne, gt, gte, lt, lte, contains, empty, not_empty), choix des colonnes et pagination. Les lignes de total sont exclues. Lecture seule.',
+    input: z.object({
+      table: tableRef,
+      columns: z
+        .array(z.string().min(1))
+        .optional()
+        .describe(
+          'Colonnes à renvoyer : key (cout_ht), lettre (C), libellé (Coût HT) ou id. _ligne et _id sont toujours inclus. Par défaut : toutes.',
+        ),
+      filters: z
+        .array(
+          z.object({
+            column: z.string().min(1).describe('Colonne : key, lettre, libellé ou id'),
+            op: z.enum(FILTER_OPS),
+            value: z
+              .union([z.string(), z.number(), z.boolean(), z.null()])
+              .optional()
+              .describe(
+                'Valeur comparée à la valeur calculée (inutile pour empty / not_empty). Date : AAAA-MM-JJ ou JJ/MM/AAAA. contains : texte, sans tenir compte de la casse ni des accents.',
+              ),
+          }),
+        )
+        .optional(),
+      offset: z.number().int().min(0).optional().describe('Lignes à sauter (défaut 0)'),
+      limit: z
+        .number()
+        .int()
+        .min(1)
+        .max(QUERY_MAX_LIMIT)
+        .optional()
+        .describe(
+          `Nombre maximum de lignes (défaut ${QUERY_DEFAULT_LIMIT}, au plus ${QUERY_MAX_LIMIT})`,
+        ),
+    }),
+    run({ table: ref, columns, filters, offset = 0, limit = QUERY_DEFAULT_LIMIT }, host) {
+      const d = data(host)
+      const table = resolveTable(d, ref)
+      let payload
+      try {
+        payload = buildSnapshotPayload(d, table.id, { sheet: sheetOf(host, table) })
+      } catch (e) {
+        throw new CodedToolError('NOT_FOUND', e instanceof Error ? e.message : String(e))
+      }
+      const flat = flattenPayload(payload)
+      const resolve = (refText: string) => {
+        const t = refText.trim()
+        const found =
+          flat.columns.find((c) => c.key === t) ??
+          flat.columns.find((c) => c.letter === t.toUpperCase() && /^[A-Za-z]{1,3}$/.test(t)) ??
+          flat.columns.find((c) => c.fieldId === t) ??
+          flat.columns.find((c) => sameName(c.label, t))
+        if (!found) {
+          throw new CodedToolError(
+            'VALIDATION',
+            `Colonne introuvable : « ${refText} ». Colonnes : ${flat.columns
+              .map((c) => (c.letter ? `${c.key} (${c.letter}, « ${c.label} »)` : c.key))
+              .join(', ')}`,
+          )
+        }
+        return found.key
+      }
+      const query = {
+        ...(columns ? { keys: columns.map(resolve) } : {}),
+        filters: (filters ?? []).map((f): TableFilter => ({
+          key: resolve(f.column),
+          op: f.op,
+          ...(f.value !== undefined ? { value: f.value } : {}),
+        })),
+        offset,
+        limit,
+      }
+      try {
+        return queryAtelierTable(
+          { name: table.id, label: table.name, columns: flat.columns, rows: flat.rows },
+          query,
+        )
+      } catch (e) {
+        if (e instanceof TableQueryError) throw new CodedToolError('VALIDATION', e.message)
+        throw e
+      }
+    },
+  }),
+
+  tool({
+    name: 'atelier_manifest',
+    description:
+      'Manifeste du nœud Atelier (docs/SUITE.md §7.1, contrat atelier-node/1) : ce qu’Atelier Tab sait faire dans un workflow Atelier Nexus (actions, outil MCP de chacune, schémas d’entrée et de sortie, idempotence) et les événements qu’il publie. Sans argument, lecture seule.',
+    input: z.object({}),
+    run() {
+      return buildManifest(toolSchemas())
+    },
+  }),
+
+  tool({
+    name: 'atelier_events',
+    description: `Événements d’Atelier Tab (docs/SUITE.md §7.3) : tab.table.changed (révision, lignes, projet) et tab.table.deleted. since = dernier seq déjà lu (exclusif) ; sans since, les plus récents. Réponse { events, next, oldest } (+ gap: true si des événements ont été perdus : relire l’état). Lecture seule.`,
+    input: z.object({
+      since: z.number().int().min(0).optional().describe('Dernier seq déjà lu (exclusif)'),
+      limit: z
+        .number()
+        .int()
+        .min(1)
+        .max(EVENTS_MAX_LIMIT)
+        .optional()
+        .describe(`Nombre maximum d’événements (défaut 100, au plus ${EVENTS_MAX_LIMIT})`),
+      types: z
+        .array(z.string().min(1))
+        .optional()
+        .describe('Types à garder, ex. ["tab.table.changed"]. Par défaut : tous.'),
+    }),
+    async run({ since, limit, types }, host) {
+      if (!host.readEvents) {
+        throw new CodedToolError(
+          'UNAVAILABLE',
+          'Journal des événements indisponible ici : il est tenu par l’application de bureau et le serveur MCP (dossier exports/_atelier).',
+        )
+      }
+      return host.readEvents({
+        ...(since !== undefined ? { since } : {}),
+        ...(limit !== undefined ? { limit } : {}),
+        ...(types ? { types } : {}),
+      })
+    },
+  }),
 ]
 
 export type ToolName = (typeof TOOLS)[number]['name']
@@ -946,6 +1140,27 @@ export interface ToolResult {
   ok: boolean
   /** Texte JSON destiné à l'IA. */
   content: string
+  /** Code machine d'une erreur du nœud Atelier (docs/SUITE.md §7.5). */
+  code?: ToolErrorCode
+  /** Réponse rejouée d'une clé d'idempotence déjà vue (§7.4) : rien n'a été refait. */
+  replayed?: boolean
+}
+
+/** Outils qui acceptent `idempotency_key` (contrôlé par les tests et le manifeste). */
+export const IDEMPOTENT_TOOLS: readonly string[] = TOOLS.filter((t) => t.idempotent).map(
+  (t) => t.name,
+)
+
+/** Registre par défaut, propre à chaque store (assistant de l'app, tests). */
+const memoryLedgers = new WeakMap<object, IdempotencyLedger>()
+function ledgerOf(host: ToolHost): IdempotencyLedger {
+  if (host.ledger) return host.ledger
+  let ledger = memoryLedgers.get(host.store)
+  if (!ledger) {
+    ledger = new MemoryLedger()
+    memoryLedgers.set(host.store, ledger)
+  }
+  return ledger
 }
 
 /** Exécute un outil par son nom, avec validation des arguments. */
@@ -954,6 +1169,7 @@ export async function runTool(name: string, args: unknown, host: ToolHost): Prom
   if (!def) {
     return {
       ok: false,
+      code: 'NOT_FOUND',
       content: `Outil inconnu : ${name}. Outils : ${TOOLS.map((t) => t.name).join(', ')}`,
     }
   }
@@ -962,12 +1178,41 @@ export async function runTool(name: string, args: unknown, host: ToolHost): Prom
     const details = parsed.error.issues
       .map((i) => `${i.path.join('.') || 'arguments'} : ${i.message}`)
       .join(' ; ')
-    return { ok: false, content: `Arguments invalides pour ${name} : ${details}` }
+    return {
+      ok: false,
+      code: 'VALIDATION',
+      content: `Arguments invalides pour ${name} : ${details}`,
+    }
   }
+
+  // Idempotence (§7.4) : l'empreinte porte sur l'outil et l'entrée validée, sans la clé.
+  let key: string | undefined
+  let fingerprint = ''
+  if (def.idempotent) {
+    const { idempotency_key, ...input } = parsed.data as { idempotency_key?: string }
+    key = idempotency_key
+    if (key !== undefined) {
+      fingerprint = inputFingerprint(name, input)
+      const seen = ledgerOf(host).get(key)
+      if (seen) {
+        if (seen.fingerprint === fingerprint)
+          return { ok: true, content: seen.content, replayed: true }
+        return {
+          ok: false,
+          code: 'IDEMPOTENCY_KEY_REUSED',
+          content: `Clé d’idempotence « ${key} » déjà utilisée pour une autre entrée : rien n’a été fait. Utilisez une nouvelle clé pour une nouvelle opération.`,
+        }
+      }
+    }
+  }
+
   try {
     const result = await (def.run as (a: unknown, h: ToolHost) => unknown)(parsed.data, host)
-    return { ok: true, content: JSON.stringify(result) }
+    const content = JSON.stringify(result)
+    if (key !== undefined) ledgerOf(host).put(key, { fingerprint, content })
+    return { ok: true, content }
   } catch (e) {
+    if (e instanceof CodedToolError) return { ok: false, code: e.code, content: e.message }
     if (e instanceof ToolError) return { ok: false, content: e.message }
     return { ok: false, content: `Erreur interne : ${e instanceof Error ? e.message : String(e)}` }
   }
