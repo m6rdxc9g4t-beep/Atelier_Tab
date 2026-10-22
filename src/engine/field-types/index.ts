@@ -28,3 +28,4 @@ export {
   type WorkflowStatus,
   type WorkflowStatusCode,
 } from './workflow-status'
+export { CHOICE_COLORS, choicesFromLabels } from './choices'

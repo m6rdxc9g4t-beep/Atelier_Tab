@@ -18,6 +18,15 @@ export interface EditingState {
   origin: 'cell' | 'bar'
 }
 
+/** Assistant d'import CSV ouvert : projet et table de destination proposés, fichier éventuel. */
+export interface ImportRequest {
+  projectId: string
+  /** Table proposée comme destination ; nul : nouvelle table. */
+  tableId: string | null
+  /** Fichier déposé sur l'app ; absent : l'assistant demande un fichier. */
+  file?: File
+}
+
 export interface UIState {
   activeTableId: string | null
   selection: CellPosition | null
@@ -26,6 +35,8 @@ export interface UIState {
   inputError: string | null
   sidebarCollapsed: boolean
   expandedProjectIds: string[]
+  /** Non persisté. */
+  importRequest: ImportRequest | null
 
   openTable(tableId: string | null): void
   select(cell: CellPosition | null): void
@@ -35,6 +46,8 @@ export interface UIState {
   setInputError(message: string | null): void
   toggleSidebar(): void
   toggleProject(projectId: string, expanded?: boolean): void
+  openImport(request: ImportRequest): void
+  closeImport(): void
 }
 
 export const useUIStore = create<UIState>()(
@@ -46,6 +59,7 @@ export const useUIStore = create<UIState>()(
       inputError: null,
       sidebarCollapsed: false,
       expandedProjectIds: ['proj_renovation_2026'],
+      importRequest: null,
 
       openTable: (tableId) =>
         set({ activeTableId: tableId, selection: null, editing: null, inputError: null }),
@@ -68,6 +82,8 @@ export const useUIStore = create<UIState>()(
               : s.expandedProjectIds.filter((id) => id !== projectId),
           }
         }),
+      openImport: (request) => set({ importRequest: request, editing: null }),
+      closeImport: () => set({ importRequest: null }),
     }),
     {
       name: 'atelier-tab:ui',

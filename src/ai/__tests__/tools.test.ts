@@ -40,6 +40,7 @@ describe('définitions', () => {
       'delete_column',
       'create_project',
       'create_table',
+      'import_csv',
       'rename',
       'evaluate',
       'get_settings',
@@ -292,6 +293,109 @@ describe('modification', () => {
     expect(res.ok).toBe(false)
     expect(res.content).toMatch(/Arguments invalides pour set_cells : cells/)
     expect((await call('outil_bidon')).content).toMatch(/Outil inconnu/)
+  })
+})
+
+describe('import CSV', () => {
+  const CSV = [
+    'Poste;Statut;Montant HT;Échéance',
+    'Fondations;En cours;12 500,50 €;30/11/2026',
+    'Charpente;À faire;8 000 €;15/12/2026',
+    'Toiture;En cours;9 000 €;',
+  ].join('\n')
+
+  it('crée une table typée à partir d’un CSV « à la française »', async () => {
+    open()
+    const res = await call('import_csv', {
+      csv: CSV,
+      project: 'Rénovation Urbaine 2026',
+      name: 'Devis reçus',
+    })
+    expect(res.ok).toBe(true)
+    expect(res.json).toMatchObject({ inserted: 3, updated: 0 })
+    expect(
+      res.json.new_columns.map((c: { label: string; type: string }) => `${c.label}:${c.type}`),
+    ).toEqual(['Poste:text', 'Statut:select', 'Montant HT:currency', 'Échéance:date'])
+    expect(res.json.new_columns[1]).toMatchObject({
+      mapping: 'workflow_state',
+      choices: ['À faire', 'En cours'],
+    })
+    const read = await call('read_table', { table: 'Devis reçus' })
+    expect(read.json.rows[0].cells).toEqual({
+      A: 'Fondations',
+      B: 'En cours',
+      C: 12500.5,
+      D: '2026-11-30',
+    })
+    // Une vue Kanban est créée sur la colonne de statut.
+    const table = Object.values(session!.host.store.getState().tables).find(
+      (t) => t.name === 'Devis reçus',
+    )!
+    expect(table.views.map((v) => v.mode)).toEqual(['hybrid', 'kanban'])
+  })
+
+  it('table existante : ajout au-dessus du total, puis mise à jour par colonne clé', async () => {
+    open()
+    const add = await call('import_csv', {
+      csv: 'Lot / Tâche;Coût HT\nMenuiseries;10 000\n',
+      table: 'Planning & Lots',
+    })
+    expect(add.json).toMatchObject({ inserted: 1, updated: 0, new_columns: [] })
+    const upd = await call('import_csv', {
+      csv: 'Lot / Tâche;Coût HT\nmenuiseries;11 000\nVRD;3 000\n',
+      table: 'Planning & Lots',
+      key_column: 'Lot / Tâche',
+    })
+    expect(upd.json).toMatchObject({ inserted: 1, updated: 1 })
+    const read = await call('read_table', { table: 'Planning & Lots' })
+    const total = read.json.rows.at(-1)
+    expect(total.total_row).toBe(true)
+    expect(total.cells.C).toBe(45000 + 28500 + 15000 + 11000 + 3000)
+  })
+
+  it('types imposés, colonnes ignorées et valeurs refusées', async () => {
+    open()
+    const res = await call('import_csv', {
+      csv: 'Ref;Code postal;Montant;Note\nA1;01000;12;x\nA2;75001;douze;y\n',
+      project: 'Rénovation Urbaine 2026',
+      columns: { 'code postal': 'text', Montant: 'number', Note: 'skip' },
+    })
+    expect(res.ok).toBe(true)
+    expect(res.json.new_columns.map((c: { label: string }) => c.label)).toEqual([
+      'Ref',
+      'Code postal',
+      'Montant',
+    ])
+    expect(res.json.rejected_values).toBe(1)
+    expect(res.json.rejected[0]).toMatchObject({ csv_row: 2, column: 'Montant', value: 'douze' })
+    const read = await call('read_table', { table: res.json.table_id })
+    expect(read.json.rows[0].cells).toEqual({ A: 'A1', B: '01000', C: 12 })
+  })
+
+  it('erreurs claires', async () => {
+    open()
+    expect((await call('import_csv', { csv: 'a;b\n1;2' })).content).toMatch(/soit `table`/)
+    expect(
+      (await call('import_csv', { csv: '\n\n', project: 'Rénovation Urbaine 2026' })).content,
+    ).toMatch(/aucune donnée/)
+    expect(
+      (
+        await call('import_csv', {
+          csv: 'a;b\n1;2',
+          table: 'Planning & Lots',
+          key_column: 'zz',
+        })
+      ).content,
+    ).toMatch(/Colonne CSV inconnue : « zz »/)
+    expect(
+      (
+        await call('import_csv', {
+          csv: 'Ref;b\n1;2',
+          table: 'Planning & Lots',
+          key_column: 'Ref',
+        })
+      ).content,
+    ).toMatch(/doit correspondre à une colonne existante/)
   })
 })
 

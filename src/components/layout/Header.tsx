@@ -7,6 +7,7 @@ import {
   Send,
   Sparkles,
   Table2,
+  Upload,
 } from 'lucide-react'
 import { useAssistant } from '@/store/assistant.store'
 import { useDataStore, useUIStore } from '@/store'
@@ -37,6 +38,7 @@ export function Header({ table, mode }: { table: Table; mode: ViewMode }) {
   const setViewMode = useDataStore((s) => s.setViewMode)
   const sidebarCollapsed = useUIStore((s) => s.sidebarCollapsed)
   const toggleSidebar = useUIStore((s) => s.toggleSidebar)
+  const openImport = useUIStore((s) => s.openImport)
   const assistantOpen = useAssistant((s) => s.open)
   const toggleAssistant = useAssistant((s) => s.toggle)
 
@@ -97,6 +99,16 @@ export function Header({ table, mode }: { table: Table; mode: ViewMode }) {
         ))}
       </div>
 
+      <button
+        type="button"
+        onClick={() => openImport({ projectId: table.projectId, tableId: table.id })}
+        aria-label="Importer un fichier CSV"
+        title="Importer un fichier CSV dans cette table ou dans une nouvelle table"
+        className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-line-strong bg-field px-2.5 text-muted hover:bg-surface-hover hover:text-ink"
+      >
+        <Upload size={14} />
+        <span className="@max-[90rem]:sr-only">Importer</span>
+      </button>
       <button
         type="button"
         onClick={() => setExportOpen(true)}

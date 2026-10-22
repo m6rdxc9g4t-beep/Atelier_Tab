@@ -58,6 +58,7 @@ Chaque valeur est exportée sous double forme :
 | `transports/webhook.ts`       | Envoi HTTP                                                                                                                                                           |
 | `transports/projets.ts`       | Atelier Projets : préréglage d'adresse, `projectId`, lecture du résumé d'import                                                                                      |
 | `snapshot.ts`                 | Instantanés pour Atelier Viz : payload sans contrôle bloquant, chemin, empreinte                                                                                     |
+| `import/`                     | Import CSV : lecture, analyse, inférence des types, plan de correspondance, changements à appliquer (voir « Import CSV »)                                            |
 
 ### Extensions au schéma 2.1.0
 
@@ -99,6 +100,35 @@ Atelier Projets importe l'enveloppe telle quelle (contrat complet : `docs/SUITE.
   - Navigateur (`npm run dev` / `preview`, origine `http://127.0.0.1:5175` ou `:4175`) : `fetch` direct.
   - App de bureau : la page a l'origine `app://atelier` (protocole privé), refusée par Projets (403), et sa politique de contenu n'admet que cette machine. Tout envoi webhook passe donc par le processus principal (IPC `webhook:post`), sans en-tête `Origin`, comme un script local. Le relais revérifie l'adresse (https, ou http vers cette machine ; sans identifiants), le mode hors ligne (fichier de préférences) et la règle du jeton, ne transmet que les en-têtes du contrat, ne suit aucune redirection et ne répond qu'à l'interface de l'app (cadre `app://atelier/…`, contrôlé par `desktop/ipc-guard.ts`).
   - Jeton : si Projets est configuré avec `ATELIER_IMPORT_TOKEN`, un appel relayé (sans `Origin`) est un appel externe et doit porter `Authorization: Bearer <jeton>` (champ « Jeton d'accès » du dialogue).
+
+## Import CSV
+
+Entrées : bouton **Importer** de l'en-tête (table ouverte ou nouvelle table), icône d'import d'un projet dans la sidebar (nouvelle table), fichier glissé sur la zone de travail, cellules collées depuis Excel dans l'assistant, outil IA `import_csv`.
+
+### Lecture (`import/csv-parse.ts`, `import/analyze.ts`)
+
+- **Encodage** : BOM UTF-8 ou UTF-16 ; sinon UTF-8 strict, et à défaut Windows-1252 (exports d'Excel sous Windows).
+- **Séparateur** : ligne `sep=;` d'Excel si présente ; sinon celui qui donne le même nombre de colonnes (au moins deux) sur le plus de lignes de l'échantillon (64 Ko). Égalité : `;`, `,`, tabulation, `|`. Modifiable dans l'assistant.
+- **Découpage** RFC 4180 : guillemets doublés, séparateurs et retours à la ligne dans les cellules entre guillemets. Lignes vides ignorées ; lignes courtes complétées.
+- **En-têtes** : vides → « Colonne N », doublons → « Montant (2) ». Option « sans ligne d'en-tête ».
+- **Limites** : 20 Mo par fichier (interface), 10 millions de caractères (outil IA), 50 000 lignes, 200 colonnes.
+- **CSV enrichi d'Atelier Tab** reconnu (`Ligne`, `Identifiant`, `C · Libellé`, `C · Libellé (formule)`) : libellés sans la lettre, formule à la place de la valeur calculée quand il y en a une, identifiants de lignes repris.
+
+### Types et rôles (`import/infer.ts`)
+
+Type le plus précis compatible avec les valeurs non vides : date (`18/10/2026`, ISO), case à cocher (`Oui/Non`, `Vrai/Faux`, `x` ; une colonne de `0/1` reste un nombre), pourcentage (majorité de `%`), devise (`€ $ £ CHF`, ou en-tête de montant : prix, coût, HT, TTC…), nombre (`45 000,50`, `1.234,56`), responsable (noms ou initiales des collaborateurs), statut (uniquement des statuts de workflow, ou au plus 24 libellés courts répétés), sinon texte. À partir de 10 valeurs, 90 % de nombres ou de dates suffisent : les autres valeurs sont signalées. Un statut ne contenant que des statuts de workflow suit l'ordre du workflow, avec les couleurs officielles.
+
+Rôles `atelier_projets` proposés une fois chacun, d'après le type et l'en-tête (`Statut` → `workflow_state`, `Échéance` → `due_date`, `TTC` → `financial_ttc`…), sans reprendre un rôle déjà porté par la table ; repli : premier texte → `entity_title`, premier statut → `workflow_state`, première devise → `financial_ht`.
+
+### Correspondance et application (`import/build.ts`, `import/apply.ts`)
+
+- **Nouvelle table** : une colonne par colonne du fichier (renommable, type modifiable, ou ignorée). Vue Grille, et Kanban sur la colonne de statut.
+- **Table existante** : une colonne au libellé identique (sans casse ni accents) est remplie, les autres deviennent de nouvelles colonnes. Les colonnes-formules ne sont jamais remplies par un import.
+- **Ajout** : lignes insérées au-dessus de la première ligne de total, en une seule opération (`insertRecords`) : les plages des totaux s'étendent, une seule réécriture des formules.
+- **Mise à jour** : par colonne clé (valeur convertie comparée sans casse ni accents) ou par `Identifiant` (CSV enrichi réimporté dans sa table, proposé d'office). Ligne reconnue : ses cellules sont remplacées, une cellule vide du fichier n'efface rien. Ligne non reconnue : ajoutée.
+- **Conversion** : règles de saisie de la grille (`parseUserInput`). Valeur refusée : cellule laissée vide, signalée (ligne, colonne, raison) avant l'import et dans le bilan. Libellé inconnu d'un statut existant : ajouté à ses choix.
+- **Formules** (`=…`) : recopiées comme un copier-coller Excel, les références relatives suivent l'écart entre la ligne du fichier et la ligne d'arrivée. Le moteur maison les évalue sans `eval()` ; elles ne peuvent lire que la table.
+- **Une seule mise à jour du store** (`importIntoTable`, `createTableFromImport`) : un seul recalcul, un seul enregistrement.
 
 ## Instantanés pour Atelier Viz
 

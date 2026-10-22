@@ -9,6 +9,7 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 import { immer } from 'zustand/middleware/immer'
+import { applyImport, type ImportChanges } from '@/dataflow/import'
 import { insertField, insertRecord, removeField, removeRecords } from '@/engine/table'
 import { createDemoData } from '@/fixtures/demo'
 import { newId } from '@/lib/ids'
@@ -23,7 +24,7 @@ import type {
   TableRecord,
   ViewMode,
 } from '@/types/domain'
-import { createDefaultTable, createField, createRecord, createView } from './factories'
+import { buildTable, createDefaultTable, createField, createRecord, createView } from './factories'
 
 export interface DataActions {
   /** Remplace toutes les données (par défaut : données de démonstration). */
@@ -59,6 +60,14 @@ export interface DataActions {
   deleteRecords(tableId: string, recordIds: string[]): void
   setCell(tableId: string, recordId: string, fieldId: string, input: CellInput): void
   setRecordKind(tableId: string, recordId: string, kind: TableRecord['kind']): void
+
+  /**
+   * Import CSV dans une table existante, en une seule mise à jour (une seule réécriture des
+   * formules et un seul recalcul). Renvoie les ids des lignes ajoutées.
+   */
+  importIntoTable(tableId: string, changes: ImportChanges): string[]
+  /** Crée une table à partir d'un import CSV (vues Grille, et Kanban s'il y a un statut). */
+  createTableFromImport(projectId: string, name: string, changes: ImportChanges): string
 
   /** Réglages de la connexion à atelier_projets (URL du webhook, jeton). */
   setAtelierIntegration(patch: Partial<Omit<AtelierIntegration, 'lastExport'>>): void
@@ -280,6 +289,47 @@ export function createDataStore(options: { adapter?: StorageAdapter; initialData
             const r = s.tables[tableId]?.records[recordId]
             if (r) r.kind = kind
           }),
+
+        // ------------------------------------------------------------ import
+        importIntoTable: (tableId, changes) => {
+          let inserted: string[] = []
+          set((s) => {
+            const t = s.tables[tableId]
+            if (!t) throw new Error(`Table introuvable : ${tableId}`)
+            inserted = applyImport(t, changes)
+          })
+          return inserted
+        },
+
+        createTableFromImport: (projectId, name, changes) => {
+          if (!get().projects[projectId]) throw new Error(`Projet introuvable : ${projectId}`)
+          const table = buildTable({
+            id: newId('tbl'),
+            projectId,
+            name,
+            fields: [],
+            records: [],
+            views: [createView('hybrid')],
+          })
+          applyImport(table, changes)
+          if (table.fieldOrder.length === 0) {
+            insertField(
+              table,
+              createField({ label: 'Nom', type: 'text', atelierMapping: 'entity_title' }),
+            )
+          }
+          const status =
+            table.fieldOrder.find((id) => table.fields[id]?.atelierMapping === 'workflow_state') ??
+            table.fieldOrder.find((id) => table.fields[id]?.type === 'select')
+          if (status) table.views.push(createView('kanban', { groupByFieldId: status }))
+          set((s) => {
+            const p = s.projects[projectId]
+            if (!p) return
+            s.tables[table.id] = table
+            p.tableIds.push(table.id)
+          })
+          return table.id
+        },
 
         // ------------------------------------------------------------ intégration
         setAtelierIntegration: (patch) =>
