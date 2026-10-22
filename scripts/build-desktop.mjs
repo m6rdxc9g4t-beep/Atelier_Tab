@@ -10,7 +10,11 @@ import { build } from 'rolldown'
 
 const root = path.resolve(import.meta.dirname, '..')
 const { version } = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'))
-const out = path.join(root, 'dist-desktop')
+// ATELIER_TAB_DESKTOP_DIR : dossier temporaire de la mise à jour automatique (ADR 0005), qui
+// remplace ensuite dist-desktop/ d'un bloc.
+const out = process.env.ATELIER_TAB_DESKTOP_DIR
+  ? path.resolve(process.env.ATELIER_TAB_DESKTOP_DIR)
+  : path.join(root, 'dist-desktop')
 rmSync(out, { recursive: true, force: true })
 
 const common = {
@@ -42,4 +46,4 @@ await build({
   input: path.join(root, 'desktop/mcp-server.ts'),
   output: { file: path.join(out, 'atelier-mcp.mjs'), format: 'esm', minify: true },
 })
-console.log('✓ dist-desktop : main.cjs, preload.cjs, atelier-mcp.mjs')
+console.log(`✓ ${path.relative(root, out) || out} : main.cjs, preload.cjs, atelier-mcp.mjs`)
