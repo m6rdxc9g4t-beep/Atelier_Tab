@@ -16,6 +16,7 @@ import {
   openLog,
   planUpdate,
   readStamp,
+  renameWithRetry,
   repoState,
   swapBuild,
   tryLock,
@@ -23,22 +24,66 @@ import {
   workPaths,
 } from '../launcher/update.cjs'
 
-const FAKE_NPM = `#!/bin/sh
-echo "$*|skip=\${ELECTRON_SKIP_BINARY_DOWNLOAD:-}|node=\${ELECTRON_RUN_AS_NODE:-}" >> "$FAKE_NPM_CALLS"
-case "$1 $2" in
-  "ci --no-audit")
-    [ -f .echec-ci ] && { echo "npm ERR! network ECONNREFUSED registry.npmjs.org" >&2; exit 1; }
-    rm -rf node_modules && mkdir -p node_modules && echo '{}' > node_modules/.package-lock.json ;;
-  "run build")
-    [ -f .echec-build ] && { echo "src/x.ts(1,1): error TS2322: erreur simulée" >&2; exit 2; }
-    mkdir -p "$ATELIER_TAB_DIST_DIR" && cat version.txt > "$ATELIER_TAB_DIST_DIR/index.html" ;;
-  "run build:desktop")
-    [ -f .echec-desktop ] && { echo "rolldown : erreur simulée" >&2; exit 3; }
-    mkdir -p "$ATELIER_TAB_DESKTOP_DIR"
-    for f in main.cjs preload.cjs atelier-mcp.mjs; do cat version.txt > "$ATELIER_TAB_DESKTOP_DIR/$f"; done ;;
-  *) echo "commande inattendue : $*" >&2; exit 9 ;;
-esac
+const WIN = process.platform === 'win32'
+
+/**
+ * Faux npm (JavaScript, exécuté par le vrai Node.js) : POSIX → `bin/npm` qui le lance ;
+ * Windows → `bin/node_modules/npm/bin/npm-cli.js`, lancé par `bin/node.exe` comme le vrai npm.
+ */
+const FAKE_NPM = `'use strict'
+const fs = require('node:fs')
+const path = require('node:path')
+const args = process.argv.slice(2)
+const env = process.env
+fs.appendFileSync(env.FAKE_NPM_CALLS, args.join(' ') + '|skip=' + (env.ELECTRON_SKIP_BINARY_DOWNLOAD || '') + '|node=' + (env.ELECTRON_RUN_AS_NODE || '') + '\\n')
+const fail = (message, code) => { process.stderr.write(message + '\\n'); process.exit(code) }
+const version = () => fs.readFileSync('version.txt', 'utf8')
+switch (args.slice(0, 2).join(' ')) {
+  case 'ci --no-audit':
+    if (fs.existsSync('.echec-ci')) fail('npm ERR! network ECONNREFUSED registry.npmjs.org', 1)
+    fs.rmSync('node_modules', { recursive: true, force: true })
+    fs.mkdirSync('node_modules')
+    fs.writeFileSync(path.join('node_modules', '.package-lock.json'), '{}')
+    break
+  case 'run build':
+    if (fs.existsSync('.echec-build')) fail('src/x.ts(1,1): error TS2322: erreur simulée', 2)
+    fs.mkdirSync(env.ATELIER_TAB_DIST_DIR, { recursive: true })
+    fs.writeFileSync(path.join(env.ATELIER_TAB_DIST_DIR, 'index.html'), version())
+    break
+  case 'run build:desktop':
+    if (fs.existsSync('.echec-desktop')) fail('rolldown : erreur simulée', 3)
+    fs.mkdirSync(env.ATELIER_TAB_DESKTOP_DIR, { recursive: true })
+    for (const f of ['main.cjs', 'preload.cjs', 'atelier-mcp.mjs'])
+      fs.writeFileSync(path.join(env.ATELIER_TAB_DESKTOP_DIR, f), version())
+    break
+  default:
+    fail('commande inattendue : ' + args.join(' '), 9)
+}
 `
+
+/** Installe le faux Node.js + npm dans `dir` (lien vers le vrai Node.js, copie sinon). */
+function installFakeToolchain(dir: string) {
+  if (WIN) {
+    const node = path.join(dir, 'node.exe')
+    try {
+      fs.linkSync(process.execPath, node)
+    } catch {
+      fs.copyFileSync(process.execPath, node)
+    }
+    const cli = path.join(dir, 'node_modules', 'npm', 'bin', 'npm-cli.js')
+    fs.mkdirSync(path.dirname(cli), { recursive: true })
+    fs.writeFileSync(cli, FAKE_NPM)
+  } else {
+    fs.symlinkSync(process.execPath, path.join(dir, 'node'))
+    const script = path.join(dir, 'fake-npm.cjs')
+    fs.writeFileSync(script, FAKE_NPM)
+    fs.writeFileSync(
+      path.join(dir, 'npm'),
+      `#!/bin/sh\nexec "${process.execPath}" "${script}" "$@"\n`,
+      { mode: 0o755 },
+    )
+  }
+}
 
 let tmp: string
 let repo: string
@@ -108,10 +153,10 @@ beforeEach(() => {
   fs.mkdirSync(repo)
   fs.mkdirSync(bin)
   fs.mkdirSync(home)
-  fs.symlinkSync(process.execPath, path.join(bin, 'node'))
-  fs.writeFileSync(path.join(bin, 'npm'), FAKE_NPM, { mode: 0o755 })
+  installFakeToolchain(bin)
   env = {
-    PATH: `${bin}:/usr/bin:/bin`,
+    PATH: WIN ? `${bin};${process.env.PATH ?? ''}` : `${bin}:/usr/bin:/bin`,
+    ...(WIN ? { SystemRoot: process.env.SystemRoot ?? 'C:\\Windows' } : {}),
     HOME: home,
     FAKE_NPM_CALLS: calls,
     // Variables d'Electron : jamais transmises à npm.
@@ -125,6 +170,8 @@ beforeEach(() => {
   write('package-lock.json', '{"lockfileVersion":3,"v":1}\n')
   write('version.txt', 'v1')
   write('.gitignore', 'node_modules\ndist\ndist-desktop\n.mise-a-jour\n.echec-*\n')
+  // Aucune conversion de fins de ligne (core.autocrlf=true sur les machines Windows).
+  write('.gitattributes', '* -text\n')
   git('add', '-A')
   git('commit', '-q', '-m', 'initial')
   // Dépendances déjà installées (comme après `npm install` avant `npm run app:install`).
@@ -268,9 +315,12 @@ describe('échecs', () => {
     await expect(run()).rejects.toThrow(/installation des dépendances a échoué.*registre npm/)
     expect(readStamp(repo)).toEqual(stamp)
     expect(read('dist/index.html')).toBe('v1')
+    // node_modules précédent remis en place (§8.4), rien ne reste de côté.
+    expect(read('node_modules/.package-lock.json')).toBe('{}')
+    expect(fs.existsSync(workPaths(repo).modules)).toBe(false)
   })
 
-  it('Node.js trop ancien → message clair (version trouvée et conseil)', async () => {
+  it.skipIf(WIN)('Node.js trop ancien → message clair (version trouvée et conseil)', async () => {
     const old = path.join(tmp, 'vieux')
     fs.mkdirSync(old)
     fs.writeFileSync(path.join(old, 'node'), '#!/bin/sh\necho v18.20.0\n', { mode: 0o755 })
@@ -292,6 +342,67 @@ describe('échecs', () => {
     expect(read('dist/index.html')).toBe('ancien')
     expect(read('dist-desktop/main.cjs')).toBe('ancien')
     expect(fs.readFileSync(path.join(staging, 'dist', 'index.html'), 'utf8')).toBe('nouveau')
+  })
+
+  it('renommage occupé (Windows : fichier ouvert, antivirus) → réessayé, puis réussi', () => {
+    let calls = 0
+    const rename = (from: string, to: string) => {
+      calls++
+      if (calls < 3) throw Object.assign(new Error('occupé'), { code: 'EBUSY' })
+      fs.renameSync(from, to)
+    }
+    write('a/x', '1')
+    renameWithRetry(path.join(repo, 'a'), path.join(repo, 'b'), { rename, delayMs: 1 })
+    expect(calls).toBe(3)
+    expect(read('b/x')).toBe('1')
+    // Autre erreur : aucune nouvelle tentative.
+    let other = 0
+    expect(() =>
+      renameWithRetry('x', 'y', {
+        delayMs: 1,
+        rename: () => {
+          other++
+          throw Object.assign(new Error('absent'), { code: 'ENOENT' })
+        },
+      }),
+    ).toThrow('absent')
+    expect(other).toBe(1)
+  })
+
+  it('swapBuild : fichier toujours occupé → ancienne compilation en place, message clair', () => {
+    write('dist/index.html', 'ancien')
+    write('dist-desktop/main.cjs', 'ancien')
+    const staging = path.join(tmp, 'compilation')
+    for (const dir of ['dist', 'dist-desktop']) {
+      fs.mkdirSync(path.join(staging, dir), { recursive: true })
+      fs.writeFileSync(path.join(staging, dir, 'f'), 'nouveau')
+    }
+    // Le dépôt peut être mis de côté, mais la nouvelle compilation reste bloquée.
+    const rename = (from: string, to: string) => {
+      if (from.startsWith(staging)) throw Object.assign(new Error('occupé'), { code: 'EPERM' })
+      fs.renameSync(from, to)
+    }
+    expect(() =>
+      swapBuild(repo, staging, path.join(tmp, 'precedente'), { rename, attempts: 2, delayMs: 1 }),
+    ).toThrow(/encore utilisé \(EPERM\)/)
+    expect(read('dist/index.html')).toBe('ancien')
+    expect(read('dist-desktop/main.cjs')).toBe('ancien')
+  })
+
+  it('swapBuild : un reste de l’ancienne compilation (non supprimable) n’empêche rien', () => {
+    write('dist/index.html', 'ancien')
+    write('dist-desktop/main.cjs', 'ancien')
+    const previous = path.join(tmp, 'precedente')
+    fs.mkdirSync(path.join(previous, 'dist'), { recursive: true })
+    fs.writeFileSync(path.join(previous, 'dist', 'reste'), '')
+    const staging = path.join(tmp, 'compilation')
+    for (const dir of ['dist', 'dist-desktop']) {
+      fs.mkdirSync(path.join(staging, dir), { recursive: true })
+      fs.writeFileSync(path.join(staging, dir, 'f'), 'nouveau')
+    }
+    swapBuild(repo, staging, previous)
+    expect(read('dist/f')).toBe('nouveau')
+    expect(fs.existsSync(previous)).toBe(false)
   })
 })
 

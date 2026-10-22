@@ -34,6 +34,7 @@ import {
   type IndexFile,
 } from '@/storage/format'
 import type { AppData, AppPreferences, Table } from '@/types/domain'
+import { appDirs } from './launcher/decision.cjs'
 import { resolveInside } from './safe-path'
 
 export interface LoadResult {
@@ -55,14 +56,19 @@ export function defaultDataDir(): string {
   return process.env.ATELIER_TAB_DATA || path.join(os.homedir(), 'Atelier_Tab')
 }
 
-/** Emplacement du fichier de secrets partagé entre l'app et le serveur MCP. */
+/**
+ * Emplacement du fichier de secrets partagé entre l'app et le serveur MCP : dossier de l'app hors
+ * du dossier de données (`appDirs`, docs/SUITE.md §9.2) — macOS `~/Library/Application Support/
+ * Atelier_Tab`, Windows `%APPDATA%\Atelier_Tab`, Linux `~/.config/Atelier_Tab`.
+ */
 export function defaultSecretsFile(): string {
   if (process.env.ATELIER_TAB_SECRETS) return process.env.ATELIER_TAB_SECRETS
-  const base =
-    process.platform === 'darwin'
-      ? path.join(os.homedir(), 'Library', 'Application Support')
-      : process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config')
-  return path.join(base, 'Atelier_Tab', 'secrets.json')
+  const { config } = appDirs({
+    platform: process.platform,
+    home: os.homedir(),
+    env: process.env,
+  })
+  return path.join(config, 'secrets.json')
 }
 
 /**

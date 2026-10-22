@@ -24,6 +24,8 @@ const fs = require('node:fs')
 const path = require('node:path')
 const d = require('./decision.cjs')
 
+const WIN = process.platform === 'win32'
+
 /** Dossier de travail de la mise à jour, à la racine du dépôt (ignoré par git). */
 const WORK_DIR = '.mise-a-jour'
 
@@ -40,7 +42,8 @@ const WORK_DIR = '.mise-a-jour'
 /**
  * @typedef {object} Toolchain
  * @property {string} node    Exécutable `node` retenu (absolu).
- * @property {string} npm     Exécutable `npm` du même dossier.
+ * @property {string} npm     Exécutable lancé pour npm : `npm` du même dossier ; Windows : `node.exe`.
+ * @property {string[]} npmArgs Arguments placés avant ceux de npm (Windows : `npm-cli.js`).
  * @property {string} version `v22.12.0`.
  * @property {string} path    PATH des commandes lancées (dossier de Node en tête).
  */
@@ -64,6 +67,7 @@ function workPaths(repo) {
     lock: path.join(dir, 'verrou'),
     staging: path.join(dir, 'compilation'),
     previous: path.join(dir, 'precedente'),
+    modules: path.join(dir, 'node_modules-precedent'),
     toolchain: path.join(dir, 'environnement.json'),
   }
 }
@@ -82,7 +86,7 @@ function readText(file) {
   }
 }
 
-/** @param {string} file */
+/** Exécutable présent (Windows : fichier présent, X_OK n'y a pas de sens). @param {string} file */
 function isExecutable(file) {
   try {
     fs.accessSync(file, fs.constants.X_OK)
@@ -394,14 +398,17 @@ function writeToolchainCache(repo, value) {
 function findGit({ repo, env, home }) {
   const dirs = d.candidateGitDirs({
     cachedGit: readToolchainCache(repo).git ?? null,
-    envPath: env.PATH ?? '',
+    envPath: d.envPathValue(env) ?? '',
     home,
+    platform: process.platform,
+    env,
   })
+  const name = d.toolNames(process.platform).git
   for (const dir of dirs) {
-    const candidate = path.join(dir, 'git')
+    const candidate = path.join(dir, name)
     if (isExecutable(candidate)) return candidate
   }
-  return 'git'
+  return name
 }
 
 /**
@@ -475,11 +482,13 @@ function findNode({
   }
   /** @type {string[]} */
   const rejected = []
+  const platform = process.platform
+  const nodeName = d.toolNames(platform).node
   /** @param {string[]} dirs */
   const pick = (dirs) => {
     for (const dir of dirs) {
-      const node = path.join(dir, 'node')
-      const npm = path.join(dir, 'npm')
+      const node = path.join(dir, nodeName)
+      const npm = d.npmBeside(dir, platform)
       if (!isExecutable(node) || !isExecutable(npm)) continue
       /** @type {string} */
       let text
@@ -488,6 +497,7 @@ function findNode({
           encoding: 'utf8',
           timeout: 10_000,
           stdio: ['ignore', 'pipe', 'ignore'],
+          windowsHide: true,
         })
       } catch {
         continue
@@ -500,24 +510,34 @@ function findNode({
     return null
   }
   const cache = readToolchainCache(repo)
-  const nvmDir = env.NVM_DIR || path.join(home, '.nvm')
-  const nvm = {
-    home,
-    nvmDir,
-    nvmDefault: readText(path.join(nvmDir, 'alias', 'default'))?.trim() || null,
-    nvmVersions: listDir(path.join(nvmDir, 'versions', 'node')),
-  }
+  const envPath = d.envPathValue(env) ?? ''
   // Dossier connu (terminal, ou retenu la dernière fois) : pas besoin d'interroger le shell.
-  let found = pick(d.cleanPathEntries([preferDir, cache.nodeDir]))
+  let found = pick(d.cleanPathEntries([preferDir, cache.nodeDir], platform))
   /** @type {string | null} */
   let loginPath = null
-  if (!found) {
+  if (!found && WIN) {
+    const roots = d.windowsToolRoots(env)
+    found = pick(
+      d.candidateNodeDirsWin32({
+        cachedDir: null,
+        envPath,
+        env,
+        nvmVersions: roots.nvm ? listDir(roots.nvm) : [],
+        fnmVersions: roots.fnm ? listDir(path.join(roots.fnm, 'node-versions')) : [],
+        voltaVersions: roots.volta ? listDir(path.join(roots.volta, 'tools', 'image', 'node')) : [],
+      }),
+    )
+  } else if (!found) {
+    const nvmDir = env.NVM_DIR || path.join(home, '.nvm')
     loginPath = probeLoginPath(env)
     found = pick(
       d.candidateNodeDirs({
-        ...nvm,
+        home,
+        nvmDir,
+        nvmDefault: readText(path.join(nvmDir, 'alias', 'default'))?.trim() || null,
+        nvmVersions: listDir(path.join(nvmDir, 'versions', 'node')),
         cachedDir: null,
-        envPath: env.PATH ?? '',
+        envPath,
         loginPath,
         ...(commonDirs ? { commonDirs } : {}),
       }),
@@ -526,20 +546,49 @@ function findNode({
   if (!found) {
     const detail =
       rejected.length > 0 ? ` Versions trouvées, trop anciennes : ${rejected.join(', ')}.` : ''
+    const advice = WIN
+      ? '« winget install OpenJS.NodeJS.LTS »'
+      : 'par exemple « brew install node »'
     throw new UpdateError(
-      `Node.js ${minimum.join('.')} ou plus récent introuvable (avec npm).${detail} Installez Node.js (par exemple « brew install node »), puis relancez Atelier Tab — ou lancez une fois « npm run app:update » dans le dépôt depuis un terminal.`,
+      `Node.js ${minimum.join('.')} ou plus récent introuvable (avec npm).${detail} Installez Node.js (${advice}), puis relancez Atelier Tab — ou lancez une fois « npm run app:update » dans le dépôt depuis un terminal.`,
     )
+  }
+  if (WIN) {
+    const systemRoot = env.SystemRoot || env.SYSTEMROOT || 'C:\\Windows'
+    const pathEntries = d.cleanPathEntries(
+      [
+        found.dir,
+        ...d.splitPath(envPath, platform),
+        path.join(systemRoot, 'System32'),
+        systemRoot,
+        path.join(systemRoot, 'System32', 'Wbem'),
+      ],
+      platform,
+    )
+    return {
+      node: found.node,
+      npm: found.node,
+      npmArgs: [found.npm],
+      version: found.version,
+      path: pathEntries.join(';'),
+    }
   }
   const pathEntries = d.cleanPathEntries([
     found.dir,
     ...(loginPath ?? '').split(':'),
-    ...(env.PATH ?? '').split(':'),
+    ...envPath.split(':'),
     '/usr/bin',
     '/bin',
     '/usr/sbin',
     '/sbin',
   ])
-  return { node: found.node, npm: found.npm, version: found.version, path: pathEntries.join(':') }
+  return {
+    node: found.node,
+    npm: found.npm,
+    npmArgs: [],
+    version: found.version,
+    path: pathEntries.join(':'),
+  }
 }
 
 /**
@@ -552,10 +601,12 @@ function findNode({
 function childEnv(env, toolchain, extra = {}) {
   /** @type {NodeJS.ProcessEnv} */
   const out = {}
+  const ignored = d.inheritedEnvToIgnore(env)
   for (const [key, value] of Object.entries(env)) {
-    if (!key.startsWith('ELECTRON_') && value !== undefined) out[key] = value
+    if (key.toUpperCase().startsWith('ELECTRON_') || ignored.includes(key)) continue
+    if (value !== undefined) out[key] = value
   }
-  return { ...out, PATH: toolchain.path, ...extra }
+  return { ...d.withPath(out, toolchain.path), ...extra }
 }
 
 // ---------------------------------------------------------------------------
@@ -567,11 +618,13 @@ function childEnv(env, toolchain, extra = {}) {
  * les sous-processus (tsc, vite…).
  * @param {string} command
  * @param {string[]} args
- * @param {{ cwd: string, env: NodeJS.ProcessEnv, log: Log, onChild?: (child: import('node:child_process').ChildProcess) => void }} options
+ * Windows : ni groupe ni nouvelle console (`windowsHide`), aucun shell : la commande est un
+ * exécutable (`node.exe`), jamais un `.cmd`.
+ * @param {{ cwd: string, env: NodeJS.ProcessEnv, log: Log, label?: string, onChild?: (child: import('node:child_process').ChildProcess) => void }} options
  * @returns {Promise<void>}
  */
-function runCommand(command, args, { cwd, env, log, onChild }) {
-  const shown = `${path.basename(command)} ${args.join(' ')}`
+function runCommand(command, args, { cwd, env, log, label, onChild }) {
+  const shown = label ?? `${path.basename(command)} ${args.join(' ')}`
   log.write(`$ ${shown}`)
   // Sortie de cette commande seulement, pour l'extrait affiché après un échec.
   const from = logSize(log.file)
@@ -589,7 +642,9 @@ function runCommand(command, args, { cwd, env, log, onChild }) {
       child = spawn(command, args, {
         cwd,
         env,
-        detached: true,
+        // POSIX : groupe à part (arrêt de tout l'arbre). Windows : `detached` ouvrirait une console.
+        detached: !WIN,
+        windowsHide: true,
         stdio: ['ignore', fd ?? 'ignore', fd ?? 'ignore'],
       })
     } catch (error) {
@@ -618,6 +673,23 @@ function runCommand(command, args, { cwd, env, log, onChild }) {
 /** Arrête une commande lancée par `runCommand` et ses sous-processus. @param {import('node:child_process').ChildProcess} child */
 function stopCommand(child) {
   if (child.exitCode !== null || child.signalCode !== null || !child.pid) return
+  if (WIN) {
+    // Pas de groupe de processus sous Windows : taskkill arrête l'arbre (/T). Sans shell.
+    const systemRoot = process.env.SystemRoot || 'C:\\Windows'
+    try {
+      spawn(
+        path.join(systemRoot, 'System32', 'taskkill.exe'),
+        ['/pid', String(child.pid), '/T', '/F'],
+        {
+          stdio: 'ignore',
+          windowsHide: true,
+        },
+      ).once('error', () => child.kill())
+    } catch {
+      child.kill()
+    }
+    return
+  }
   try {
     process.kill(-child.pid, 'SIGTERM')
   } catch {
@@ -629,16 +701,76 @@ function stopCommand(child) {
   }
 }
 
+/** Erreurs d'un fichier encore ouvert ou analysé (Windows, antivirus) : on réessaie. */
+const BUSY_CODES = new Set(['EPERM', 'EACCES', 'EBUSY', 'ENOTEMPTY'])
+
+/** Attente synchrone (remplacements, quelques centaines de millisecondes au plus). @param {number} ms */
+function sleepSync(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
+}
+
+/**
+ * Renommage qui réessaie quelques fois quand un fichier est occupé (Windows : fichier ouvert,
+ * antivirus qui analyse une compilation toute neuve). Autre erreur : levée aussitôt.
+ * @param {string} from
+ * @param {string} to
+ * @param {{ attempts?: number, delayMs?: number, rename?: (from: string, to: string) => void }} [options]
+ */
+function renameWithRetry(from, to, { attempts = 10, delayMs = 250, rename = fs.renameSync } = {}) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      rename(from, to)
+      return
+    } catch (error) {
+      const code = /** @type {NodeJS.ErrnoException} */ (error).code ?? ''
+      if (!BUSY_CODES.has(code) || attempt >= attempts) throw error
+      sleepSync(delayMs * attempt)
+    }
+  }
+}
+
+/**
+ * Supprime un dossier sans jamais échouer (Windows : un fichier encore ouvert le garde en place ;
+ * il sera retiré à la mise à jour suivante). Rend vrai si le dossier a disparu.
+ * @param {string} dir
+ */
+function removeQuietly(dir) {
+  try {
+    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 })
+  } catch {
+    /* retiré plus tard */
+  }
+  return !fs.existsSync(dir)
+}
+
+/**
+ * Dossier libre pour ranger l'ancienne compilation : `previous`, ou `previous-<date>` si un reste
+ * d'une mise à jour précédente ne peut pas encore être supprimé (Windows).
+ * @param {string} previous
+ */
+function freeAside(previous) {
+  const parent = path.dirname(previous)
+  const base = path.basename(previous)
+  for (const name of fs.existsSync(parent) ? fs.readdirSync(parent) : []) {
+    if (name.startsWith(`${base}-`)) removeQuietly(path.join(parent, name))
+  }
+  if (removeQuietly(previous)) return previous
+  return `${previous}-${Date.now()}`
+}
+
 /**
  * Remplace `dist/` et `dist-desktop/` par ceux de `staging`, chaque dossier par un renommage
- * (atomique). Échec en cours de route : l'ancienne compilation est remise en place.
+ * (atomique), réessayé si un fichier est occupé (Windows). Échec en cours de route : l'ancienne
+ * compilation est remise en place ; l'ancienne compilation n'est jamais supprimée avant que la
+ * nouvelle soit en place, et son retrait est différé si un fichier est encore ouvert.
  * @param {string} repo
  * @param {string} staging
  * @param {string} previous
+ * @param {{ attempts?: number, delayMs?: number, rename?: (from: string, to: string) => void }} [retry]
  */
-function swapBuild(repo, staging, previous) {
-  fs.rmSync(previous, { recursive: true, force: true })
-  fs.mkdirSync(previous, { recursive: true })
+function swapBuild(repo, staging, previous, retry = {}) {
+  const aside = freeAside(previous)
+  fs.mkdirSync(aside, { recursive: true })
   /** @type {string[]} */
   const moved = []
   /** @type {string[]} */
@@ -646,20 +778,51 @@ function swapBuild(repo, staging, previous) {
   try {
     for (const dir of d.BUILD_DIRS) {
       if (fs.existsSync(path.join(repo, dir))) {
-        fs.renameSync(path.join(repo, dir), path.join(previous, dir))
+        renameWithRetry(path.join(repo, dir), path.join(aside, dir), retry)
         moved.push(dir)
       }
     }
     for (const dir of d.BUILD_DIRS) {
-      fs.renameSync(path.join(staging, dir), path.join(repo, dir))
+      renameWithRetry(path.join(staging, dir), path.join(repo, dir), retry)
       installed.push(dir)
     }
   } catch (error) {
-    for (const dir of installed) fs.renameSync(path.join(repo, dir), path.join(staging, dir))
-    for (const dir of moved) fs.renameSync(path.join(previous, dir), path.join(repo, dir))
+    for (const dir of installed) renameWithRetry(path.join(repo, dir), path.join(staging, dir))
+    for (const dir of moved) renameWithRetry(path.join(aside, dir), path.join(repo, dir))
+    const code = /** @type {NodeJS.ErrnoException} */ (error).code ?? ''
+    if (BUSY_CODES.has(code))
+      throw new UpdateError(
+        `La version précédente n’a pas pu être remplacée : un de ses fichiers est encore utilisé (${code}). Fermez Atelier Tab et les sessions Claude Code qui utilisent son serveur MCP, puis relancez : la compilation sera refaite.`,
+      )
     throw error
   }
-  fs.rmSync(previous, { recursive: true, force: true })
+  removeQuietly(aside)
+}
+
+/**
+ * Met `node_modules` de côté avant `npm ci` (docs/SUITE.md §8.4) : en cas d'échec, il est remis
+ * en place (la version précédente garde ses dépendances) ; après un succès, il est supprimé.
+ * @param {string} repo
+ * @returns {{ restore: () => void, discard: () => void }}
+ */
+function setModulesAside(repo) {
+  const current = path.join(repo, 'node_modules')
+  const aside = freeAside(workPaths(repo).modules)
+  let saved = false
+  if (fs.existsSync(current)) {
+    renameWithRetry(current, aside)
+    saved = true
+  }
+  return {
+    restore() {
+      if (!saved) return
+      removeQuietly(current)
+      if (!fs.existsSync(current)) renameWithRetry(aside, current)
+    },
+    discard() {
+      if (saved) removeQuietly(aside)
+    },
+  }
 }
 
 /**
@@ -685,20 +848,35 @@ async function runSteps(
   if (steps.includes('install')) {
     tasks.push({
       label: d.STEP_LABELS.install,
-      run: () =>
-        runCommand(toolchain.npm, ['ci', '--no-audit', '--no-fund'], {
-          cwd: repo,
-          // Réseau limité au registre npm (§8.2) : le binaire Electron du dépôt n'est pas téléchargé,
-          // l'app installée embarque le sien (`npm run app` le télécharge au besoin).
-          env: childEnv(env, toolchain, { ELECTRON_SKIP_BINARY_DOWNLOAD: '1' }),
-          log,
-          ...(onChild ? { onChild } : {}),
-        }).catch((error) => {
+      run: async () => {
+        // Fichier occupé (Windows : `npm run dev` ouvert…) : échec ici, avant d'avoir rien supprimé.
+        let aside
+        try {
+          aside = setModulesAside(repo)
+        } catch (error) {
           throw new UpdateError(
-            `L’installation des dépendances a échoué (${error.message}) Vérifiez la connexion au registre npm.`,
+            `Les dépendances actuelles (node_modules) n’ont pas pu être mises de côté : ${error instanceof Error ? error.message : String(error)}. Fermez les programmes lancés depuis le dépôt (npm run dev…), puis relancez.`,
+          )
+        }
+        try {
+          await runCommand(toolchain.npm, [...toolchain.npmArgs, 'ci', '--no-audit', '--no-fund'], {
+            cwd: repo,
+            // Réseau limité au registre npm (§8.2) : le binaire Electron du dépôt n'est pas
+            // téléchargé, l'app installée embarque le sien (`npm run app` le télécharge au besoin).
+            env: childEnv(env, toolchain, { ELECTRON_SKIP_BINARY_DOWNLOAD: '1' }),
+            log,
+            label: 'npm ci --no-audit --no-fund',
+            ...(onChild ? { onChild } : {}),
+          })
+        } catch (error) {
+          aside.restore()
+          throw new UpdateError(
+            `L’installation des dépendances a échoué (${error instanceof Error ? error.message : String(error)}) Vérifiez la connexion au registre npm.`,
             error instanceof UpdateError ? error.tail : '',
           )
-        }),
+        }
+        aside.discard()
+      },
     })
   }
   if (steps.includes('build')) {
@@ -709,10 +887,11 @@ async function runSteps(
       run: () => {
         fs.rmSync(paths.staging, { recursive: true, force: true })
         fs.mkdirSync(paths.staging, { recursive: true })
-        return runCommand(toolchain.npm, ['run', 'build'], {
+        return runCommand(toolchain.npm, [...toolchain.npmArgs, 'run', 'build'], {
           cwd: repo,
           env: childEnv(env, toolchain, { ATELIER_TAB_DIST_DIR: outDist }),
           log,
+          label: 'npm run build',
           ...(onChild ? { onChild } : {}),
         })
       },
@@ -720,10 +899,11 @@ async function runSteps(
     tasks.push({
       label: d.STEP_LABELS.buildDesktop,
       run: () =>
-        runCommand(toolchain.npm, ['run', 'build:desktop'], {
+        runCommand(toolchain.npm, [...toolchain.npmArgs, 'run', 'build:desktop'], {
           cwd: repo,
           env: childEnv(env, toolchain, { ATELIER_TAB_DESKTOP_DIR: outDesktop }),
           log,
+          label: 'npm run build:desktop',
           ...(onChild ? { onChild } : {}),
         }),
     })
@@ -843,6 +1023,7 @@ module.exports = {
   logTail,
   openLog,
   planUpdate,
+  renameWithRetry,
   readStamp,
   repoElectronVersion,
   repoState,

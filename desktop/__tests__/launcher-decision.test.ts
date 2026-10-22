@@ -7,9 +7,18 @@ import {
   FLAG_AFTER_UPDATE,
   FLAG_SKIP_UPDATE,
   LOGIN_PATH_COMMAND,
+  appDirs,
   candidateGitDirs,
   candidateNodeDirs,
+  candidateNodeDirsWin32,
   cleanPathEntries,
+  envPathValue,
+  FLAG_UPDATE_ONLY,
+  inheritedEnvToIgnore,
+  npmBeside,
+  splitPath,
+  toolNames,
+  withPath,
   decide,
   electronDrift,
   formatStamp,
@@ -263,12 +272,99 @@ describe('Node.js et git depuis le Finder', () => {
   })
 })
 
+describe('Node.js et git sous Windows (§9.3)', () => {
+  const env = {
+    ProgramFiles: 'C:\\Program Files',
+    ProgramW6432: 'C:\\Program Files',
+    LOCALAPPDATA: 'C:\\Users\\François\\AppData\\Local',
+    APPDATA: 'C:\\Users\\François\\AppData\\Roaming',
+    NVM_SYMLINK: 'C:\\nvm4w\\nodejs',
+  }
+
+  it('cleanPathEntries : séparateur ;, guillemets, casse, lecteurs, node_modules\\.bin', () => {
+    expect(splitPath('C:\\a;"C:\\Program Files\\nodejs\\";c:\\A\\', 'win32')).toHaveLength(3)
+    expect(
+      cleanPathEntries(
+        [
+          'C:\\a',
+          '"C:\\Program Files\\nodejs\\"',
+          'c:\\A\\',
+          'relatif\\bin',
+          'C:\\depot\\node_modules\\.bin',
+          'C:\\',
+          '\\\\serveur\\outils',
+          '/usr/bin',
+        ],
+        'win32',
+      ),
+    ).toEqual(['C:\\a', 'C:\\Program Files\\nodejs', 'C:\\', '\\\\serveur\\outils'])
+  })
+
+  it('ordre : retenu, PATH, nvm-windows, Program Files, Programs, fnm, nvm, Volta', () => {
+    const dirs = candidateNodeDirsWin32({
+      cachedDir: 'D:\\node',
+      envPath: 'C:\\Windows\\system32;C:\\Program Files\\nodejs\\',
+      env,
+      fnmVersions: ['v22.12.0', 'v24.1.0'],
+      nvmVersions: ['v20.19.0', 'v22.14.0'],
+      voltaVersions: ['22.12.0'],
+    })
+    expect(dirs).toEqual([
+      'D:\\node',
+      'C:\\Windows\\system32',
+      'C:\\Program Files\\nodejs',
+      'C:\\nvm4w\\nodejs',
+      'C:\\Users\\François\\AppData\\Local\\Programs\\nodejs',
+      'C:\\Users\\François\\AppData\\Roaming\\fnm\\aliases\\default',
+      'C:\\Users\\François\\AppData\\Roaming\\fnm\\node-versions\\v24.1.0\\installation',
+      'C:\\Users\\François\\AppData\\Roaming\\fnm\\node-versions\\v22.12.0\\installation',
+      'C:\\Users\\François\\AppData\\Roaming\\nvm\\v22.14.0',
+      'C:\\Users\\François\\AppData\\Roaming\\nvm\\v20.19.0',
+      'C:\\Users\\François\\AppData\\Local\\Volta\\tools\\image\\node\\22.12.0',
+    ])
+  })
+
+  it('npm : npm-cli.js à côté de node.exe (jamais npm.cmd) ; exécutables .exe', () => {
+    expect(npmBeside('C:\\Program Files\\nodejs', 'win32')).toBe(
+      'C:\\Program Files\\nodejs\\node_modules\\npm\\bin\\npm-cli.js',
+    )
+    expect(npmBeside('/usr/local/bin', 'darwin')).toBe('/usr/local/bin/npm')
+    expect(toolNames('win32')).toEqual({ node: 'node.exe', git: 'git.exe' })
+    expect(toolNames('darwin')).toEqual({ node: 'node', git: 'git' })
+  })
+
+  it('git : retenu, PATH, Git for Windows', () => {
+    expect(
+      candidateGitDirs({
+        cachedGit: 'E:\\Git\\cmd\\git.exe',
+        envPath: 'C:\\Windows',
+        home: 'C:\\Users\\f',
+        platform: 'win32',
+        env,
+      }),
+    ).toEqual([
+      'E:\\Git\\cmd',
+      'C:\\Windows',
+      'C:\\Program Files\\Git\\cmd',
+      'C:\\Users\\François\\AppData\\Local\\Programs\\Git\\cmd',
+    ])
+  })
+
+  it('PATH : clé Path de Windows lue et remplacée sans doublon de casse', () => {
+    expect(envPathValue({ Path: 'C:\\a' })).toBe('C:\\a')
+    expect(withPath({ Path: 'C:\\a', X: '1' }, 'C:\\b')).toEqual({ X: '1', PATH: 'C:\\b' })
+  })
+})
+
 describe('divers', () => {
   it('drapeaux de relance : jamais cumulés', () => {
     expect(parseFlags(['/app', FLAG_SKIP_UPDATE])).toEqual({
       skipUpdate: true,
       afterUpdate: false,
+      updateOnly: false,
     })
+    expect(parseFlags(['/app', FLAG_UPDATE_ONLY]).updateOnly).toBe(true)
+    expect(relaunchArgs(['/app', FLAG_UPDATE_ONLY, '--y'])).toEqual(['--y'])
     expect(relaunchArgs(['/app', '--x', FLAG_SKIP_UPDATE], FLAG_AFTER_UPDATE)).toEqual([
       '--x',
       FLAG_AFTER_UPDATE,
@@ -286,6 +382,50 @@ describe('divers', () => {
     expect(
       logFilePath({ platform: 'darwin', home: '/Users/f', env: { ATELIER_TAB_LOG_DIR: '/t/' } }),
     ).toBe('/t/mise-a-jour.log')
+  })
+
+  it('journal Windows : %LOCALAPPDATA%\\Atelier_Tab\\Logs (chemins avec espaces et accents)', () => {
+    const env = {
+      APPDATA: 'C:\\Users\\François Pichon\\AppData\\Roaming',
+      LOCALAPPDATA: 'C:\\Users\\François Pichon\\AppData\\Local',
+    }
+    const home = 'C:\\Users\\François Pichon'
+    expect(logFilePath({ platform: 'win32', home, env })).toBe(
+      'C:\\Users\\François Pichon\\AppData\\Local\\Atelier_Tab\\Logs\\mise-a-jour.log',
+    )
+    expect(appDirs({ platform: 'win32', home, env }).config).toBe(
+      'C:\\Users\\François Pichon\\AppData\\Roaming\\Atelier_Tab',
+    )
+    // Variables absentes : dossiers usuels sous le profil.
+    expect(appDirs({ platform: 'win32', home, env: {} })).toEqual({
+      config: 'C:\\Users\\François Pichon\\AppData\\Roaming\\Atelier_Tab',
+      logs: 'C:\\Users\\François Pichon\\AppData\\Local\\Atelier_Tab\\Logs',
+    })
+  })
+
+  it('dossiers de l’app : macOS et Linux inchangés', () => {
+    expect(appDirs({ platform: 'darwin', home: '/Users/f', env: {} }).config).toBe(
+      '/Users/f/Library/Application Support/Atelier_Tab',
+    )
+    expect(appDirs({ platform: 'linux', home: '/home/f', env: {} }).config).toBe(
+      '/home/f/.config/Atelier_Tab',
+    )
+    expect(
+      appDirs({ platform: 'linux', home: '/home/f', env: { XDG_CONFIG_HOME: '/x' } }).config,
+    ).toBe('/x/Atelier_Tab')
+  })
+
+  it('variables héritées ignorées au lancement (§9.4), casse indifférente', () => {
+    expect(
+      inheritedEnvToIgnore({
+        ELECTRON_RUN_AS_NODE: '1',
+        Node_Options: '--require x.js',
+        NODE_ENV: 'production',
+        ELECTRON_NO_ASAR: '1',
+        ATELIER_TAB_DATA: 'C:\\Données',
+        PATH: '/usr/bin',
+      }).sort(),
+    ).toEqual(['ELECTRON_NO_ASAR', 'ELECTRON_RUN_AS_NODE', 'NODE_ENV', 'Node_Options'])
   })
 
   it('Electron différent entre l’app et le dépôt → conseil de réinstallation', () => {

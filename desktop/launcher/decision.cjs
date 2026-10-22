@@ -11,6 +11,8 @@
  */
 'use strict'
 
+const path = require('node:path')
+
 /**
  * État du dépôt au moment du lancement.
  * @typedef {object} RepoState
@@ -187,28 +189,104 @@ function lockIsStale(holder, { now, isAlive, fileAgeMs = Infinity, maxAgeMs = LO
 /** Dossiers d'outils courants sur macOS, après ceux du shell de connexion. */
 const COMMON_BIN_DIRS = Object.freeze(['/opt/homebrew/bin', '/usr/local/bin'])
 
+/** @param {string | undefined} platform */
+const isWin = (platform) => platform === 'win32'
+
+/**
+ * Chemin absolu pour la plateforme : `/…` (macOS, Linux) ; `C:\…` ou `\\serveur\…` (Windows).
+ * @param {string} entry
+ * @param {string} [platform]
+ */
+function isAbsoluteFor(entry, platform) {
+  return isWin(platform) ? /^(?:[A-Za-z]:[\\/]|\\\\[^\\])/.test(entry) : entry.startsWith('/')
+}
+
 /**
  * Entrées de PATH utilisables : absolues, sans `node_modules/.bin` ni dossiers ajoutés par npm
- * (`node-gyp-bin`), sans doublon.
+ * (`node-gyp-bin`), sans doublon. Windows : guillemets retirés, `\` final retiré (sauf `C:\`),
+ * doublons comparés sans tenir compte de la casse.
  * @param {Iterable<string | undefined | null>} entries
+ * @param {string} [platform] `process.platform` (défaut : règles POSIX).
  * @returns {string[]}
  */
-function cleanPathEntries(entries) {
+function cleanPathEntries(entries, platform) {
+  const win = isWin(platform)
   /** @type {string[]} */
   const out = []
+  /** @type {Set<string>} */
+  const seen = new Set()
   for (const raw of entries) {
     if (typeof raw !== 'string') continue
-    const entry = raw.trim().replace(/\/+$/, '') || (raw.trim() === '/' ? '/' : '')
-    if (!entry.startsWith('/')) continue
-    if (/(^|\/)node_modules\/\.bin$/.test(entry) || entry.includes('node-gyp-bin')) continue
-    if (!out.includes(entry)) out.push(entry)
+    let entry = raw.trim()
+    if (win) {
+      entry = entry.replace(/^"(.*)"$/, '$1').trim()
+      entry = /^[A-Za-z]:[\\/]$/.test(entry) ? entry : entry.replace(/[\\/]+$/, '')
+    } else {
+      entry = entry.replace(/\/+$/, '') || (entry === '/' ? '/' : '')
+    }
+    if (!isAbsoluteFor(entry, platform)) continue
+    if (/(^|[\\/])node_modules[\\/]\.bin$/i.test(entry) || entry.includes('node-gyp-bin')) continue
+    const key = win ? entry.toLowerCase().replace(/\//g, '\\') : entry
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(entry)
   }
   return out
 }
 
-/** @param {string | undefined} value */
-function splitPath(value) {
-  return value ? value.split(':') : []
+/**
+ * Découpe un PATH (`:` ; Windows : `;`).
+ * @param {string | undefined} value
+ * @param {string} [platform]
+ */
+function splitPath(value, platform) {
+  return value ? value.split(isWin(platform) ? ';' : ':') : []
+}
+
+/**
+ * Valeur de PATH d'un environnement : sous Windows la clé peut s'écrire `Path`.
+ * @param {Record<string, string | undefined>} env
+ * @returns {string | undefined}
+ */
+function envPathValue(env) {
+  if (env.PATH !== undefined) return env.PATH
+  const key = Object.keys(env).find((k) => k.toUpperCase() === 'PATH')
+  return key ? env[key] : undefined
+}
+
+/**
+ * Copie d'un environnement avec un nouveau PATH, sans doublon de casse (`Path` et `PATH` côte à
+ * côte : Windows n'en garderait qu'un, au hasard).
+ * @param {Record<string, string | undefined>} env
+ * @param {string} value
+ * @returns {Record<string, string>}
+ */
+function withPath(env, value) {
+  /** @type {Record<string, string>} */
+  const out = {}
+  for (const [key, v] of Object.entries(env)) {
+    if (v !== undefined && key.toUpperCase() !== 'PATH') out[key] = v
+  }
+  out.PATH = value
+  return out
+}
+
+/** Noms des exécutables cherchés. @param {string} [platform] */
+function toolNames(platform) {
+  return isWin(platform) ? { node: 'node.exe', git: 'git.exe' } : { node: 'node', git: 'git' }
+}
+
+/**
+ * npm à côté de `node` : Windows → `node_modules\npm\bin\npm-cli.js`, lancé par `node.exe`
+ * (jamais `npm.cmd` : un `.cmd` exige `cmd.exe`, donc une ligne de commande à échapper) ;
+ * ailleurs → l'exécutable `npm`.
+ * @param {string} dir
+ * @param {string} [platform]
+ */
+function npmBeside(dir, platform) {
+  return isWin(platform)
+    ? path.win32.join(dir, 'node_modules', 'npm', 'bin', 'npm-cli.js')
+    : path.posix.join(dir, 'npm')
 }
 
 /** Repère qui entoure le PATH imprimé par le shell de connexion (le shell peut écrire autre chose). */
@@ -281,11 +359,25 @@ function candidateNodeDirs({
 
 /**
  * Dossiers où chercher `git` : Homebrew avant `/usr/bin/git`, simple relais vers les outils de
- * développement Apple (qui ouvrent une fenêtre d'installation s'ils manquent).
- * @param {{ cachedGit?: string | null, envPath?: string, home: string }} input
+ * développement Apple (qui ouvrent une fenêtre d'installation s'ils manquent). Windows : PATH, puis
+ * Git for Windows (`%ProgramFiles%\Git\cmd`, installation par utilisateur).
+ * @param {{ cachedGit?: string | null, envPath?: string, home: string, platform?: string, env?: Record<string, string | undefined> }} input
  * @returns {string[]}
  */
-function candidateGitDirs({ cachedGit, envPath, home }) {
+function candidateGitDirs({ cachedGit, envPath, home, platform, env = {} }) {
+  if (isWin(platform)) {
+    const cached =
+      cachedGit && /[\\/]git\.exe$/i.test(cachedGit) ? path.win32.dirname(cachedGit) : null
+    return cleanPathEntries(
+      [
+        cached,
+        ...splitPath(envPath, platform),
+        ...programFilesDirs(env).map((p) => path.win32.join(p, 'Git', 'cmd')),
+        env.LOCALAPPDATA ? path.win32.join(env.LOCALAPPDATA, 'Programs', 'Git', 'cmd') : null,
+      ],
+      platform,
+    )
+  }
   const cached = cachedGit && cachedGit.endsWith('/git') ? cachedGit.slice(0, -4) : null
   return cleanPathEntries([
     cached,
@@ -294,6 +386,75 @@ function candidateGitDirs({ cachedGit, envPath, home }) {
     ...splitPath(envPath),
     '/usr/bin',
   ])
+}
+
+/** `%ProgramFiles%` et `%ProgramW6432%` (Node.js x64 depuis un processus ARM64 ou 32 bits). @param {Record<string, string | undefined>} env */
+function programFilesDirs(env) {
+  return [env.ProgramFiles, env.ProgramW6432, env['ProgramFiles(x86)']].filter(
+    /** @returns {p is string} */ (p) => typeof p === 'string' && p !== '',
+  )
+}
+
+/**
+ * Dossiers où chercher `node.exe` (et npm à côté) sous Windows, dans l'ordre (docs/SUITE.md §9.3) :
+ * dossier retenu la dernière fois, PATH, nvm-windows (`%NVM_SYMLINK%`), `%ProgramFiles%\nodejs`,
+ * `%LOCALAPPDATA%\Programs\nodejs`, fnm (alias `default`, puis la version la plus récente),
+ * nvm-windows (`%NVM_HOME%\v…`), Volta (`tools\image\node\…`).
+ * @param {object} input
+ * @param {string | null} [input.cachedDir]
+ * @param {string} [input.envPath]
+ * @param {Record<string, string | undefined>} input.env
+ * @param {string[]} [input.nvmVersions]   Dossiers de `%NVM_HOME%` (`v22.12.0`…).
+ * @param {string[]} [input.fnmVersions]   Dossiers de `<fnm>\node-versions`.
+ * @param {string[]} [input.voltaVersions] Dossiers de `<volta>\tools\image\node`.
+ * @returns {string[]}
+ */
+function candidateNodeDirsWin32({
+  cachedDir,
+  envPath,
+  env,
+  nvmVersions = [],
+  fnmVersions = [],
+  voltaVersions = [],
+}) {
+  const j = path.win32.join
+  const dirs = windowsToolRoots(env)
+  return cleanPathEntries(
+    [
+      cachedDir,
+      ...splitPath(envPath, 'win32'),
+      env.NVM_SYMLINK,
+      ...programFilesDirs(env).map((p) => j(p, 'nodejs')),
+      env.LOCALAPPDATA ? j(env.LOCALAPPDATA, 'Programs', 'nodejs') : null,
+      dirs.fnm ? j(dirs.fnm, 'aliases', 'default') : null,
+      ...(dirs.fnm
+        ? nvmVersionsDescending(fnmVersions).map((v) =>
+            j(dirs.fnm ?? '', 'node-versions', v, 'installation'),
+          )
+        : []),
+      ...(dirs.nvm ? nvmVersionsDescending(nvmVersions).map((v) => j(dirs.nvm ?? '', v)) : []),
+      ...(dirs.volta
+        ? nvmVersionsDescending(voltaVersions).map((v) =>
+            j(dirs.volta ?? '', 'tools', 'image', 'node', v),
+          )
+        : []),
+    ],
+    'win32',
+  )
+}
+
+/**
+ * Dossiers des gestionnaires de versions de Node.js sous Windows (à lister par `update.cjs`).
+ * @param {Record<string, string | undefined>} env
+ * @returns {{ nvm: string | null, fnm: string | null, volta: string | null }}
+ */
+function windowsToolRoots(env) {
+  const j = path.win32.join
+  return {
+    nvm: env.NVM_HOME || (env.APPDATA ? j(env.APPDATA, 'nvm') : null),
+    fnm: env.FNM_DIR || (env.APPDATA ? j(env.APPDATA, 'fnm') : null),
+    volta: env.VOLTA_HOME || (env.LOCALAPPDATA ? j(env.LOCALAPPDATA, 'Volta') : null),
+  }
 }
 
 /** @param {string} name @param {string} alias */
@@ -346,12 +507,18 @@ function meetsMinimum(version, minimum) {
 const FLAG_SKIP_UPDATE = '--atelier-sans-mise-a-jour'
 /** Relance qui suit une mise à jour réussie : jamais de seconde mise à jour d'affilée. */
 const FLAG_AFTER_UPDATE = '--atelier-apres-mise-a-jour'
+/**
+ * Mise à jour seule, sans fenêtre : l'app met à jour la compilation puis s'arrête (code 0 : à jour,
+ * 1 : échec). Sert à la CI Windows (docs/SUITE.md §9.5) et au diagnostic.
+ */
+const FLAG_UPDATE_ONLY = '--atelier-mise-a-jour-seule'
 
 /** @param {string[]} argv */
 function parseFlags(argv) {
   return {
     skipUpdate: argv.includes(FLAG_SKIP_UPDATE),
     afterUpdate: argv.includes(FLAG_AFTER_UPDATE),
+    updateOnly: argv.includes(FLAG_UPDATE_ONLY),
   }
 }
 
@@ -361,20 +528,75 @@ function parseFlags(argv) {
  * @param {string} [flag]
  */
 function relaunchArgs(argv, flag) {
-  const kept = argv.slice(1).filter((a) => a !== FLAG_SKIP_UPDATE && a !== FLAG_AFTER_UPDATE)
+  const ours = [FLAG_SKIP_UPDATE, FLAG_AFTER_UPDATE, FLAG_UPDATE_ONLY]
+  const kept = argv.slice(1).filter((a) => !ours.includes(a))
   return flag ? [...kept, flag] : kept
 }
 
 /**
- * Journal de la mise à jour : `~/Library/Logs/Atelier_Tab/mise-a-jour.log` sur macOS.
+ * Dossiers propres à l'app hors du dépôt et hors du dossier de données (docs/SUITE.md §9.2), seule
+ * source de ces emplacements (lanceur, préférences, secrets) :
+ * - macOS : `~/Library/Application Support/Atelier_Tab`, journaux `~/Library/Logs/Atelier_Tab` ;
+ * - Windows : `%APPDATA%\Atelier_Tab`, journaux `%LOCALAPPDATA%\Atelier_Tab\Logs` ;
+ * - Linux : XDG (`~/.config/Atelier_Tab`, journaux `~/.local/state/Atelier_Tab`).
+ * @param {{ platform: string, home: string, env: Record<string, string | undefined> }} input
+ * @returns {{ config: string, logs: string }}
+ */
+function appDirs({ platform, home, env }) {
+  const name = 'Atelier_Tab'
+  if (platform === 'darwin')
+    return {
+      config: path.posix.join(home, 'Library', 'Application Support', name),
+      logs: path.posix.join(home, 'Library', 'Logs', name),
+    }
+  if (isWin(platform)) {
+    const j = path.win32.join
+    return {
+      config: j(env.APPDATA || j(home, 'AppData', 'Roaming'), name),
+      logs: j(env.LOCALAPPDATA || j(home, 'AppData', 'Local'), name, 'Logs'),
+    }
+  }
+  return {
+    config: path.posix.join(env.XDG_CONFIG_HOME || path.posix.join(home, '.config'), name),
+    logs: path.posix.join(env.XDG_STATE_HOME || path.posix.join(home, '.local', 'state'), name),
+  }
+}
+
+/**
+ * Journal de la mise à jour : `~/Library/Logs/Atelier_Tab/mise-a-jour.log` sur macOS,
+ * `%LOCALAPPDATA%\Atelier_Tab\Logs\mise-a-jour.log` sous Windows.
  * @param {{ platform: string, home: string, env: Record<string, string | undefined> }} input
  */
 function logFilePath({ platform, home, env }) {
-  if (env.ATELIER_TAB_LOG_DIR)
-    return `${env.ATELIER_TAB_LOG_DIR.replace(/\/+$/, '')}/mise-a-jour.log`
-  if (platform === 'darwin') return `${home}/Library/Logs/Atelier_Tab/mise-a-jour.log`
-  const state = env.XDG_STATE_HOME || `${home}/.local/state`
-  return `${state}/Atelier_Tab/mise-a-jour.log`
+  const p = isWin(platform) ? path.win32 : path.posix
+  if (env.ATELIER_TAB_LOG_DIR) return p.join(env.ATELIER_TAB_LOG_DIR, 'mise-a-jour.log')
+  return p.join(appDirs({ platform, home, env }).logs, 'mise-a-jour.log')
+}
+
+/**
+ * Variables héritées ignorées au lancement de l'app de bureau (docs/SUITE.md §9.4). Tab n'en
+ * reçoit aucune qui désigne d'autres données (`ATELIER_TAB_DATA` est la sienne), mais celles-ci,
+ * posées par un terminal ou une autre app, casseraient sa relance ou sa mise à jour :
+ * - `ELECTRON_RUN_AS_NODE` : l'app relancée (ou Electron lancé par npm) démarrerait en simple Node.js ;
+ * - `ELECTRON_NO_ASAR` : le point d'entrée de l'app (dans `app.asar`) deviendrait illisible ;
+ * - `NODE_OPTIONS` : options injectées dans npm, la compilation et l'app relancée (`--require`,
+ *   `--inspect`…) ;
+ * - `NODE_ENV` : `production` ferait sauter les devDependencies à `npm ci` (compilation impossible).
+ */
+const IGNORED_INHERITED_ENV = Object.freeze([
+  'ELECTRON_RUN_AS_NODE',
+  'ELECTRON_NO_ASAR',
+  'NODE_OPTIONS',
+  'NODE_ENV',
+])
+
+/**
+ * Noms des variables de `env` à ignorer (casse indifférente, comme sous Windows).
+ * @param {Record<string, string | undefined>} env
+ * @returns {string[]}
+ */
+function inheritedEnvToIgnore(env) {
+  return Object.keys(env).filter((key) => IGNORED_INHERITED_ENV.includes(key.toUpperCase()))
 }
 
 /**
@@ -405,6 +627,18 @@ function tailLines(text, count) {
 
 module.exports = {
   BUILD_DIRS,
+  FLAG_UPDATE_ONLY,
+  IGNORED_INHERITED_ENV,
+  appDirs,
+  candidateNodeDirsWin32,
+  envPathValue,
+  inheritedEnvToIgnore,
+  isAbsoluteFor,
+  npmBeside,
+  splitPath,
+  toolNames,
+  windowsToolRoots,
+  withPath,
   BUILD_OUTPUTS,
   COMMON_BIN_DIRS,
   FLAG_AFTER_UPDATE,
