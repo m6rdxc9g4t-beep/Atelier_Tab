@@ -80,6 +80,16 @@ async function loadFile(f: File): Promise<LoadedFile | { error: string }> {
 const fieldClass =
   'h-7 rounded-md border border-line-strong bg-field px-1.5 outline-none focus:border-focus focus:shadow-focus'
 
+/** Au moins une colonne du fichier porte le libellé d'une colonne de la table. */
+function fileMatchesTable(file: LoadedFile, table: Table): boolean {
+  try {
+    const analysis = analyzeCsv(file.text, file.encoding ? { encoding: file.encoding } : {})
+    return suggestPlan(analysis, table, lookupContext()).targets.some((t) => t.kind === 'field')
+  } catch {
+    return false
+  }
+}
+
 /** Assistant d'import CSV, ouvert par `useUIStore.openImport`. */
 export function ImportDialog() {
   const request = useUIStore((s) => s.importRequest)
@@ -252,7 +262,11 @@ function MappingStep({
   const project = useDataStore((s) => s.projects[request.projectId])
   const [delimiter, setDelimiter] = useState<CsvDelimiter | 'auto'>('auto')
   const [hasHeader, setHasHeader] = useState(true)
-  const [destination, setDestination] = useState<'new' | 'table'>(table ? 'table' : 'new')
+  // Table ouverte proposée seulement si au moins une colonne du fichier y correspond :
+  // sinon les données atterriraient à côté de colonnes vides.
+  const [destination, setDestination] = useState<'new' | 'table'>(() =>
+    table && fileMatchesTable(file, table) ? 'table' : 'new',
+  )
   const [name, setName] = useState(() => tableNameFromFile(file.name))
   const [busy, setBusy] = useState(false)
   const [commitError, setCommitError] = useState<string | null>(null)

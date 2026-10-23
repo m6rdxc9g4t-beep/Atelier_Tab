@@ -19,7 +19,7 @@ Atelier Tab réunit la liberté de calcul d'Excel (formules, références `A1:C1
 | **Import CSV**         | Fichier déposé, choisi ou collé depuis Excel : séparateur et encodage détectés (Windows-1252 compris), formats français, types et statuts déduits, correspondance des colonnes, ajout ou mise à jour par colonne clé. Le CSV enrichi d'Atelier Tab se réimporte sans perte. |
 | **DataFlow**           | Export JSON normalisé (schéma `atelier_projets` v2.1.0), CSV enrichi, envoi direct à Atelier Projets (préréglage local, résumé d'import). Instantanés pour Atelier Viz.                                                                                                     |
 | **Persistance**        | App de bureau : fichiers JSON dans `~/Atelier_Tab`, synchronisés en direct. Navigateur : IndexedDB.                                                                                                                                                                         |
-| **IA**                 | Serveur MCP pour Claude Code et assistant intégré (Ollama local, ou Claude en ligne) : mêmes 20 outils, mêmes règles que la grille. Nœud Atelier pour les workflows d'Atelier Nexus.                                                                                        |
+| **IA**                 | Serveur MCP pour Claude Code et assistant intégré (Ollama local, ou Claude en ligne) : mêmes 21 outils, mêmes règles que la grille. Nœud Atelier pour les workflows d'Atelier Nexus.                                                                                        |
 
 ## Démarrage
 
@@ -141,6 +141,7 @@ L'assistant voit la table ouverte et la cellule sélectionnée, et chaque action
 | `set_cells`, `add_rows`, `delete_rows`         | Modifier les lignes (saisie à la française, formules)            |
 | `add_column`, `update_column`, `delete_column` | Modifier les colonnes (formules, préréglage « Statuts Atelier ») |
 | `create_project`, `create_table`, `rename`     | Organiser                                                        |
+| `delete`                                       | Supprimer une table ou un projet (confirmation demandée)         |
 | `import_csv`                                   | Importer un CSV (nouvelle table ou table existante, colonne clé) |
 | `evaluate`                                     | Calculer une formule sans rien modifier                          |
 | `get_settings`                                 | Lire le mode « En ligne » (lecture seule)                        |

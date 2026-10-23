@@ -39,6 +39,10 @@ export function describeToolCall(
       return args.table !== undefined
         ? `Import CSV dans « ${table} »`
         : `Import CSV dans la nouvelle table « ${text('name') || 'Import CSV'} »`
+    case 'delete':
+      return args.kind === 'project'
+        ? `Suppression du projet « ${text('target')} »`
+        : `Suppression de la table « ${text('target')} »`
     case 'rename':
       return `Renommage en « ${text('name')} »`
     case 'evaluate':

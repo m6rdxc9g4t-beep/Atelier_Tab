@@ -913,6 +913,39 @@ export const TOOLS = [
   }),
 
   tool({
+    name: 'delete',
+    description:
+      'Supprime définitivement une table (ses colonnes et ses lignes) ou un projet (toutes ses tables). Irréversible : à n’utiliser que si l’utilisateur l’a demandé explicitement.',
+    input: z.object({
+      kind: z.enum(['project', 'table']),
+      target: z.string().describe('id ou nom exact'),
+    }),
+    async run({ kind, target }, host) {
+      const d = data(host)
+      if (kind === 'table') {
+        const table = resolveTable(d, target)
+        const rows = table.rowOrder.length
+        await requireConfirmation(host, {
+          tool: 'delete',
+          kind: 'delete',
+          message: `L’assistant veut supprimer la table « ${table.name} » et ses ${plural(rows, 'ligne', 'lignes')}.`,
+        })
+        host.store.getState().deleteTable(table.id)
+        return { deleted: { kind, id: table.id, name: table.name, rows } }
+      }
+      const project = resolveProject(d, target)
+      const tables = project.tableIds.length
+      await requireConfirmation(host, {
+        tool: 'delete',
+        kind: 'delete',
+        message: `L’assistant veut supprimer le projet « ${project.name} » et ses ${plural(tables, 'table', 'tables')}.`,
+      })
+      host.store.getState().deleteProject(project.id)
+      return { deleted: { kind, id: project.id, name: project.name, tables } }
+    },
+  }),
+
+  tool({
     name: 'evaluate',
     description:
       'Calcule une formule sur une table sans rien modifier, ex. "=SUM(C1:C3)*1.2" ou "=AVERAGE(D1:D10)". Fonctions : SUM, AVERAGE/AVG, MIN, MAX, COUNT, COUNTA, IF, IFERROR, AND, OR, NOT, ROUND, ABS, CONCAT.',
