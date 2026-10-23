@@ -2,6 +2,8 @@
  * Client Ollama minimal (API locale http://127.0.0.1:11434).
  * Dans l'app de bureau, les requêtes passent par le processus principal ; dans le
  * navigateur (npm run dev), elles partent directement vers Ollama.
+ * Version web hébergée sur un serveur : `VITE_OLLAMA_URL` (au build) désigne l'Ollama
+ * du serveur, par exemple `/ollama` relayé par le portail sur la même origine.
  */
 import { getDesktopApi, type OllamaRequest, type OllamaResponse } from '@/services/desktop'
 
@@ -10,7 +12,25 @@ export interface OllamaTransport {
   cancel(id: string): void
 }
 
-export function createOllamaTransport(baseUrl = 'http://127.0.0.1:11434'): OllamaTransport {
+/** Ollama de cette machine, adresse par défaut. */
+export const LOCAL_OLLAMA_URL = 'http://127.0.0.1:11434'
+
+type BuildEnv = Record<string, string | undefined>
+// Ce fichier est aussi compilé pour le bureau (sans les types de Vite) : lecture prudente.
+const buildEnv: BuildEnv = (import.meta as { env?: BuildEnv }).env ?? {}
+
+/** Adresse d'Ollama pour la version navigateur : `VITE_OLLAMA_URL` si fourni au build, sinon cette machine. */
+export function ollamaBaseUrl(env: BuildEnv = buildEnv): string {
+  const configured = env.VITE_OLLAMA_URL?.trim()
+  return configured ? configured.replace(/\/+$/, '') : LOCAL_OLLAMA_URL
+}
+
+/** Vrai quand la version web utilise l'Ollama d'un serveur (messages d'aide adaptés). */
+export function usesServerOllama(env: BuildEnv = buildEnv): boolean {
+  return !getDesktopApi() && ollamaBaseUrl(env) !== LOCAL_OLLAMA_URL
+}
+
+export function createOllamaTransport(baseUrl = ollamaBaseUrl()): OllamaTransport {
   const desktop = getDesktopApi()
   if (desktop) {
     return { request: (req) => desktop.ollama(req), cancel: (id) => void desktop.ollamaCancel(id) }

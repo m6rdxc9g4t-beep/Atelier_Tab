@@ -7,6 +7,7 @@
  */
 import type { ClaudeStatus } from './claude'
 import type { EngineId } from './provider'
+import { usesServerOllama } from './ollama'
 
 export type EngineChoice = 'auto' | 'ollama' | 'claude'
 
@@ -64,8 +65,10 @@ export function resolveEngine(input: EngineInputs): EngineState {
 }
 
 /** Ligne bouclier : ce qui est envoyé quand ce moteur répond (contrat §5.2, cas de Tab). */
-export function privacyNote(engine: EngineId): string {
-  return engine === 'claude'
-    ? 'Réponse par Claude. Seules la demande et les cellules que l’assistant lit avec ses outils (contenu des tables) sont envoyées.'
+export function privacyNote(engine: EngineId, serverOllama = usesServerOllama()): string {
+  if (engine === 'claude')
+    return 'Réponse par Claude. Seules la demande et les cellules que l’assistant lit avec ses outils (contenu des tables) sont envoyées.'
+  return serverOllama
+    ? 'Réponse par l’IA de votre serveur (Ollama). Rien ne part ailleurs que sur votre serveur.'
     : 'Réponse par Ollama (local). Rien ne quitte cet ordinateur.'
 }

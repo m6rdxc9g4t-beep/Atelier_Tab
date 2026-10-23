@@ -277,6 +277,7 @@ describe('choix du moteur (SUITE.md §5.1–5.2)', () => {
 
   it('ligne bouclier : ce qui est envoyé', () => {
     expect(privacyNote('claude')).toMatch(/la demande et les cellules que l’assistant lit/)
-    expect(privacyNote('ollama')).toMatch(/Rien ne quitte cet ordinateur/)
+    expect(privacyNote('ollama', false)).toMatch(/Rien ne quitte cet ordinateur/)
+    expect(privacyNote('ollama', true)).toMatch(/IA de votre serveur/)
   })
 })
