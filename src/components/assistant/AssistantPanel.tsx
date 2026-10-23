@@ -21,7 +21,7 @@ import {
   type ClaudeStatus,
 } from '@/ai/claude'
 import { ENGINE_CHOICES, privacyNote, resolveEngine, type EngineState } from '@/ai/engine'
-import type { ModelsResult } from '@/ai/ollama'
+import { usesServerOllama, type ModelsResult } from '@/ai/ollama'
 import { ENGINE_LABELS, ollamaProvider } from '@/ai/provider'
 import { answerConfirmation, askAssistant, cancelAssistant } from '@/store/assistant-actions'
 import { useAssistant, type AssistantEntry } from '@/store/assistant.store'
@@ -514,13 +514,25 @@ function OllamaMissing({
   return (
     <div className="flex flex-col gap-3">
       <p className="font-medium text-ink">
-        {reason === 'unreachable' ? 'Ollama n’est pas lancé' : 'Ollama ne répond pas correctement'}
+        {usesServerOllama()
+          ? 'L’IA du serveur ne répond pas'
+          : reason === 'unreachable'
+            ? 'Ollama n’est pas lancé'
+            : 'Ollama ne répond pas correctement'}
       </p>
-      <p className="text-muted">
-        Ouvrez l’application Ollama, ou lancez{' '}
-        <code className="rounded bg-surface-sunken px-1 font-mono">ollama serve</code> dans le
-        Terminal, puis réessayez.
-      </p>
+      {usesServerOllama() ? (
+        <p className="text-muted">
+          Elle démarre peut-être encore : réessayez dans un instant. Si cela dure, vérifiez le
+          service <code className="rounded bg-surface-sunken px-1 font-mono">ollama</code> du
+          serveur.
+        </p>
+      ) : (
+        <p className="text-muted">
+          Ouvrez l’application Ollama, ou lancez{' '}
+          <code className="rounded bg-surface-sunken px-1 font-mono">ollama serve</code> dans le
+          Terminal, puis réessayez.
+        </p>
+      )}
       <p className="text-[12px] text-faint">{message}</p>
       {!claudeHint && (
         <p className="text-[12px] text-muted">Autre moteur : choisissez « Claude » ci-dessus.</p>
@@ -557,11 +569,11 @@ function NoToolModel({ onRetry, hasModels }: { onRetry: () => void; hasModels: b
         {hasModels ? 'Aucun de vos modèles ne sait utiliser d’outils' : 'Aucun modèle installé'}
       </p>
       <p className="text-muted">
-        Pour agir dans vos tables, l’assistant a besoin d’un modèle compatible avec les outils. Dans
-        le Terminal :
+        Pour agir dans vos tables, l’assistant a besoin d’un modèle compatible avec les outils.
+        {usesServerOllama() ? ' Sur le serveur :' : ' Dans le Terminal :'}
       </p>
       <code className="rounded-md bg-surface-sunken px-2 py-1.5 font-mono text-[12px]">
-        ollama pull qwen3:8b
+        {usesServerOllama() ? 'sudo ./update.sh' : 'ollama pull qwen3:8b'}
       </code>
       <RetryButton onRetry={onRetry} />
     </div>
