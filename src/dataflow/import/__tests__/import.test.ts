@@ -96,6 +96,32 @@ describe('detectDelimiter', () => {
     expect(detectDelimiter('a|b\n1|2\n')).toBe('|')
   })
 
+  it('point en dernier recours (export OpenProject), jamais devant un séparateur usuel', () => {
+    const openProject = [
+      'id.Sujet.Type.Assigné à.Statut.Temps passé.Date de début',
+      '1056.Corrections du module.Epic.Marie Dubois.Closed."79.0".""',
+      '1057.   US-001 : Afficher les trigrammes.Story.Marie Dubois.Closed."3.37".09/02/2026',
+      '1058.Créer une colonne calculée.Feature.Karim Benali.In progress."0.25".10/02/2026',
+    ].join('\n')
+    expect(detectDelimiter(openProject)).toBe('.')
+    const a = analyzeCsv(openProject)
+    expect(a.columns.map((c) => c.header)).toEqual([
+      'id',
+      'Sujet',
+      'Type',
+      'Assigné à',
+      'Statut',
+      'Temps passé',
+      'Date de début',
+    ])
+    expect(a.rows[1]?.[5]).toBe('3.37')
+    // Des nombres à point décimal ne font pas du point le séparateur.
+    expect(detectDelimiter('Nom,Prix\nA,1.5\nB,2.25\n')).toBe(',')
+    expect(detectDelimiter('Nom;Prix\nA;1.5\nB;2.25\n')).toBe(';')
+    // Une seule colonne de texte avec des points : pas de découpage hasardeux.
+    expect(detectDelimiter('Note\nVoir p. 3\nFin.\n')).toBe(';')
+  })
+
   it('ligne « sep= » prioritaire', () => {
     expect(detectDelimiter('sep=,\na;b,c\n')).toBe(',')
   })

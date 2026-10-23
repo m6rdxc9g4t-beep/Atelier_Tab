@@ -154,7 +154,7 @@ describe('modes et navigation', () => {
 
   it('ouvre une autre table depuis la sidebar', () => {
     render(<App />)
-    fireEvent.click(screen.getByRole('button', { name: /Calculs Surfaces/ }))
+    fireEvent.click(screen.getByRole('button', { name: /^Calculs Surfaces/ }))
     expect(text(cell('rec_sf_total', 'sf_area'))).toBe('272,44')
   })
 

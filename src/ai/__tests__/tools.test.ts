@@ -42,6 +42,7 @@ describe('définitions', () => {
       'create_table',
       'import_csv',
       'rename',
+      'delete',
       'evaluate',
       'get_settings',
       'check_export',
@@ -605,6 +606,36 @@ describe('garde-fous de l’assistant (SUITE.md §5.4)', () => {
     open({ caller: 'assistant', confirm: yes.confirm })
     expect((await call('delete_rows', { table: 'Planning & Lots', rows: [1] })).ok).toBe(true)
     expect(session!.snapshot().tables.tbl_planning_lots?.rowOrder).toHaveLength(3)
+  })
+
+  it('suppression d’une table ou d’un projet : confirmation demandée, rien sans accord', async () => {
+    const no = confirmer(false)
+    open({ caller: 'assistant', confirm: no.confirm })
+    const refused = await call('delete', { kind: 'table', target: 'Planning & Lots' })
+    expect(refused.ok).toBe(false)
+    expect(no.asked).toEqual([
+      expect.objectContaining({
+        tool: 'delete',
+        kind: 'delete',
+        message: 'L’assistant veut supprimer la table « Planning & Lots » et ses 4 lignes.',
+      }),
+    ])
+    expect(session!.snapshot().tables.tbl_planning_lots).toBeDefined()
+
+    const yes = confirmer(true)
+    open({ caller: 'assistant', confirm: yes.confirm })
+    const table = await call('delete', { kind: 'table', target: 'Planning & Lots' })
+    expect(table.json).toMatchObject({ deleted: { kind: 'table', rows: 4 } })
+    const after = session!.snapshot()
+    expect(after.tables.tbl_planning_lots).toBeUndefined()
+    expect(after.projects.proj_renovation_2026?.tableIds).not.toContain('tbl_planning_lots')
+
+    const project = await call('delete', { kind: 'project', target: 'Rénovation Urbaine 2026' })
+    expect(project.json).toMatchObject({ deleted: { kind: 'project', tables: 2 } })
+    expect(session!.snapshot().projects.proj_renovation_2026).toBeUndefined()
+    expect(yes.asked.map((r) => r.message)).toContain(
+      'L’assistant veut supprimer le projet « Rénovation Urbaine 2026 » et ses 2 tables.',
+    )
   })
 
   it('suppression de colonne : confirmation demandée ; sans moyen de confirmer, refusée', async () => {

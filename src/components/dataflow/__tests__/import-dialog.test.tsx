@@ -74,6 +74,20 @@ describe('assistant d’import CSV', () => {
     expect(useUIStore.getState().activeTableId).toBe(created.id)
   })
 
+  it('aucune colonne en commun avec la table ouverte : nouvelle table proposée', async () => {
+    act(() =>
+      useUIStore.getState().openImport({
+        projectId: 'proj_renovation_2026',
+        tableId: 'tbl_planning_lots',
+        file: csvFile('id.Sujet.Type\n1.Corriger.Bug\n2.Documenter.Task\n3.Tester.Task\n'),
+      }),
+    )
+    render(<ImportDialog />)
+    const newTable = await screen.findByRole('radio', { name: /Nouvelle table dans/ })
+    expect((newTable as HTMLInputElement).checked).toBe(true)
+    expect(screen.getByText(/3 colonnes/)).toBeTruthy()
+  })
+
   it('fichier qui n’est pas un CSV : message clair', async () => {
     act(() =>
       useUIStore.getState().openImport({

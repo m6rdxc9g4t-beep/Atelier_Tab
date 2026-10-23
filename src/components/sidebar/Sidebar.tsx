@@ -7,6 +7,7 @@ import {
   PlugZap,
   Plus,
   Table2,
+  Trash2,
   Unplug,
   Upload,
 } from 'lucide-react'
@@ -14,11 +15,16 @@ import { STATUS_LABELS, useExportStatus } from '@/components/dataflow/useExportS
 import { useDataStore, useUIStore } from '@/store'
 import type { Project } from '@/types/domain'
 import { cn } from '@/lib/cn'
+import { DeleteDialog, type DeleteTarget } from './DeleteDialog'
 
 /**
  * Navigation : Espaces de travail › Projets › Tables.
  * La recherche rapide (Ctrl/Cmd + K), le renommage et la duplication arrivent en phase 4.
  */
+/** Bouton d'action d'une ligne : visible au survol ou au clavier, toujours sur écran tactile. */
+const ROW_ACTION =
+  'rounded p-0.5 text-muted opacity-0 group-hover:opacity-100 hover:text-ink focus-visible:opacity-100 pointer-coarse:opacity-100'
+
 export function Sidebar() {
   const workspaceOrder = useDataStore((s) => s.workspaceOrder)
   const workspaces = useDataStore((s) => s.workspaces)
@@ -96,7 +102,7 @@ function WorkspaceSection({
           onClick={() => setNaming(true)}
           aria-label={`Nouveau projet dans ${name}`}
           title="Nouveau projet"
-          className="rounded p-0.5 text-muted opacity-0 group-hover:opacity-100 hover:bg-surface-hover hover:text-ink focus-visible:opacity-100"
+          className="rounded p-0.5 text-muted opacity-0 group-hover:opacity-100 hover:bg-surface-hover hover:text-ink focus-visible:opacity-100 pointer-coarse:opacity-100"
         >
           <Plus size={14} />
         </button>
@@ -129,6 +135,7 @@ function ProjectItem({ project }: { project: Project }) {
   const openTable = useUIStore((s) => s.openTable)
   const openImport = useUIStore((s) => s.openImport)
   const [naming, setNaming] = useState(false)
+  const [deleting, setDeleting] = useState<DeleteTarget | null>(null)
   const containsActive = activeTableId !== null && project.tableIds.includes(activeTableId)
   const Folder = expanded ? FolderOpen : FolderClosed
 
@@ -159,10 +166,19 @@ function ProjectItem({ project }: { project: Project }) {
         </button>
         <button
           type="button"
+          onClick={() => setDeleting({ kind: 'project', id: project.id })}
+          aria-label={`Supprimer le projet ${project.name}`}
+          title="Supprimer le projet"
+          className={cn(ROW_ACTION, 'hover:text-danger')}
+        >
+          <Trash2 size={13} />
+        </button>
+        <button
+          type="button"
           onClick={() => openImport({ projectId: project.id, tableId: null })}
           aria-label={`Importer un CSV dans ${project.name}`}
           title="Nouvelle table depuis un fichier CSV"
-          className="rounded p-0.5 text-muted opacity-0 group-hover:opacity-100 hover:text-ink focus-visible:opacity-100"
+          className={ROW_ACTION}
         >
           <Upload size={13} />
         </button>
@@ -174,7 +190,7 @@ function ProjectItem({ project }: { project: Project }) {
           }}
           aria-label={`Nouvelle table dans ${project.name}`}
           title="Nouvelle table"
-          className="mr-1 rounded p-0.5 text-muted opacity-0 group-hover:opacity-100 hover:text-ink focus-visible:opacity-100"
+          className={cn(ROW_ACTION, 'mr-1')}
         >
           <Plus size={13} />
         </button>
@@ -187,13 +203,13 @@ function ProjectItem({ project }: { project: Project }) {
             if (!table) return null
             const active = tableId === activeTableId
             return (
-              <li key={tableId}>
+              <li key={tableId} className="group/table relative">
                 <button
                   type="button"
                   onClick={() => openTable(tableId)}
                   aria-current={active ? 'page' : undefined}
                   className={cn(
-                    'flex h-7 w-full items-center gap-1.5 rounded-md px-1.5 text-left',
+                    'flex h-7 w-full items-center gap-1.5 rounded-md pr-7 pl-1.5 text-left',
                     active
                       ? 'atelier-nav-active font-medium'
                       : 'text-muted hover:bg-surface-hover hover:text-ink',
@@ -202,6 +218,15 @@ function ProjectItem({ project }: { project: Project }) {
                   <Table2 size={13} className={cn('shrink-0', active && 'text-accent-fg')} />
                   <span className="min-w-0 flex-1 truncate">{table.name}</span>
                   <ExportStatusDot tableId={tableId} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDeleting({ kind: 'table', id: tableId })}
+                  aria-label={`Supprimer la table ${table.name}`}
+                  title="Supprimer la table"
+                  className="absolute top-1/2 right-1 -translate-y-1/2 rounded p-0.5 text-muted opacity-0 group-hover/table:opacity-100 hover:text-danger focus-visible:opacity-100 pointer-coarse:opacity-100"
+                >
+                  <Trash2 size={13} />
                 </button>
               </li>
             )
@@ -217,6 +242,7 @@ function ProjectItem({ project }: { project: Project }) {
           )}
         </ul>
       )}
+      {deleting && <DeleteDialog target={deleting} onClose={() => setDeleting(null)} />}
     </li>
   )
 }

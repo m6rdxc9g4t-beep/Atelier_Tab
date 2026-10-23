@@ -65,6 +65,11 @@ export function resolveEngine(input: EngineInputs): EngineState {
 }
 
 /** Ligne bouclier : ce qui est envoyé quand ce moteur répond (contrat §5.2, cas de Tab). */
+/** Nom d'Ollama dans l'assistant : celui du serveur (version web hébergée) ou celui de cette machine. */
+export function ollamaLabel(serverOllama = usesServerOllama()): string {
+  return serverOllama ? 'L’IA du serveur (Ollama)' : 'Ollama (local)'
+}
+
 export function privacyNote(engine: EngineId, serverOllama = usesServerOllama()): string {
   if (engine === 'claude')
     return 'Réponse par Claude. Seules la demande et les cellules que l’assistant lit avec ses outils (contenu des tables) sont envoyées.'

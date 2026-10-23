@@ -108,7 +108,7 @@ Entrées : bouton **Importer** de l'en-tête (table ouverte ou nouvelle table), 
 ### Lecture (`import/csv-parse.ts`, `import/analyze.ts`)
 
 - **Encodage** : BOM UTF-8 ou UTF-16 ; sinon UTF-8 strict, et à défaut Windows-1252 (exports d'Excel sous Windows).
-- **Séparateur** : ligne `sep=;` d'Excel si présente ; sinon celui qui donne le même nombre de colonnes (au moins deux) sur le plus de lignes de l'échantillon (64 Ko). Égalité : `;`, `,`, tabulation, `|`. Modifiable dans l'assistant.
+- **Séparateur** : ligne `sep=;` d'Excel si présente ; sinon celui qui donne le même nombre de colonnes (au moins deux) sur le plus de lignes de l'échantillon (64 Ko). Égalité : `;`, `,`, tabulation, `|`. Le point (exports OpenProject) n'est retenu qu'en dernier recours, si aucun séparateur usuel ne découpe le fichier et qu'il le découpe en au moins 3 colonnes sur 90 % des lignes. Modifiable dans l'assistant, qui prévient quand une seule colonne est détectée.
 - **Découpage** RFC 4180 : guillemets doublés, séparateurs et retours à la ligne dans les cellules entre guillemets. Lignes vides ignorées ; lignes courtes complétées.
 - **En-têtes** : vides → « Colonne N », doublons → « Montant (2) ». Option « sans ligne d'en-tête ».
 - **Limites** : 20 Mo par fichier (interface), 10 millions de caractères (outil IA), 50 000 lignes, 200 colonnes.
@@ -116,7 +116,7 @@ Entrées : bouton **Importer** de l'en-tête (table ouverte ou nouvelle table), 
 
 ### Types et rôles (`import/infer.ts`)
 
-Type le plus précis compatible avec les valeurs non vides : date (`18/10/2026`, ISO), case à cocher (`Oui/Non`, `Vrai/Faux`, `x` ; une colonne de `0/1` reste un nombre), pourcentage (majorité de `%`), devise (`€ $ £ CHF`, ou en-tête de montant : prix, coût, HT, TTC…), nombre (`45 000,50`, `1.234,56`), responsable (noms ou initiales des collaborateurs), statut (uniquement des statuts de workflow, ou au plus 24 libellés courts répétés), sinon texte. À partir de 10 valeurs, 90 % de nombres ou de dates suffisent : les autres valeurs sont signalées. Un statut ne contenant que des statuts de workflow suit l'ordre du workflow, avec les couleurs officielles.
+Type le plus précis compatible avec les valeurs non vides : date (`18/10/2026`, ISO), case à cocher (`Oui/Non`, `Vrai/Faux`, `x` ; une colonne de `0/1` reste un nombre), pourcentage (majorité de `%`), devise (`€ $ £ CHF`, ou en-tête de montant : prix, coût, HT, TTC…), nombre (`45 000,50`, `1.234,56`), responsable (noms ou initiales des collaborateurs), statut (uniquement des statuts de workflow, ou au plus 24 libellés répétés de 80 caractères au plus), sinon texte. À partir de 10 valeurs, 90 % de nombres ou de dates suffisent : les autres valeurs sont signalées. Un statut ne contenant que des statuts de workflow suit l'ordre du workflow, avec les couleurs officielles.
 
 Rôles `atelier_projets` proposés une fois chacun, d'après le type et l'en-tête (`Statut` → `workflow_state`, `Échéance` → `due_date`, `TTC` → `financial_ttc`…), sans reprendre un rôle déjà porté par la table ; repli : premier texte → `entity_title`, premier statut → `workflow_state`, première devise → `financial_ht`.
 

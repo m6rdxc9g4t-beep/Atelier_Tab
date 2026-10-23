@@ -20,7 +20,13 @@ import {
   type ClaudeModelAlias,
   type ClaudeStatus,
 } from '@/ai/claude'
-import { ENGINE_CHOICES, privacyNote, resolveEngine, type EngineState } from '@/ai/engine'
+import {
+  ENGINE_CHOICES,
+  ollamaLabel,
+  privacyNote,
+  resolveEngine,
+  type EngineState,
+} from '@/ai/engine'
 import { usesServerOllama, type ModelsResult } from '@/ai/ollama'
 import { ENGINE_LABELS, ollamaProvider } from '@/ai/provider'
 import { answerConfirmation, askAssistant, cancelAssistant } from '@/store/assistant-actions'
@@ -260,7 +266,7 @@ function EnginePicker({
   claudeModel: ClaudeModelAlias
   onClaudeModel: (m: ClaudeModelAlias) => void
 }) {
-  const label = engine.engine === 'claude' ? 'Claude' : 'Ollama (local)'
+  const label = engine.engine === 'claude' ? 'Claude' : ollamaLabel()
   return (
     <section aria-label="Moteur" className="shrink-0 border-b border-line px-3 pt-2.5 pb-3">
       <h2 className="mb-1.5 text-[12px] font-semibold text-muted">Moteur</h2>
