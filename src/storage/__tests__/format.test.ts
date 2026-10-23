@@ -51,6 +51,20 @@ describe('format sur disque', () => {
     expect(rebuilt).toEqual({ ...data, integrations: { atelierProjets: expected } })
   })
 
+  it('relit les rôles item_type et time_spent', () => {
+    const data = createDemoData()
+    const table = data.tables.tbl_planning_lots!
+    table.fields.status!.atelierMapping = 'item_type'
+    table.fields.cost_ht!.atelierMapping = 'time_spent'
+    const files = serializeData(data)
+    const parsed = parseTableFile(
+      'tables/tbl_planning_lots.json',
+      files.get('tables/tbl_planning_lots.json')!,
+    )
+    expect(parsed.fields.status?.atelierMapping).toBe('item_type')
+    expect(parsed.fields.cost_ht?.atelierMapping).toBe('time_spent')
+  })
+
   it('reconnaît les chemins de tables', () => {
     expect(tableIdFromPath('tables/tbl_x.json')).toBe('tbl_x')
     expect(tableIdFromPath('tables/.tbl_x.json.123.tmp')).toBeNull()

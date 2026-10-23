@@ -245,6 +245,18 @@ describe('suggestMappings', () => {
     ])
   })
 
+  it('export OpenProject : Type → type d’élément, Temps passé → temps passé (heures)', () => {
+    expect(
+      suggestMappings([
+        { header: 'Sujet', type: 'text' },
+        { header: 'Type', type: 'select' },
+        { header: 'Statut', type: 'select' },
+        { header: 'Temps passé', type: 'number' },
+        { header: 'Quantité', type: 'number' },
+      ]),
+    ).toEqual(['entity_title', 'item_type', 'workflow_state', 'time_spent', 'quantity'])
+  })
+
   it('rôles déjà pris exclus ; repli sur le premier texte', () => {
     expect(
       suggestMappings(

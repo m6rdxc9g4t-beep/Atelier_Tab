@@ -19,6 +19,8 @@ export const atelierMappingSchema = z.enum([
   'description',
   'flag',
   'custom',
+  'item_type',
+  'time_spent',
 ])
 
 export const columnTypeSchema = z.enum([

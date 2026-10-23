@@ -143,6 +143,17 @@ const HINTS: { mapping: AtelierMapping; types: FieldType[]; header?: RegExp }[] 
     types: ['text'],
     header: /(description|notes?|commentaires?|d[ée]tails?|remarques?)/i,
   },
+  {
+    mapping: 'time_spent',
+    types: ['number'],
+    header:
+      /(temps (pass|consomm|r[ée]el|saisi)|heures? (pass|consomm|r[ée]elles?)|time spent|spent time|logged)/i,
+  },
+  {
+    mapping: 'item_type',
+    types: ['select', 'text'],
+    header: /^(type|type d['’][ée]l[ée]ment|issue type|work item type)$/i,
+  },
   { mapping: 'quantity', types: ['number'], header: /(qt[ée]|quantit|nombre|\bnb\b)/i },
   { mapping: 'flag', types: ['checkbox'] },
 ]
