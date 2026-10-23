@@ -13,4 +13,6 @@ export const MAPPING_LABELS: Record<AtelierMapping, string> = {
   description: 'Description',
   flag: 'Indicateur oui/non',
   custom: 'Champ libre',
+  item_type: 'Type d’élément (Feature, Task, Bug)',
+  time_spent: 'Temps passé (heures)',
 }

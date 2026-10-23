@@ -46,6 +46,10 @@ export type AtelierMapping =
   | 'description'
   | 'flag'
   | 'custom'
+  /** Type d'élément pour Atelier Projets : Feature, Task ou Bug. */
+  | 'item_type'
+  /** Temps passé, en heures (saisie de temps dans Atelier Projets). */
+  | 'time_spent'
 
 export interface Field {
   id: string

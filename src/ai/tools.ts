@@ -199,6 +199,8 @@ const MAPPING_VALUES = [
   'description',
   'flag',
   'custom',
+  'item_type',
+  'time_spent',
 ] as const
 
 const DEFAULT_CHOICE_LABELS = DEFAULT_STATUS_CHOICES.map((c) => c.label)
