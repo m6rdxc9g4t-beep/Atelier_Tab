@@ -31,7 +31,7 @@ const TOLERANCE = 0.9
 const TOLERANCE_MIN_VALUES = 10
 
 /** Libellé de statut court : au-delà, c'est probablement du texte libre. */
-const MAX_CHOICE_LENGTH = 40
+const MAX_CHOICE_LENGTH = 80
 const MAX_CHOICES = 24
 
 function currencyOf(value: string): CurrencyCode | null {

@@ -247,7 +247,7 @@ const MAX_IMPORT_CSV_CHARS = 10_000_000
 const IMPORT_TYPES = FIELD_TYPE_VALUES.filter(
   (t): t is Exclude<FieldType, 'formula'> => t !== 'formula',
 ) as [Exclude<FieldType, 'formula'>, ...Exclude<FieldType, 'formula'>[]]
-const DELIMITERS = { semicolon: ';', comma: ',', tab: '\t', pipe: '|' } as const
+const DELIMITERS = { semicolon: ';', comma: ',', tab: '\t', pipe: '|', dot: '.' } as const
 
 /**
  * Confirmation de l'utilisateur pour une action de l'assistant. Sans effet pour un client MCP
@@ -753,7 +753,7 @@ export const TOOLS = [
   tool({
     name: 'import_csv',
     description:
-      'Importe le contenu d’un fichier CSV, dans une nouvelle table (`project`, `name`) ou dans une table existante (`table`). Séparateur (; , tabulation), nombres « 45 000,50 € », pourcentages, dates « 18/10/2026 », Oui/Non reconnus ; types et statuts déduits des valeurs. Table existante : les colonnes au libellé identique sont remplies, les autres ajoutées ; avec `key_column`, une ligne dont la clé existe déjà est mise à jour (ses cellules vides n’effacent rien). Le CSV enrichi exporté par Atelier Tab est réimporté avec ses formules et ses identifiants.',
+      'Importe le contenu d’un fichier CSV, dans une nouvelle table (`project`, `name`) ou dans une table existante (`table`). Séparateur (; , tabulation, point des exports OpenProject), nombres « 45 000,50 € », pourcentages, dates « 18/10/2026 », Oui/Non reconnus ; types et statuts déduits des valeurs. Table existante : les colonnes au libellé identique sont remplies, les autres ajoutées ; avec `key_column`, une ligne dont la clé existe déjà est mise à jour (ses cellules vides n’effacent rien). Le CSV enrichi exporté par Atelier Tab est réimporté avec ses formules et ses identifiants.',
     input: z.object({
       csv: z
         .string()
@@ -767,7 +767,7 @@ export const TOOLS = [
         .describe('Projet (id ou nom) où créer une nouvelle table avec ces données'),
       name: z.string().min(1).optional().describe('Nom de la nouvelle table (défaut : Import CSV)'),
       delimiter: z
-        .enum(['semicolon', 'comma', 'tab', 'pipe'])
+        .enum(['semicolon', 'comma', 'tab', 'pipe', 'dot'])
         .optional()
         .describe('Séparateur ; par défaut détecté'),
       has_header: z

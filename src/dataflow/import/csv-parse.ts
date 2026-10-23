@@ -6,17 +6,26 @@
  * entre guillemets. Module pur, sans dépendance au DOM ni au store.
  */
 
-export type CsvDelimiter = ';' | ',' | '\t' | '|'
+export type CsvDelimiter = ';' | ',' | '\t' | '|' | '.'
 export type CsvEncoding = 'utf-8' | 'utf-16le' | 'utf-16be' | 'windows-1252'
 
-/** Ordre de préférence en cas d'égalité : `;` d'abord (Excel français). */
-export const CSV_DELIMITERS: readonly CsvDelimiter[] = [';', ',', '\t', '|']
+/** Séparateurs usuels, par ordre de préférence en cas d'égalité : `;` d'abord (Excel français). */
+const USUAL_DELIMITERS: readonly CsvDelimiter[] = [';', ',', '\t', '|']
+
+/**
+ * Le point, séparateur de certains exports (OpenProject…), n'est essayé qu'en dernier recours :
+ * il apparaît aussi dans les nombres (`1.5`) et dans le texte.
+ */
+const FALLBACK_DELIMITERS: readonly CsvDelimiter[] = ['.']
+
+export const CSV_DELIMITERS: readonly CsvDelimiter[] = [...USUAL_DELIMITERS, ...FALLBACK_DELIMITERS]
 
 export const DELIMITER_LABELS: Record<CsvDelimiter, string> = {
   ';': 'Point-virgule (;)',
   ',': 'Virgule (,)',
   '\t': 'Tabulation',
   '|': 'Barre verticale (|)',
+  '.': 'Point (.)',
 }
 
 /**
@@ -117,9 +126,30 @@ export function parseCsv(text: string, delimiter: CsvDelimiter, maxRows = Infini
 const SNIFF_CHARS = 64 * 1024
 const SNIFF_ROWS = 40
 
+/** Régularité (part des lignes au nombre de colonnes le plus fréquent) et nombre de colonnes. */
+function shape(sample: string, d: CsvDelimiter): { regularity: number; width: number } | null {
+  const rows = parseCsv(sample, d, SNIFF_ROWS)
+  if (rows.length === 0) return null
+  const counts = new Map<number, number>()
+  for (const r of rows) counts.set(r.length, (counts.get(r.length) ?? 0) + 1)
+  let width = 1
+  let modeRows = 0
+  for (const [w, k] of counts) {
+    if (k > modeRows || (k === modeRows && w > width)) {
+      width = w
+      modeRows = k
+    }
+  }
+  return width < 2 ? null : { regularity: modeRows / rows.length, width }
+}
+
+/** En dessous, aucun séparateur usuel ne découpe le fichier proprement. */
+const GOOD_REGULARITY = 0.9
+
 /**
  * Devine le séparateur : celui qui donne le même nombre de colonnes (au moins deux) sur le
- * plus de lignes de l'échantillon. Égalité : `;`, puis `,`, tabulation et `|`.
+ * plus de lignes de l'échantillon. Égalité : `;`, puis `,`, tabulation et `|`. Le point n'est
+ * retenu que si aucun séparateur usuel ne convient et qu'il découpe très régulièrement.
  */
 export function detectDelimiter(text: string): CsvDelimiter {
   const explicit = explicitDelimiter(text)
@@ -132,25 +162,23 @@ export function detectDelimiter(text: string): CsvDelimiter {
   }
   let best: CsvDelimiter = ';'
   let bestScore = 0
-  for (const d of CSV_DELIMITERS) {
-    const rows = parseCsv(sample, d, SNIFF_ROWS)
-    if (rows.length === 0) continue
-    const counts = new Map<number, number>()
-    for (const r of rows) counts.set(r.length, (counts.get(r.length) ?? 0) + 1)
-    let mode = 1
-    let modeRows = 0
-    for (const [width, k] of counts) {
-      if (k > modeRows || (k === modeRows && width > mode)) {
-        mode = width
-        modeRows = k
-      }
-    }
-    if (mode < 2) continue
+  let bestRegularity = 0
+  for (const d of USUAL_DELIMITERS) {
+    const s = shape(sample, d)
+    if (!s) continue
     // Régularité d'abord, puis nombre de colonnes.
-    const score = (modeRows / rows.length) * 1000 + Math.min(mode, 999)
+    const score = s.regularity * 1000 + Math.min(s.width, 999)
     if (score > bestScore) {
       best = d
       bestScore = score
+      bestRegularity = s.regularity
+    }
+  }
+  if (bestRegularity >= GOOD_REGULARITY) return best
+  for (const d of FALLBACK_DELIMITERS) {
+    const s = shape(sample, d)
+    if (s && s.width >= 3 && s.regularity >= GOOD_REGULARITY && s.regularity > bestRegularity) {
+      return d
     }
   }
   return best

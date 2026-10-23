@@ -425,6 +425,16 @@ function MappingStep({
               {parsed.error}
             </p>
           )}
+          {analysis && analysis.columns.length === 1 && analysis.rows.length > 0 && (
+            <p
+              role="status"
+              className="mt-3 flex items-start gap-2 rounded-lg bg-warning/15 px-3 py-2"
+            >
+              <AlertTriangle size={15} className="mt-0.5 shrink-0 text-warning" />
+              Une seule colonne détectée : si votre fichier en a plusieurs, choisissez son
+              séparateur ci-dessus.
+            </p>
+          )}
           {analysis?.enriched && (
             <p className="mt-3 flex items-start gap-2 rounded-lg bg-accent-soft px-3 py-2">
               <Info size={15} className="mt-0.5 shrink-0 text-accent-fg" />
