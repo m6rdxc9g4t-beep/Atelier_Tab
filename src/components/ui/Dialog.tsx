@@ -1,4 +1,5 @@
 import { useEffect, useRef, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { cn } from '@/lib/cn'
 
@@ -12,7 +13,12 @@ interface DialogProps {
   className?: string
 }
 
-/** Fenêtre modale : Échap ou clic sur le fond ferment, le focus revient à l'élément d'origine. */
+/**
+ * Fenêtre modale : Échap ou clic sur le fond ferment, le focus revient à l'élément d'origine.
+ * Rendue dans `<body>` (portail) : un parent avec `backdrop-filter`, `transform` ou `filter`
+ * (l'en-tête flouté) deviendrait sinon le repère de `position: fixed`, et la fenêtre se
+ * centrerait sur lui au lieu de l'écran (hors de l'écran sur mobile).
+ */
 export function Dialog({
   open,
   onClose,
@@ -42,7 +48,7 @@ export function Dialog({
   }, [open, onClose])
 
   if (!open) return null
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-50 grid place-items-center bg-black/30 p-4 dark:bg-black/60"
       onMouseDown={(e) => {
@@ -79,6 +85,7 @@ export function Dialog({
           <div className="flex items-center gap-2 border-t border-line px-5 py-3">{footer}</div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

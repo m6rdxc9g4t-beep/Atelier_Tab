@@ -361,7 +361,7 @@ function MappingStep({
                 {commitError}
               </span>
             ) : result ? (
-              <span className="text-muted">{describeImport(result)}</span>
+              <span className="text-muted max-sm:hidden">{describeImport(result)}</span>
             ) : null}
           </div>
           <button
