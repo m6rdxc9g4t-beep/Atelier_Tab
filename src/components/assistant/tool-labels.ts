@@ -35,6 +35,10 @@ export function describeToolCall(
       return `Création du projet « ${text('name')} »`
     case 'create_table':
       return `Création de la table « ${text('name')} »`
+    case 'import_csv':
+      return args.table !== undefined
+        ? `Import CSV dans « ${table} »`
+        : `Import CSV dans la nouvelle table « ${text('name') || 'Import CSV'} »`
     case 'rename':
       return `Renommage en « ${text('name')} »`
     case 'evaluate':

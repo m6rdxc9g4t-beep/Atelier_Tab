@@ -4,10 +4,11 @@ import {
   FolderClosed,
   FolderOpen,
   PanelLeftClose,
+  PlugZap,
   Plus,
   Table2,
-  PlugZap,
   Unplug,
+  Upload,
 } from 'lucide-react'
 import { STATUS_LABELS, useExportStatus } from '@/components/dataflow/useExportStatus'
 import { useDataStore, useUIStore } from '@/store'
@@ -126,6 +127,7 @@ function ProjectItem({ project }: { project: Project }) {
   const activeTableId = useUIStore((s) => s.activeTableId)
   const toggleProject = useUIStore((s) => s.toggleProject)
   const openTable = useUIStore((s) => s.openTable)
+  const openImport = useUIStore((s) => s.openImport)
   const [naming, setNaming] = useState(false)
   const containsActive = activeTableId !== null && project.tableIds.includes(activeTableId)
   const Folder = expanded ? FolderOpen : FolderClosed
@@ -154,6 +156,15 @@ function ProjectItem({ project }: { project: Project }) {
           />
           <Folder size={14} className="shrink-0 text-muted" />
           <span className="truncate">{project.name}</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => openImport({ projectId: project.id, tableId: null })}
+          aria-label={`Importer un CSV dans ${project.name}`}
+          title="Nouvelle table depuis un fichier CSV"
+          className="rounded p-0.5 text-muted opacity-0 group-hover:opacity-100 hover:text-ink focus-visible:opacity-100"
+        >
+          <Upload size={13} />
         </button>
         <button
           type="button"

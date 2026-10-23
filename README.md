@@ -10,15 +10,16 @@ Atelier Tab réunit la liberté de calcul d'Excel (formules, références `A1:C1
 
 ## Fonctionnalités
 
-| Domaine                | Ce que ça fait                                                                                                                                                                                                                                                     |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Moteur de formules** | `SUM`, `AVG`/`AVERAGE`, `MIN`, `MAX`, `IF`, `COUNT`, `ROUND`, `ABS`, opérateurs `+ - * / ^ &`, comparaisons, références et plages. Recalcul incrémental, détection des cycles, erreurs Excel (`#REF!`, `#DIV/0!`, `#VALUE!`, `#NAME?`, `#CYCLE!`). Aucun `eval()`. |
-| **Colonnes typées**    | Texte, nombre, devise, pourcentage, statut (badge aux couleurs officielles de la suite, préréglage « Statuts Atelier »), date, case à cocher, responsable, formule.                                                                                                |
-| **Vues**               | Grille hybride, tableur pur, Kanban groupé par statut, fiche détaillée.                                                                                                                                                                                            |
-| **Navigation**         | Espaces de travail › Projets › Tables, recherche rapide `Ctrl/Cmd + K`.                                                                                                                                                                                            |
-| **DataFlow**           | Export JSON normalisé (schéma `atelier_projets` v2.1.0), CSV enrichi, envoi direct à Atelier Projets (préréglage local, résumé d'import). Instantanés pour Atelier Viz.                                                                                            |
-| **Persistance**        | App de bureau : fichiers JSON dans `~/Atelier_Tab`, synchronisés en direct. Navigateur : IndexedDB.                                                                                                                                                                |
-| **IA**                 | Serveur MCP pour Claude Code et assistant intégré (Ollama local, ou Claude en ligne) : mêmes 19 outils, mêmes règles que la grille. Nœud Atelier pour les workflows d'Atelier Nexus.                                                                               |
+| Domaine                | Ce que ça fait                                                                                                                                                                                                                                                              |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Moteur de formules** | `SUM`, `AVG`/`AVERAGE`, `MIN`, `MAX`, `IF`, `COUNT`, `ROUND`, `ABS`, opérateurs `+ - * / ^ &`, comparaisons, références et plages. Recalcul incrémental, détection des cycles, erreurs Excel (`#REF!`, `#DIV/0!`, `#VALUE!`, `#NAME?`, `#CYCLE!`). Aucun `eval()`.          |
+| **Colonnes typées**    | Texte, nombre, devise, pourcentage, statut (badge aux couleurs officielles de la suite, préréglage « Statuts Atelier »), date, case à cocher, responsable, formule.                                                                                                         |
+| **Vues**               | Grille hybride, tableur pur, Kanban groupé par statut, fiche détaillée.                                                                                                                                                                                                     |
+| **Navigation**         | Espaces de travail › Projets › Tables, recherche rapide `Ctrl/Cmd + K`.                                                                                                                                                                                                     |
+| **Import CSV**         | Fichier déposé, choisi ou collé depuis Excel : séparateur et encodage détectés (Windows-1252 compris), formats français, types et statuts déduits, correspondance des colonnes, ajout ou mise à jour par colonne clé. Le CSV enrichi d'Atelier Tab se réimporte sans perte. |
+| **DataFlow**           | Export JSON normalisé (schéma `atelier_projets` v2.1.0), CSV enrichi, envoi direct à Atelier Projets (préréglage local, résumé d'import). Instantanés pour Atelier Viz.                                                                                                     |
+| **Persistance**        | App de bureau : fichiers JSON dans `~/Atelier_Tab`, synchronisés en direct. Navigateur : IndexedDB.                                                                                                                                                                         |
+| **IA**                 | Serveur MCP pour Claude Code et assistant intégré (Ollama local, ou Claude en ligne) : mêmes 20 outils, mêmes règles que la grille. Nœud Atelier pour les workflows d'Atelier Nexus.                                                                                        |
 
 ## Démarrage
 
@@ -140,6 +141,7 @@ L'assistant voit la table ouverte et la cellule sélectionnée, et chaque action
 | `set_cells`, `add_rows`, `delete_rows`         | Modifier les lignes (saisie à la française, formules)            |
 | `add_column`, `update_column`, `delete_column` | Modifier les colonnes (formules, préréglage « Statuts Atelier ») |
 | `create_project`, `create_table`, `rename`     | Organiser                                                        |
+| `import_csv`                                   | Importer un CSV (nouvelle table ou table existante, colonne clé) |
 | `evaluate`                                     | Calculer une formule sans rien modifier                          |
 | `get_settings`                                 | Lire le mode « En ligne » (lecture seule)                        |
 | `configure_export`                             | Régler l'envoi direct (préréglage Atelier Projets, projet cible) |
@@ -147,7 +149,7 @@ L'assistant voit la table ouverte et la cellule sélectionnée, et chaque action
 | `query_table`                                  | Lignes calculées au format `atelier-table/1` (filtres, pages)    |
 | `atelier_manifest`, `atelier_events`           | Nœud Atelier : manifeste et événements (lecture seule)           |
 
-`add_rows`, `add_column` et `create_table` acceptent `idempotency_key` : rejouer la même clé avec la même entrée renvoie la même réponse sans rien refaire ; avec une autre entrée, l'appel est refusé (`IDEMPOTENCY_KEY_REUSED`).
+`add_rows`, `add_column`, `create_table` et `import_csv` acceptent `idempotency_key` : rejouer la même clé avec la même entrée renvoie la même réponse sans rien refaire ; avec une autre entrée, l'appel est refusé (`IDEMPOTENCY_KEY_REUSED`).
 
 ### Scripts
 
@@ -201,7 +203,7 @@ src/
 ├── storage/          Format des fichiers de données (lecture tolérante, validation)
 ├── ai/               Outils partagés par Claude Code (MCP) et Ollama, boucle de l'assistant
 ├── services/         Persistance (fichiers, IndexedDB, REST), pont vers l'app de bureau
-├── dataflow/         Export vers Atelier Projets (schéma, mapping, transports), instantanés pour Viz
+├── dataflow/         Export vers Atelier Projets (schéma, mapping, transports), import CSV, instantanés pour Viz
 ├── styles/atelier-ds Copie verbatim du design system de la Suite Atelier
 ├── components/       Interface : layout, sidebar, grid, cells, formula-bar, kanban…
 ├── hooks/            Hooks React transverses (thème)
@@ -210,7 +212,7 @@ src/
 
 Principe directeur : **`engine/` et `dataflow/` sont du TypeScript pur, testés sans navigateur.** React affiche l'état et déclenche des actions ; il ne calcule rien lui-même.
 
-Détails : [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) · Moteur : [`docs/FORMULA_ENGINE.md`](docs/FORMULA_ENGINE.md) · Export : [`docs/DATAFLOW_SPEC.md`](docs/DATAFLOW_SPEC.md)
+Détails : [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) · Moteur : [`docs/FORMULA_ENGINE.md`](docs/FORMULA_ENGINE.md) · Export et import : [`docs/DATAFLOW_SPEC.md`](docs/DATAFLOW_SPEC.md)
 
 ### Stack
 
@@ -225,6 +227,7 @@ React 19 · TypeScript (strict) · Vite · Electron (app macOS) · Tailwind CSS 
 - [x] **Phase 3** — Grille hybride et barre de formules
 - [ ] **Phase 4** — Sidebar et navigation clavier
 - [x] **Phase 5** — DataFlow → `atelier_projets`
+- [x] **Import CSV** — Assistant d'import, glisser-déposer, collage Excel, outil `import_csv`
 - [x] **IA** — Données en fichiers, serveur MCP (Claude Code), assistant Ollama
 - [ ] **Phase 6** — Kanban, fiche détaillée, filtres
 - [ ] **Phase 7** — Undo/redo, copier-coller, accessibilité, tests e2e

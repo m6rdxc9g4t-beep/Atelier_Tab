@@ -143,7 +143,10 @@ function ExportDialogBody({ table, onClose }: { table: Table; onClose: () => voi
                 {outcome.message}
               </span>
             ) : (
-              <LastExport />
+              // Petit écran : la place va aux boutons.
+              <span className="max-sm:hidden">
+                <LastExport />
+              </span>
             )}
           </div>
           <button
@@ -469,7 +472,7 @@ function ColumnMapping({ table }: { table: Table }) {
                 updateField(table.id, fieldId, { atelierMapping: e.target.value as AtelierMapping })
               }
               aria-label={`Rôle de la colonne ${field.label} dans Atelier Projets`}
-              className="h-7 w-48 rounded-md border border-line-strong bg-field px-1.5 outline-none focus:border-focus focus:shadow-focus"
+              className="h-7 w-36 shrink-0 rounded-md border border-line-strong bg-field px-1.5 outline-none focus:border-focus focus:shadow-focus sm:w-48"
             >
               {Object.entries(MAPPING_LABELS).map(([value, label]) => (
                 <option key={value} value={value}>

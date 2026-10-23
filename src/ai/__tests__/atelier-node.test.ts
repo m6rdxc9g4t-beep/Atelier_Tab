@@ -66,6 +66,7 @@ describe('manifeste (SUITE.md §7.1)', () => {
       ['tables.query', 'read', 'query_table', 'atelier-table/1', 'natural'],
       ['tables.create', 'write', 'create_table', 'json', 'field'],
       ['rows.add', 'write', 'add_rows', 'json', 'field'],
+      ['tables.import_csv', 'write', 'import_csv', 'json', 'field'],
       ['cells.set', 'write', 'set_cells', 'json', 'natural'],
       ['rows.delete', 'destructive', 'delete_rows', 'json', 'none'],
       ['columns.add', 'write', 'add_column', 'json', 'field'],
@@ -100,7 +101,9 @@ describe('manifeste (SUITE.md §7.1)', () => {
   it('les actions « field » sont exactement les outils qui acceptent idempotency_key', () => {
     const field = manifest.actions.filter((a) => a.idempotency === 'field').map((a) => a.mcp_tool)
     expect([...field].sort()).toEqual([...IDEMPOTENT_TOOLS].sort())
-    expect(IDEMPOTENT_TOOLS).toEqual(expect.arrayContaining(['add_rows', 'create_table']))
+    expect(IDEMPOTENT_TOOLS).toEqual(
+      expect.arrayContaining(['add_rows', 'create_table', 'import_csv']),
+    )
   })
 
   it('événements déclarés avec data_schema', () => {

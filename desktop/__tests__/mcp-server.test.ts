@@ -95,14 +95,14 @@ describe('serveur MCP sans données (app jamais ouverte)', () => {
 })
 
 describe('serveur MCP', () => {
-  it('se présente avec des instructions et 19 outils, dont ceux du nœud Atelier', async () => {
+  it('se présente avec des instructions et 20 outils, dont ceux du nœud Atelier', async () => {
     expect(client.getServerVersion()?.name).toBe('atelier-tab')
     expect(client.getInstructions()).toMatch(/list_tables puis read_table/)
     expect(client.getInstructions()).toMatch(/Instantanés lus par Atelier Viz/)
     const { tools } = await client.listTools()
-    expect(tools).toHaveLength(19)
+    expect(tools).toHaveLength(20)
     expect(tools.map((t) => t.name)).toEqual(
-      expect.arrayContaining(['atelier_manifest', 'atelier_events', 'query_table']),
+      expect.arrayContaining(['atelier_manifest', 'atelier_events', 'query_table', 'import_csv']),
     )
     expect(client.getInstructions()).toMatch(/atelier_manifest/)
     expect(tools.find((t) => t.name === 'set_cells')?.inputSchema.required).toEqual([

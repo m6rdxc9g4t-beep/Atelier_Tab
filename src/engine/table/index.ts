@@ -9,6 +9,7 @@ export {
 export {
   rewriteFormulas,
   insertRecord,
+  insertRecords,
   removeRecords,
   insertField,
   removeField,

@@ -47,6 +47,29 @@ export function insertRecord(table: Table, record: TableRecord, index?: number):
   table.rowOrder.splice(at, 0, record.id)
 }
 
+/**
+ * Insère plusieurs lignes d'un coup (import) : une seule réécriture des formules, quel que
+ * soit le nombre de lignes, au lieu d'une par ligne.
+ */
+export function insertRecords(table: Table, records: TableRecord[], index?: number): void {
+  if (records.length === 0) return
+  const at = clamp(index ?? defaultRowInsertIndex(table), 0, table.rowOrder.length)
+  const beforeSummary = table.records[table.rowOrder[at] ?? '']?.kind === 'summary'
+  rewriteFormulas(table, {
+    axis: 'row',
+    index: at,
+    count: records.length,
+    expandAdjacent: beforeSummary,
+  })
+  for (const record of records) table.records[record.id] = record
+  // Pas de `splice(at, 0, ...ids)` : trop d'arguments pour un gros import.
+  table.rowOrder = [
+    ...table.rowOrder.slice(0, at),
+    ...records.map((r) => r.id),
+    ...table.rowOrder.slice(at),
+  ]
+}
+
 export function removeRecords(table: Table, recordIds: string[]): void {
   const indices = recordIds
     .map((id) => table.rowOrder.indexOf(id))

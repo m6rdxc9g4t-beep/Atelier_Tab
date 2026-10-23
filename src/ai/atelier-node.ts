@@ -76,7 +76,8 @@ export function selectEvents(
   }
   const next = events.at(-1)?.seq ?? query.since ?? last
   const response: EventsResponse = { events, next, oldest }
-  if (query.since !== undefined && (query.since < oldest - 1 || query.since > last)) response.gap = true
+  if (query.since !== undefined && (query.since < oldest - 1 || query.since > last))
+    response.gap = true
   return response
 }
 
@@ -331,6 +332,29 @@ const ACTIONS: ActionSpec[] = [
           },
         },
         required: ['added'],
+      },
+    },
+    idempotency: 'field',
+  },
+  {
+    id: 'tables.import_csv',
+    tool: 'import_csv',
+    label: 'Importer un CSV',
+    description:
+      'Importe le contenu d’un CSV dans une nouvelle table ou une table existante (types déduits, formats français, mise à jour par colonne clé).',
+    kind: 'write',
+    output: {
+      format: 'json',
+      schema: {
+        type: 'object',
+        properties: {
+          table_id: { type: 'string' },
+          inserted: { type: 'integer', minimum: 0 },
+          updated: { type: 'integer', minimum: 0 },
+          new_columns: { type: 'array', items: OBJECT },
+          rejected_values: { type: 'integer', minimum: 0 },
+        },
+        required: ['table_id', 'inserted', 'updated', 'new_columns'],
       },
     },
     idempotency: 'field',
