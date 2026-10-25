@@ -31,6 +31,14 @@ export function describeToolCall(
       return `Modification de la colonne « ${text('column')} »`
     case 'delete_column':
       return `Suppression de la colonne « ${text('column')} »`
+    case 'move_rows':
+      return `Déplacement de lignes dans « ${table} »`
+    case 'move_column':
+      return `Déplacement de la colonne « ${text('column')} »`
+    case 'configure_view':
+      return `Réglage de la vue de « ${table} »`
+    case 'add_collaborator':
+      return `Ajout du collaborateur « ${text('name')} »`
     case 'create_project':
       return `Création du projet « ${text('name')} »`
     case 'create_table':

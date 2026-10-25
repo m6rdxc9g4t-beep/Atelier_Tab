@@ -38,6 +38,10 @@ describe('définitions', () => {
       'add_column',
       'update_column',
       'delete_column',
+      'move_rows',
+      'move_column',
+      'configure_view',
+      'add_collaborator',
       'create_project',
       'create_table',
       'import_csv',
@@ -246,6 +250,92 @@ describe('modification', () => {
     const read = await call('read_table', { table: 'Planning & Lots' })
     expect(read.json.columns[1].choices).toEqual(['À faire', 'En cours', 'Terminée', 'Réceptionné'])
     expect(read.json.rows[1].cells.B).toBe('Terminée')
+  })
+
+  it('change le type d’une colonne en convertissant ses valeurs', async () => {
+    open()
+    const res = await call('update_column', {
+      table: 'Planning & Lots',
+      column: 'Échéance',
+      type: 'text',
+    })
+    expect(res.json.updated).toMatchObject({ label: 'Échéance', type: 'text' })
+    expect(res.json.converted).toBe(3)
+    const read = await call('read_table', { table: 'Planning & Lots' })
+    expect(read.json.rows[0].cells.F).toBe('30/11/2026')
+    const refused = await call('update_column', {
+      table: 'Planning & Lots',
+      column: 'Coût HT',
+      type: 'formula',
+    })
+    expect(refused.ok).toBe(false)
+    expect(refused.content).toMatch(/donnez la formule/)
+  })
+
+  it('déplace des lignes et une colonne, formules réécrites', async () => {
+    open()
+    const rows = await call('move_rows', { table: 'Planning & Lots', from_row: 3, before_row: 1 })
+    expect(rows.json).toEqual({ moved: 1, rows: [1] })
+    const col = await call('move_column', {
+      table: 'Planning & Lots',
+      column: 'Coût HT',
+      before: 'A',
+    })
+    expect(col.json.moved).toMatchObject({ letter: 'A', label: 'Coût HT' })
+    const read = await call('read_table', { table: 'Planning & Lots' })
+    // Le total suit : =SUM(A1:A3), et la colonne TTC lit maintenant A.
+    expect(read.json.rows[3].cells.A).toBe(88500)
+    expect(read.json.columns.find((c: { label: string }) => c.label === 'Coût TTC').formula).toBe(
+      '=A1*1.2',
+    )
+    const same = await call('move_rows', { table: 'Planning & Lots', from_row: 1, before_row: 2 })
+    expect(same.ok).toBe(false)
+  })
+
+  it('règle les filtres, le tri et les colonnes masquées d’une vue', async () => {
+    open()
+    const res = await call('configure_view', {
+      table: 'Planning & Lots',
+      filters: [{ column: 'Statut', op: 'equals', value: 'En cours' }],
+      sorts: [{ column: 'Coût HT', direction: 'desc' }],
+      hidden_columns: ['Échéance', 'A'],
+      row_height: 'tall',
+    })
+    expect(res.json).toMatchObject({
+      view: 'grid',
+      filters: [{ column: 'Statut', op: 'equals', value: 'opt_doing' }],
+      sorts: [{ column: 'Coût HT', direction: 'desc' }],
+      hidden_columns: ['Échéance'],
+      row_height: 'tall',
+    })
+    const kanban = await call('configure_view', {
+      table: 'Planning & Lots',
+      view: 'kanban',
+      group_by: 'Statut',
+    })
+    expect(kanban.json).toMatchObject({ view: 'kanban', group_by: 'Statut', filters: [] })
+    const bad = await call('configure_view', {
+      table: 'Planning & Lots',
+      filters: [{ column: 'Statut', op: 'gt', value: 'x' }],
+    })
+    expect(bad.ok).toBe(false)
+    expect(bad.content).toMatch(/impossible sur « Statut »/)
+    // Aucune donnée modifiée.
+    const read = await call('read_table', { table: 'Planning & Lots' })
+    expect(read.json.rows).toHaveLength(4)
+  })
+
+  it('ajoute un collaborateur, sans doublon', async () => {
+    open()
+    const a = await call('add_collaborator', { name: 'Léa Martin' })
+    expect(a.json.collaborator).toMatchObject({ name: 'Léa Martin', initials: 'LM' })
+    const b = await call('add_collaborator', { name: 'léa martin' })
+    expect(b.json.collaborator.id).toBe(a.json.collaborator.id)
+    const set = await call('set_cells', {
+      table: 'Planning & Lots',
+      cells: [{ row: 1, column: 'Responsable', value: 'Léa Martin' }],
+    })
+    expect(set.ok).toBe(true)
   })
 
   it('crée un projet et une table avec ses colonnes', async () => {
