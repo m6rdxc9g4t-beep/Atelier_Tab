@@ -145,7 +145,7 @@ export function CellEditor({ field, align, onDone }: CellEditorProps) {
           align === 'right' && !formula && 'text-right',
         )}
       />
-      {formula && assist.panel}
+      {formula && focusHere && assist.panel}
       {listOpen && (
         <ul
           role="listbox"

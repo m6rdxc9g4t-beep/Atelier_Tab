@@ -70,7 +70,7 @@ export function App() {
     const onKey = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey) || e.altKey) return
       const key = e.key.toLowerCase()
-      const target = e.target as HTMLElement | null
+      const target = e.target instanceof Element ? e.target : null
       // Un champ de saisie garde son propre annuler / rétablir.
       const typing = target?.closest('input, textarea, select, [contenteditable="true"]')
       if (key === 'j') {
