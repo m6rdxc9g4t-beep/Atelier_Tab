@@ -17,7 +17,9 @@ export {
   refToString,
   translateFormula,
   shiftReferences,
+  moveReferences,
   type CellRef,
+  type MoveChange,
   type RangeRef,
   type StructuralChange,
 } from './references'
@@ -31,7 +33,12 @@ export {
   type ErrorCode,
   type Scalar,
 } from './values'
-export { formatNumberAsText, serialToIso, dateTextToSerial } from './coerce'
+export {
+  compareValues,
+  dateTextToSerial,
+  formatNumberAsText,
+  serialToIso,
+} from './coerce'
 export {
   CATEGORY_LABELS,
   FUNCTION_CATALOG,

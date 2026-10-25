@@ -239,3 +239,124 @@ export function shiftReferences(formula: string, change: StructuralChange): stri
     return loIsStart ? `${a}:${b}` : `${b}:${a}`
   })
 }
+
+export interface MoveChange {
+  axis: 'row' | 'col'
+  /** Premier élément (0-based) du bloc déplacé. */
+  from: number
+  /** Nombre d'éléments du bloc. */
+  count: number
+  /** Index, dans l'ordre d'origine, avant lequel le bloc est inséré (0 … longueur). */
+  to: number
+}
+
+type Interval = [number, number]
+
+/**
+ * Nouvelle position de chaque élément après le déplacement, par morceaux :
+ * le bloc, les éléments qu'il enjambe (décalés de `count`) et le reste (inchangé).
+ */
+function moveSegments({
+  from,
+  count,
+  to,
+}: MoveChange): { lo: number; hi: number; shift: number; block: boolean }[] {
+  const end = from + count // exclusif
+  if (to > end) {
+    return [
+      { lo: from, hi: end - 1, shift: to - end, block: true },
+      { lo: end, hi: to - 1, shift: -count, block: false },
+    ]
+  }
+  if (to < from) {
+    return [
+      { lo: from, hi: end - 1, shift: to - from, block: true },
+      { lo: to, hi: from - 1, shift: count, block: false },
+    ]
+  }
+  return []
+}
+
+/** Image d'un intervalle par le déplacement : morceaux [début, fin], et lesquels viennent du bloc. */
+function mapInterval(
+  lo: number,
+  hi: number,
+  change: MoveChange,
+): { all: Interval[]; rest: Interval[] } {
+  const all: Interval[] = []
+  const rest: Interval[] = []
+  let covered: Interval[] = []
+  for (const seg of moveSegments(change)) {
+    const a = Math.max(lo, seg.lo)
+    const b = Math.min(hi, seg.hi)
+    if (a > b) continue
+    covered.push([a, b])
+    const piece: Interval = [a + seg.shift, b + seg.shift]
+    all.push(piece)
+    if (!seg.block) rest.push(piece)
+  }
+  // Parties de l'intervalle hors des morceaux déplacés : inchangées.
+  covered = covered.sort((x, y) => x[0] - y[0])
+  let cursor = lo
+  for (const [a, b] of covered) {
+    if (a > cursor) {
+      all.push([cursor, a - 1])
+      rest.push([cursor, a - 1])
+    }
+    cursor = b + 1
+  }
+  if (cursor <= hi) {
+    all.push([cursor, hi])
+    rest.push([cursor, hi])
+  }
+  return { all, rest }
+}
+
+/** Un seul intervalle si les morceaux se touchent, sinon null. */
+function merged(pieces: Interval[]): Interval | null {
+  if (pieces.length === 0) return null
+  const sorted = [...pieces].sort((x, y) => x[0] - y[0])
+  let [lo, hi] = sorted[0] as Interval
+  for (const [a, b] of sorted.slice(1)) {
+    if (a > hi + 1) return null
+    hi = Math.max(hi, b)
+  }
+  return [lo, hi]
+}
+
+/**
+ * Met à jour les références après le déplacement d'un bloc de lignes ou de colonnes
+ * (glisser-déposer) : chaque référence suit la cellule qu'elle désignait, comme dans Excel.
+ * Une plage dont les éléments restent contigus suit ses éléments (réordonner les lignes d'un
+ * total ne change pas `SUM(C1:C3)`) ; un élément qui sort d'une plage la réduit ; un élément
+ * déposé au milieu d'une plage l'agrandit.
+ */
+export function moveReferences(formula: string, change: MoveChange): string {
+  if (moveSegments(change).length === 0 || change.count <= 0) return formula
+  const key = change.axis === 'row' ? 'row' : 'col'
+  const mapOne = (pos: number): number => {
+    for (const seg of moveSegments(change))
+      if (pos >= seg.lo && pos <= seg.hi) return pos + seg.shift
+    return pos
+  }
+  return rewriteReferences(formula, (target) => {
+    if (target.kind === 'cell') {
+      const p = mapOne(target.ref[key])
+      return p === target.ref[key] ? null : refToString({ ...target.ref, [key]: p })
+    }
+    const loIsStart = target.start[key] <= target.end[key]
+    const lo = loIsStart ? target.start : target.end
+    const hi = loIsStart ? target.end : target.start
+    const { all, rest } = mapInterval(lo[key], hi[key], change)
+    const box = (pieces: Interval[]): Interval => [
+      Math.min(...pieces.map((p) => p[0])),
+      Math.max(...pieces.map((p) => p[1])),
+    ]
+    const next = merged(all) ?? merged(rest) ?? box(all)
+    const [newLo, newHi] = next
+    if (newLo === lo[key] && newHi === hi[key]) return null
+    const a = refToString({ ...lo, [key]: newLo })
+    const b = refToString({ ...hi, [key]: newHi })
+    return loIsStart ? `${a}:${b}` : `${b}:${a}`
+  })
+}

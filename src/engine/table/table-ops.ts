@@ -5,7 +5,13 @@
  * Ces fonctions sont conçues pour être appelées dans un producteur Immer (elles
  * modifient la table reçue) mais n'en dépendent pas.
  */
-import { isFormula, shiftReferences, type StructuralChange } from '@/engine/formula'
+import {
+  isFormula,
+  moveReferences,
+  shiftReferences,
+  type MoveChange,
+  type StructuralChange,
+} from '@/engine/formula'
 import type { Field, Table, TableRecord } from '@/types/domain'
 
 /**
@@ -103,6 +109,62 @@ export function removeField(table: Table, fieldId: string): void {
     view.sorts = view.sorts.filter((s) => s.fieldId !== fieldId)
     if (view.groupByFieldId === fieldId) delete view.groupByFieldId
   }
+}
+
+/** Réécrit les formules de la table après un déplacement (cellules et colonnes-formules). */
+function rewriteForMove(table: Table, change: MoveChange): void {
+  for (const record of Object.values(table.records)) {
+    for (const [fieldId, input] of Object.entries(record.cells)) {
+      if (isFormula(input)) {
+        const next = moveReferences(input, change)
+        if (next !== input) record.cells[fieldId] = next
+      }
+    }
+  }
+  // Les modèles de colonnes-formules sont écrits pour la ligne courante : seules les colonnes comptent.
+  if (change.axis === 'col') {
+    for (const field of Object.values(table.fields)) {
+      if (field.columnFormula) {
+        const next = moveReferences(field.columnFormula, change)
+        if (next !== field.columnFormula) field.columnFormula = next
+      }
+    }
+  }
+}
+
+/** Nouvel ordre : le bloc [from, from + count) inséré avant l'index d'origine `to`. */
+function reorder<T>(items: T[], from: number, count: number, to: number): T[] {
+  const block = items.slice(from, from + count)
+  const rest = [...items.slice(0, from), ...items.slice(from + count)]
+  const at = to > from ? to - count : to
+  return [...rest.slice(0, at), ...block, ...rest.slice(at)]
+}
+
+/**
+ * Déplace des lignes consécutives (glisser-déposer) avant la ligne d'index `to` (ordre actuel,
+ * 0 … longueur). Les formules suivent les cellules déplacées. Renvoie false si les lignes ne
+ * sont pas consécutives ou que rien ne bouge.
+ */
+export function moveRecords(table: Table, recordIds: readonly string[], to: number): boolean {
+  const indices = recordIds.map((id) => table.rowOrder.indexOf(id)).sort((a, b) => a - b)
+  const from = indices[0]
+  if (from === undefined || from === -1 || indices.some((v, i) => v !== from + i)) return false
+  const count = indices.length
+  const target = clamp(to, 0, table.rowOrder.length)
+  if (target >= from && target <= from + count) return false
+  rewriteForMove(table, { axis: 'row', from, count, to: target })
+  table.rowOrder = reorder(table.rowOrder, from, count, target)
+  return true
+}
+
+/** Déplace une colonne avant la colonne d'index `to` (ordre actuel, 0 … nombre de colonnes). */
+export function moveField(table: Table, fieldId: string, to: number): boolean {
+  const from = table.fieldOrder.indexOf(fieldId)
+  const target = clamp(to, 0, table.fieldOrder.length)
+  if (from === -1 || target === from || target === from + 1) return false
+  rewriteForMove(table, { axis: 'col', from, count: 1, to: target })
+  table.fieldOrder = reorder(table.fieldOrder, from, 1, target)
+  return true
 }
 
 function clamp(n: number, lo: number, hi: number): number {
