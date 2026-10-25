@@ -124,6 +124,15 @@ const viewSchema = z.object({
   sorts: z.array(z.object({ fieldId: id, direction: z.enum(['asc', 'desc']) })).default([]),
   groupByFieldId: z.string().optional(),
   hiddenFieldIds: z.array(z.string()).default([]),
+  // Réglages d'affichage : une valeur inconnue (fichier édité à la main) est ignorée.
+  rowHeight: z.enum(['compact', 'standard', 'tall']).optional().catch(undefined),
+  summaries: z
+    .record(
+      z.string(),
+      z.enum(['sum', 'average', 'min', 'max', 'count', 'filled', 'empty', 'none']),
+    )
+    .optional()
+    .catch(undefined),
 })
 
 export const tableFileSchema = z.object({

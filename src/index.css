@@ -61,6 +61,11 @@
   /* Assombrit une teinte pleine sous un texte clair (avatars). */
   --tone-shade: var(--atelier-text);
 
+  /* Grille : plage sélectionnée, survol d'une ligne, ombre de la colonne figée. */
+  --range: color-mix(in oklab, var(--atelier-signature) 11%, transparent);
+  --row-hover: color-mix(in oklab, var(--atelier-signature) 4%, var(--atelier-surface));
+  --frozen-shadow: color-mix(in oklab, var(--atelier-text) 22%, transparent);
+
   /* États (couleurs officielles : inchangées) */
   --success: var(--status-closed);
   --danger: var(--status-rejected);
@@ -85,6 +90,9 @@
   /* La surface est foncée : le texte sur une teinte pleine reste clair. */
   --solid-ink: var(--atelier-text);
   --tone-shade: var(--atelier-surface);
+  --range: color-mix(in oklab, var(--atelier-signature) 16%, transparent);
+  --row-hover: color-mix(in oklab, var(--atelier-signature) 7%, var(--atelier-surface));
+  --frozen-shadow: color-mix(in oklab, var(--atelier-ink-black) 70%, transparent);
 }
 
 @theme inline {
@@ -111,6 +119,8 @@
   --color-danger: var(--danger);
   --color-warning: var(--warning);
   --color-success: var(--success);
+  --color-range: var(--range);
+  --color-row-hover: var(--row-hover);
 
   /* rounded-md / -lg / -xl → 6 / 10 / 16 px */
   --radius-md: var(--ds-radius-sm);
@@ -196,6 +206,32 @@
   }
   .tone-dot {
     background-color: var(--tone);
+  }
+
+  /* Boutons et champs communs (barre de vue, fiche, éditeur de champ). */
+  .btn {
+    @apply inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-line-strong bg-field px-2.5 text-muted hover:bg-surface-hover hover:text-ink disabled:pointer-events-none disabled:opacity-50;
+  }
+  .btn-ghost {
+    @apply inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-muted hover:bg-surface-hover hover:text-ink disabled:pointer-events-none disabled:opacity-40;
+  }
+  .btn-icon {
+    @apply inline-grid size-7 shrink-0 place-items-center rounded-md text-muted hover:bg-surface-hover hover:text-ink disabled:pointer-events-none disabled:opacity-40;
+  }
+  /* Outil actif (filtre appliqué, champ masqué…) : teinte de la signature. */
+  .btn-active {
+    @apply bg-accent-soft text-ink ring-1 ring-line-strong;
+  }
+  .field-input {
+    @apply h-8 w-full rounded-md border border-line-strong bg-field px-2 text-ink outline-none placeholder:text-faint focus:border-focus focus:shadow-focus;
+  }
+  .kbd {
+    @apply rounded border border-line-strong bg-surface-sunken px-1 font-mono text-[10.5px] leading-4 text-muted;
+  }
+
+  /* Colonne figée de la grille : ombre portée quand la grille défile horizontalement. */
+  .frozen-shadow {
+    box-shadow: 6px 0 10px -8px var(--frozen-shadow);
   }
 
   /* Références colorées : contour de la zone lue par la formule active. */

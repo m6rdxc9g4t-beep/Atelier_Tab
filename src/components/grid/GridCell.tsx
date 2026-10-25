@@ -1,12 +1,12 @@
-import { memo, useEffect, useRef } from 'react'
+import { memo } from 'react'
 import { FIELD_TYPES } from '@/engine/field-types'
 import { isFormula } from '@/engine/formula'
-import { beginEdit, toggleCheckbox } from '@/store/grid-actions'
 import { useCellValue, useDataStore, useUIStore } from '@/store'
 import type { Field } from '@/types/domain'
 import { CellContent } from '@/components/cells/CellContent'
 import { CellEditor } from '@/components/cells/CellEditor'
 import { cn } from '@/lib/cn'
+import type { GridHandlers } from './grid-handlers'
 
 interface GridCellProps {
   tableId: string
@@ -15,11 +15,25 @@ interface GridCellProps {
   width: number
   plain: boolean
   summary: boolean
+  /** Lignes hautes : le texte passe à la ligne. */
+  wrap: boolean
+  /** Cellule active (contour plein). */
+  active: boolean
+  /** Dans la plage sélectionnée ; bords de la plage portés par la cellule : t, b, l, r. */
+  inRange: boolean
+  rangeEdges: string
+  /** Coin inférieur droit de la sélection : porte la poignée de recopie. */
+  fillHandle: boolean
+  /** Zone de recopie en cours (pointillés) : bords portés par la cellule. */
+  fillEdges: string
+  /** Première colonne, figée à gauche : décalage (px), sinon null. */
+  frozenLeft: number | null
+  frozenShadow: boolean
   /** Teinte de la référence de formule qui couvre cette cellule, le cas échéant. */
   refHue: number | undefined
   /** Bords de la zone référencée portés par cette cellule : t, b, l, r. */
   refEdges: string
-  focusGrid: () => void
+  handlers: GridHandlers
 }
 
 export const GridCell = memo(function GridCell({
@@ -29,25 +43,25 @@ export const GridCell = memo(function GridCell({
   width,
   plain,
   summary,
+  wrap,
+  active,
+  inRange,
+  rangeEdges,
+  fillHandle,
+  fillEdges,
+  frozenLeft,
+  frozenShadow,
   refHue,
   refEdges,
-  focusGrid,
+  handlers,
 }: GridCellProps) {
   const value = useCellValue(tableId, recordId, field.id)
   const stored = useDataStore((s) => s.tables[tableId]?.records[recordId]?.cells[field.id] ?? null)
   const collaborators = useDataStore((s) => s.collaborators)
-  const selected = useUIStore(
-    (s) => s.selection?.recordId === recordId && s.selection.fieldId === field.id,
-  )
   const editing = useUIStore(
     (s) => s.editing?.cell.recordId === recordId && s.editing.cell.fieldId === field.id,
   )
-  const select = useUIStore((s) => s.select)
-  const ref = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (selected) ref.current?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
-  }, [selected])
+  const cell = { recordId, fieldId: field.id }
 
   const spec = FIELD_TYPES[field.type]
   // Une cellule de colonne-formule sans valeur saisie affiche la formule recopiée.
@@ -57,37 +71,53 @@ export const GridCell = memo(function GridCell({
 
   return (
     <div
-      ref={ref}
       role="gridcell"
-      aria-selected={selected}
+      aria-selected={active || inRange}
       data-cell={`${recordId}:${field.id}`}
-      style={{ width, ...refStyle(refHue, refEdges) }}
+      style={{
+        width,
+        ...(frozenLeft !== null ? { left: frozenLeft } : {}),
+        ...refStyle(refHue, refEdges),
+      }}
       onMouseDown={(e) => {
         if (editing) return
-        e.preventDefault()
-        select({ recordId, fieldId: field.id })
-        focusGrid()
+        handlers.cellMouseDown(cell, e)
       }}
-      onDoubleClick={() => beginEdit({ recordId, fieldId: field.id })}
+      onMouseEnter={() => handlers.cellMouseEnter(cell)}
+      onDoubleClick={() => handlers.cellDoubleClick(cell)}
       onClick={(e) => {
-        if (field.type === 'checkbox' && !plain && (e.target as HTMLElement).closest('span')) {
-          toggleCheckbox({ recordId, fieldId: field.id })
+        if (
+          field.type === 'checkbox' &&
+          !plain &&
+          (e.target as HTMLElement).closest('[data-check]')
+        ) {
+          handlers.toggleCheckbox(cell)
         }
       }}
+      onContextMenu={(e) => handlers.cellContextMenu(cell, e)}
       title={isOverride ? 'Valeur saisie à la main : remplace la formule de la colonne' : undefined}
       className={cn(
-        'relative flex h-full shrink-0 items-center overflow-hidden border-r border-b border-line px-2',
+        'relative flex h-full shrink-0 border-r border-b border-line px-2',
+        wrap ? 'items-start py-1.5' : 'items-center overflow-hidden',
         align === 'right' && 'justify-end',
         align === 'center' && 'justify-center',
-        isComputed && !plain && 'bg-surface-sunken/60',
-        summary && 'font-semibold',
+        frozenLeft !== null && 'sticky z-[5]',
+        frozenLeft !== null && frozenShadow && 'frozen-shadow',
+        summary
+          ? 'bg-surface-sunken font-semibold'
+          : isComputed && !plain
+            ? 'bg-surface-sunken/60'
+            : frozenLeft !== null
+              ? 'bg-surface group-hover:bg-row-hover'
+              : 'group-hover:bg-row-hover',
         refHue !== undefined && 'ref-outline',
-        selected && !editing && 'z-10 shadow-[inset_0_0_0_2px_var(--accent)]',
         isOverride && !plain && 'italic',
+        active && 'z-10',
       )}
     >
+      {inRange && !active && <span className="pointer-events-none absolute inset-0 bg-range" />}
       {editing ? (
-        <CellEditor field={field} align={align} onDone={focusGrid} />
+        <CellEditor field={field} align={align} onDone={handlers.focusGrid} />
       ) : (
         <CellContent
           field={field}
@@ -95,11 +125,46 @@ export const GridCell = memo(function GridCell({
           stored={stored}
           collaborators={collaborators}
           plain={plain}
+          wrap={wrap}
+        />
+      )}
+      {rangeEdges && (
+        <span
+          className="pointer-events-none absolute -inset-px z-10"
+          style={edgeStyle(rangeEdges, 1.5, 'solid')}
+        />
+      )}
+      {active && !editing && (
+        <span className="pointer-events-none absolute -inset-px z-10 border-2 border-accent" />
+      )}
+      {fillEdges && (
+        <span
+          className="pointer-events-none absolute -inset-px z-10"
+          style={edgeStyle(fillEdges, 1.5, 'dashed')}
+        />
+      )}
+      {fillHandle && !editing && (
+        <span
+          role="presentation"
+          title="Poignée de recopie : glissez pour prolonger (séries 1, 2, 3…, dates)"
+          onMouseDown={(e) => handlers.fillHandleMouseDown(e)}
+          className="absolute -right-[4px] -bottom-[4px] z-20 size-[8px] cursor-crosshair border border-surface bg-accent"
         />
       )}
     </div>
   )
 })
+
+function edgeStyle(edges: string, width: number, style: 'solid' | 'dashed') {
+  const line = (edge: string) =>
+    edges.includes(edge) ? `${width}px ${style} var(--accent)` : 'none'
+  return {
+    borderTop: line('t'),
+    borderBottom: line('b'),
+    borderLeft: line('l'),
+    borderRight: line('r'),
+  }
+}
 
 function refStyle(hue: number | undefined, edges: string): Record<string, string | number> {
   if (hue === undefined) return {}

@@ -6,6 +6,8 @@ export interface Notice {
   tone: 'info' | 'warning' | 'error'
   title: string
   detail?: string
+  /** Bouton du message (« Annuler » après une suppression). */
+  action?: { label: string; run: () => void }
 }
 
 interface NoticesState {

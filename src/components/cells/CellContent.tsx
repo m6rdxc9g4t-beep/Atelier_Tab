@@ -13,10 +13,19 @@ interface CellContentProps {
   collaborators: Record<string, Collaborator>
   /** Mode tableur pur : texte brut, sans badge ni avatar. */
   plain: boolean
+  /** Lignes hautes : le texte passe à la ligne (trois lignes au plus). */
+  wrap?: boolean
 }
 
 /** Rendu en lecture d'une cellule, selon son type et le mode d'affichage. */
-export function CellContent({ field, value, stored, collaborators, plain }: CellContentProps) {
+export function CellContent({
+  field,
+  value,
+  stored,
+  collaborators,
+  plain,
+  wrap = false,
+}: CellContentProps) {
   if (isError(value)) {
     return (
       <span className="font-medium text-danger" title={value.message}>
@@ -42,8 +51,9 @@ export function CellContent({ field, value, stored, collaborators, plain }: Cell
     if (field.type === 'checkbox') {
       return (
         <span
+          data-check
           className={cn(
-            'inline-grid size-4 place-items-center rounded border',
+            'inline-grid size-4 cursor-pointer place-items-center rounded border',
             value === true ? 'border-accent bg-accent text-accent-ink' : 'border-line-strong',
           )}
         >
@@ -53,5 +63,11 @@ export function CellContent({ field, value, stored, collaborators, plain }: Cell
     }
   }
 
-  return <span className="truncate">{formatValue(field, value)}</span>
+  return (
+    <span
+      className={cn('min-w-0', wrap ? 'line-clamp-3 break-words whitespace-pre-wrap' : 'truncate')}
+    >
+      {formatValue(field, value)}
+    </span>
+  )
 }

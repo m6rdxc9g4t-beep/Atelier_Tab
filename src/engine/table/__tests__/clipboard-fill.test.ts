@@ -1,9 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { fillValues, parseTsv, tileToSelection, toTsv } from '..'
+import { fillPlan, fillValues, parseTsv, tileToSelection, toTsv } from '..'
 
 describe('presse-papiers TSV', () => {
   it('écrit comme Excel : tabulations, CRLF, guillemets si besoin', () => {
-    expect(toTsv([['a', 'b'], ['c', 'd']])).toBe('a\tb\r\nc\td')
+    expect(
+      toTsv([
+        ['a', 'b'],
+        ['c', 'd'],
+      ]),
+    ).toBe('a\tb\r\nc\td')
     expect(toTsv([['ligne 1\nligne 2', 'dit "oui"']])).toBe('"ligne 1\nligne 2"\t"dit ""oui"""')
   })
 
@@ -23,7 +28,10 @@ describe('presse-papiers TSV', () => {
   })
 
   it('aller-retour sans perte', () => {
-    const rows = [['x', 'y\tz'], ['"q"', '']]
+    const rows = [
+      ['x', 'y\tz'],
+      ['"q"', ''],
+    ]
     expect(parseTsv(toTsv(rows))).toEqual(rows)
   })
 
@@ -60,6 +68,17 @@ describe('fillValues (poignée de recopie)', () => {
     expect(fillValues([7], 2, down)).toEqual([7, 7])
   })
 
+  it('Ctrl+D : simple recopie, sans série', () => {
+    expect(fillValues([1, 2], 2, { ...down, series: false })).toEqual([1, 2])
+    expect(fillValues(['Lot 1'], 1, { axis: 'row', fieldType: 'text', series: false })).toEqual([
+      'Lot 1',
+    ])
+    expect(fillPlan(['=A1'], 2, down)).toEqual([
+      { kind: 'copy', source: 0 },
+      { kind: 'copy', source: 0 },
+    ])
+  })
+
   it('formules : références relatives décalées, absolues conservées', () => {
     expect(fillValues(['=C1*1.2'], 2, down)).toEqual(['=C2*1.2', '=C3*1.2'])
     expect(fillValues(['=$C$1+C1'], 1, down)).toEqual(['=$C$1+C2'])
@@ -87,6 +106,9 @@ describe('fillValues (poignée de recopie)', () => {
       'opt_done',
       'opt_todo',
     ])
-    expect(fillValues([true, null], 2, { axis: 'row', fieldType: 'checkbox' })).toEqual([true, null])
+    expect(fillValues([true, null], 2, { axis: 'row', fieldType: 'checkbox' })).toEqual([
+      true,
+      null,
+    ])
   })
 })

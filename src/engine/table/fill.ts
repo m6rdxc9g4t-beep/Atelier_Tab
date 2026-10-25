@@ -24,34 +24,58 @@ export interface FillOptions {
   backward?: boolean
   /** Type de la colonne de destination (les dates ne sont reconnues que dans une colonne Date). */
   fieldType: FieldType
+  /** Faux : simple recopie du motif, sans série (Ctrl+D). Vrai par défaut (poignée). */
+  series?: boolean
 }
+
+/** Valeur d'une cellule cible : calculée par la série, ou copie d'une cellule source. */
+export type FillStep = { kind: 'value'; input: CellInput } | { kind: 'copy'; source: number }
 
 const TRAILING_NUMBER = /^(.*?)(\d+)(\D*)$/
 
-/** Valeurs des `count` cellules qui suivent (ou précèdent) la série `source`. */
+/**
+ * Plan de recopie des `count` cellules qui suivent (ou précèdent) `source` : une valeur de série,
+ * ou l'index de la cellule source à recopier (l'appelant décale ses références relatives).
+ */
+export function fillPlan(
+  source: readonly CellInput[],
+  count: number,
+  options: FillOptions,
+): FillStep[] {
+  const n = source.length
+  if (n === 0 || count <= 0) return []
+  // Position de chaque cellule cible par rapport à la première cellule source.
+  const positions = Array.from({ length: count }, (_, i) => (options.backward ? -1 - i : n + i))
+  const series = options.series === false ? null : seriesOf(source, options.fieldType)
+  return positions.map((p) =>
+    series ? { kind: 'value', input: series(p) } : { kind: 'copy', source: ((p % n) + n) % n },
+  )
+}
+
+/** Valeurs des cellules cibles, en supposant des cellules contiguës (décalage = écart de position). */
 export function fillValues(
   source: readonly CellInput[],
   count: number,
   options: FillOptions,
 ): CellInput[] {
   const n = source.length
-  if (n === 0 || count <= 0) return []
-  // Position de chaque cellule cible par rapport à la première cellule source.
-  const positions = Array.from({ length: count }, (_, i) => (options.backward ? -1 - i : n + i))
-  const series = seriesOf(source, options.fieldType)
-
-  return positions.map((p) => {
-    if (series) return series(p)
-    const s = ((p % n) + n) % n
-    const input = source[s] ?? null
+  return fillPlan(source, count, options).map((step, i) => {
+    if (step.kind === 'value') return step.input
+    const input = source[step.source] ?? null
     if (!isFormula(input)) return input
-    const delta = p - s
-    return options.axis === 'row' ? translateFormula(input, delta, 0) : translateFormula(input, 0, delta)
+    const p = options.backward ? -1 - i : n + i
+    const delta = p - step.source
+    return options.axis === 'row'
+      ? translateFormula(input, delta, 0)
+      : translateFormula(input, 0, delta)
   })
 }
 
 /** Fonction position → valeur pour une série reconnue, sinon null (motif répété). */
-function seriesOf(source: readonly CellInput[], fieldType: FieldType): ((p: number) => CellInput) | null {
+function seriesOf(
+  source: readonly CellInput[],
+  fieldType: FieldType,
+): ((p: number) => CellInput) | null {
   if (source.some((v) => v === null || isFormula(v))) return null
 
   if (source.every((v) => typeof v === 'number')) {

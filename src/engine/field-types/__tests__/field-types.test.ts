@@ -7,6 +7,7 @@ import {
   parseDate,
   parseLocaleNumber,
   parseUserInput,
+  toClipboardText,
   toEditText,
   toEngineInput,
 } from '..'
@@ -130,6 +131,23 @@ describe('formatValue', () => {
     const end = f('formula', { options: { resultFormat: 'date' } })
     expect(formatValue(end, '2026-12-07')).toBe('07/12/2026')
     expect(formatValue(end, 46363)).toBe('07/12/2026')
+  })
+
+  it('texte du presse-papiers, relu sans perte par la grille', () => {
+    expect(toClipboardText(f('currency'), 45000.5)).toBe('45000,5')
+    expect(toClipboardText(f('percent'), 0.2)).toBe('20 %')
+    expect(toClipboardText(f('date'), '2026-11-30')).toBe('30/11/2026')
+    expect(toClipboardText(f('checkbox'), true)).toBe('VRAI')
+    expect(toClipboardText(f('number'), new FormulaError('#REF!'))).toBe('#REF!')
+    for (const [type, value] of [
+      ['currency', 45000.5],
+      ['percent', 0.2],
+      ['date', '2026-11-30'],
+      ['checkbox', true],
+    ] as const) {
+      const parsed = parseUserInput(f(type), toClipboardText(f(type), value), ctx)
+      expect(parsed).toEqual({ ok: true, input: value })
+    }
   })
 
   it('format compact du pied de grille', () => {

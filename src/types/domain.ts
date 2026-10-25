@@ -98,6 +98,12 @@ export interface Sort {
   direction: 'asc' | 'desc'
 }
 
+/** Hauteur des lignes de la grille. */
+export type RowHeight = 'compact' | 'standard' | 'tall'
+
+/** Agrégat affiché au pied d'une colonne. */
+export type SummaryKind = 'sum' | 'average' | 'min' | 'max' | 'count' | 'filled' | 'empty' | 'none'
+
 export interface View {
   id: string
   name: string
@@ -107,6 +113,10 @@ export interface View {
   /** Kanban : champ `select` qui définit les colonnes. */
   groupByFieldId?: string
   hiddenFieldIds: string[]
+  /** Grille : hauteur des lignes (défaut `standard`). */
+  rowHeight?: RowHeight
+  /** Grille : agrégat du pied de colonne, par id de champ (défaut : somme des colonnes numériques). */
+  summaries?: Record<string, SummaryKind>
 }
 
 export interface Table {

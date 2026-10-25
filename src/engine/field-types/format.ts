@@ -91,3 +91,23 @@ export function formatValue(field: Field, value: CellValue): string {
   }
   return value
 }
+
+/**
+ * Texte d'une valeur calculée pour le presse-papiers : lisible par Excel en français et relu
+ * sans perte par la grille (nombre à virgule sans séparateur de milliers, pourcentage « 20 % »,
+ * date JJ/MM/AAAA, VRAI / FAUX, libellé du statut, nom du responsable).
+ */
+export function toClipboardText(field: Field, value: CellValue): string {
+  if (value === null) return ''
+  if (isError(value)) return value.code
+  if (typeof value === 'boolean') return value ? 'VRAI' : 'FAUX'
+  const kind = field.type === 'formula' ? (field.options?.resultFormat ?? 'number') : field.type
+  if (typeof value === 'number') {
+    if (kind === 'percent') {
+      return `${formatNumberAsText(Number((value * 100).toPrecision(15))).replace('.', ',')} %`
+    }
+    if (kind === 'date') return formatDate(serialToIso(value))
+    return formatNumberAsText(value).replace('.', ',')
+  }
+  return kind === 'date' ? formatDate(value) : value
+}
