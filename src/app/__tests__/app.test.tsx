@@ -12,6 +12,13 @@ Object.defineProperties(HTMLElement.prototype, {
   clientHeight: { configurable: true, get: () => 800 },
   clientWidth: { configurable: true, get: () => 1200 },
 })
+// La palette ⌘K (cmdk) observe la taille de sa liste et fait défiler l'option active.
+globalThis.ResizeObserver ??= class {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+Element.prototype.scrollIntoView ??= () => {}
 
 const cell = (recordId: string, fieldId: string) =>
   document.querySelector<HTMLElement>(`[data-cell="${recordId}:${fieldId}"]`) as HTMLElement
