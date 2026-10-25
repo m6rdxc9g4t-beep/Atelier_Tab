@@ -31,4 +31,13 @@ export {
   type ErrorCode,
   type Scalar,
 } from './values'
-export { formatNumberAsText } from './coerce'
+export { formatNumberAsText, serialToIso, dateTextToSerial } from './coerce'
+export {
+  CATEGORY_LABELS,
+  FUNCTION_CATALOG,
+  functionDoc,
+  suggestFunctions,
+  type FunctionCategory,
+  type FunctionDoc,
+  type FunctionSuggestion,
+} from './catalog'

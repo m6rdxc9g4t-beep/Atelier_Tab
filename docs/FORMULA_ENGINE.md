@@ -31,21 +31,44 @@ Comme dans Excel, `-2^2` vaut **4** et `2^3^2` vaut **64**.
 
 ## Fonctions
 
-| Fonction           | Alias                       | Notes                                                   |
-| ------------------ | --------------------------- | ------------------------------------------------------- |
-| `SUM`              | `SOMME`                     | Ignore texte, booléens et vides dans les plages         |
-| `AVERAGE`          | `AVG`, `MOYENNE`            | `#DIV/0!` si aucun nombre                               |
-| `MIN`, `MAX`       |                             | 0 si aucun nombre                                       |
-| `COUNT`            | `NB`                        | Compte les nombres                                      |
-| `COUNTA`           | `NBVAL`                     | Compte les cellules non vides                           |
-| `IF`               | `SI`                        | Évaluation paresseuse ; `FALSE` si pas de branche sinon |
-| `IFERROR`          | `SIERREUR`                  | Évaluation paresseuse                                   |
-| `AND`, `OR`, `NOT` | `ET`, `OU`, `NON`           |                                                         |
-| `ROUND`            | `ARRONDI`                   | Au plus loin de zéro, chiffres négatifs acceptés        |
-| `ABS`              |                             |                                                         |
-| `CONCAT`           | `CONCATENATE`, `CONCATENER` |                                                         |
+Une centaine de fonctions, chacune acceptée sous son nom anglais **et** son nom Excel français
+(`SUMIF` = `SOMME.SI`). Le catalogue (`catalog.ts`) donne la syntaxe et une description en
+français de chacune : il alimente l'autocomplétion de la barre de formules, et un test vérifie
+qu'il couvre toute la bibliothèque.
 
-Ajouter une fonction : une entrée dans `BASE` (`functions.ts`) + ses tests.
+| Famille                | Fonctions (nom français entre parenthèses quand il diffère)                                                                                                                                                                                                                                                                                                                                                       |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Statistiques           | `SUM` (`SOMME`), `AVERAGE` (`MOYENNE`, `AVG`), `MIN`, `MAX`, `COUNT` (`NB`), `COUNTA` (`NBVAL`), `COUNTBLANK` (`NB.VIDE`), `MEDIAN` (`MEDIANE`), `LARGE` / `SMALL` (`GRANDE.VALEUR` / `PETITE.VALEUR`)                                                                                                                                                                                                            |
+| Agrégats conditionnels | `SUMIF` / `SUMIFS` (`SOMME.SI` / `SOMME.SI.ENS`), `COUNTIF` / `COUNTIFS` (`NB.SI` / `NB.SI.ENS`), `AVERAGEIF` / `AVERAGEIFS` (`MOYENNE.SI` / `MOYENNE.SI.ENS`), `MAXIFS` / `MINIFS` (`MAX.SI.ENS` / `MIN.SI.ENS`)                                                                                                                                                                                                 |
+| Mathématiques          | `ROUND` (`ARRONDI`), `ROUNDUP` / `ROUNDDOWN` (`ARRONDI.SUP` / `ARRONDI.INF`), `INT` (`ENT`), `TRUNC` (`TRONQUE`), `CEILING` / `FLOOR` (`PLAFOND` / `PLANCHER`), `ABS`, `SIGN` (`SIGNE`), `MOD`, `POWER` (`PUISSANCE`), `SQRT` (`RACINE`), `PRODUCT` (`PRODUIT`), `SUMPRODUCT` (`SOMMEPROD`), `PI`, `EXP`, `LN`, `LOG`, `LOG10`                                                                                    |
+| Logique                | `IF` (`SI`), `IFS` (`SI.CONDITIONS`), `SWITCH` (`SI.MULTIPLE`), `IFERROR` (`SIERREUR`), `IFNA` (`SI.NON.DISP`), `AND` (`ET`), `OR` (`OU`), `XOR` (`OUX`), `NOT` (`NON`), `TRUE()` / `FALSE()` (`VRAI()` / `FAUX()`)                                                                                                                                                                                               |
+| Texte                  | `CONCAT` (`CONCATENER`, `CONCATENATE`), `TEXTJOIN` (`JOINDRE.TEXTE`), `LEFT` / `RIGHT` / `MID` (`GAUCHE` / `DROITE` / `STXT`), `LEN` (`NBCAR`), `UPPER` / `LOWER` / `PROPER` (`MAJUSCULE` / `MINUSCULE` / `NOMPROPRE`), `TRIM` (`SUPPRESPACE`), `SUBSTITUTE` (`SUBSTITUE`), `REPLACE` (`REMPLACER`), `FIND` (`TROUVE`), `SEARCH` (`CHERCHE`), `REPT`, `EXACT`, `TEXT` (`TEXTE`), `VALUE` (`CNUM`), `CHAR` (`CAR`) |
+| Dates                  | `TODAY` (`AUJOURDHUI`), `DATE`, `YEAR` / `MONTH` / `DAY` (`ANNEE` / `MOIS` / `JOUR`), `WEEKDAY` (`JOURSEM`), `ISOWEEKNUM` (`NO.SEMAINE.ISO`), `DATEDIF`, `DAYS` (`JOURS`), `EDATE` (`MOIS.DECALER`), `EOMONTH` (`FIN.MOIS`), `NETWORKDAYS` (`NB.JOURS.OUVRES`), `WORKDAY` (`SERIE.JOUR.OUVRE`)                                                                                                                    |
+| Recherche              | `VLOOKUP` / `HLOOKUP` (`RECHERCHEV` / `RECHERCHEH`), `XLOOKUP` (`RECHERCHEX`), `INDEX`, `MATCH` (`EQUIV`), `CHOOSE` (`CHOISIR`)                                                                                                                                                                                                                                                                                   |
+| Information            | `ISBLANK` (`ESTVIDE`), `ISNUMBER` (`ESTNUM`), `ISTEXT` (`ESTTEXTE`), `ISLOGICAL` (`ESTLOGIQUE`), `ISERROR` (`ESTERREUR`), `ISNA` (`ESTNA`), `NA`                                                                                                                                                                                                                                                                  |
+
+Règles notables :
+
+- `IF` et `IFERROR` sont évalués paresseusement ; `IFS`, `SWITCH` et `IFNA` ignorent l'erreur
+  d'une branche qui n'est pas retenue.
+- **Critères** (`SOMME.SI`, `NB.SI.ENS`…) : `5`, `">1000"`, `"<>Terminée"`, `"En*"` (jokers `*` et
+  `?`, `~` pour échapper), `""` (vide), `"<>"` (non vide), `"<2026-12-31"` (date) ; texte insensible
+  à la casse.
+- **Recherche** : `RECHERCHEV(…; FAUX)` cherche la valeur exacte (jokers acceptés) ; sans quatrième
+  argument, la valeur approchée (la plus grande inférieure ou égale, première colonne triée).
+  `RECHERCHEX` : modes `0` exact, `-1` exact ou inférieur, `1` exact ou supérieur, `2` jokers ; sens
+  `-1` pour chercher depuis la fin. Valeur absente : `#N/A`.
+- **Dates** : une colonne Date stocke `AAAA-MM-JJ`. Les fonctions de date acceptent ce texte, une
+  date `JJ/MM/AAAA` ou un numéro de série Excel, et renvoient une date `AAAA-MM-JJ`. En arithmétique,
+  une date vaut son numéro de série : `=Échéance - AUJOURDHUI()` donne un nombre de jours, `=F1 + 7`
+  un numéro de série affiché comme une date dans une colonne Date ou une formule au format `date`.
+  `AUJOURDHUI()` est calculé à chaque recalcul de la cellule, pas à minuit.
+- `TEXTE` reconnaît les formats courants : `0`, `0,00`, `# ##0,00 €`, `0 %`, `000`,
+  `jj/mm/aaaa`, `jjjj j mmmm aaaa`, `mmm aa`.
+- Les arguments omis (`;;`) ne sont pas encore acceptés : écrivez la valeur par défaut.
+
+Ajouter une fonction : son implémentation dans le module de sa famille (`functions-*.ts`), son
+alias français dans `ALIASES` (`functions.ts`), sa fiche dans `catalog.ts` et ses tests.
 
 ## Conversions
 
@@ -95,4 +118,5 @@ wb.preview('=C4/2', 'D1') // aperçu sans enregistrer
 ## Limites connues
 
 - La recherche des formules lisant une plage est linéaire en nombre de formules à plages : adapté à quelques milliers de lignes. Un index spatial pourra être ajouté si besoin.
-- Pas encore de références entre tables ni de fonctions de date.
+- Pas encore de références entre tables.
+- Pas de fonctions renvoyant un tableau (matrices dynamiques) : chaque formule donne une valeur.

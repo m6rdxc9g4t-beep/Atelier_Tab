@@ -65,6 +65,17 @@ describe('format sur disque', () => {
     expect(parsed.fields.cost_ht?.atelierMapping).toBe('time_spent')
   })
 
+  it('relit une colonne-formule au format date', () => {
+    const data = createDemoData()
+    data.tables.tbl_planning_lots!.fields.cost_ttc!.options = { resultFormat: 'date' }
+    const files = serializeData(data)
+    const parsed = parseTableFile(
+      'tables/tbl_planning_lots.json',
+      files.get('tables/tbl_planning_lots.json')!,
+    )
+    expect(parsed.fields.cost_ttc?.options?.resultFormat).toBe('date')
+  })
+
   it('reconnaît les chemins de tables', () => {
     expect(tableIdFromPath('tables/tbl_x.json')).toBe('tbl_x')
     expect(tableIdFromPath('tables/.tbl_x.json.123.tmp')).toBeNull()

@@ -12,51 +12,15 @@
  * IF et IFERROR sont évalués paresseusement par l'évaluateur, pas ici.
  */
 import { normalizeNumber, toBoolean, toNumber, toText } from './coerce'
-import { err, isError, isRange, type Arg, type CellValue, type FormulaError } from './values'
+import { flatten, numbersOf, scalarOf, type FunctionSpec } from './function-args'
+import { DATE_FUNCTIONS } from './functions-date'
+import { INFO_FUNCTIONS } from './functions-info'
+import { LOOKUP_FUNCTIONS } from './functions-lookup'
+import { MATH_FUNCTIONS } from './functions-math'
+import { TEXT_FUNCTIONS } from './functions-text'
+import { err, isError, isRange, type Arg, type CellValue } from './values'
 
-export interface FunctionSpec {
-  minArgs: number
-  maxArgs: number // Infinity = variadique
-  impl: (args: Arg[]) => CellValue
-}
-
-/** Nombres d'une liste d'arguments, ou la première erreur rencontrée. */
-function numbersOf(args: Arg[]): number[] | FormulaError {
-  const out: number[] = []
-  for (const a of args) {
-    if (isRange(a)) {
-      for (const row of a.rows) {
-        for (const v of row) {
-          if (isError(v)) return v
-          if (typeof v === 'number') out.push(v)
-        }
-      }
-    } else {
-      const n = toNumber(a)
-      if (isError(n)) return n
-      out.push(n)
-    }
-  }
-  return out
-}
-
-/** Aplatit les arguments en une liste de valeurs (plages déroulées ligne par ligne). */
-function flatten(args: Arg[]): CellValue[] {
-  const out: CellValue[] = []
-  for (const a of args) {
-    if (isRange(a)) for (const row of a.rows) out.push(...row)
-    else out.push(a)
-  }
-  return out
-}
-
-/** Une plage passée là où une valeur unique est attendue : seule une cellule 1×1 est acceptée. */
-export function scalarOf(a: Arg): CellValue {
-  if (!isRange(a)) return a
-  const first = a.rows[0]?.[0]
-  if (a.rows.length === 1 && a.rows[0]?.length === 1 && first !== undefined) return first
-  return err('#VALUE!', 'Une plage ne peut pas être utilisée comme valeur unique')
-}
+export { scalarOf, type FunctionSpec }
 
 const sum: FunctionSpec['impl'] = (args) => {
   const nums = numbersOf(args)
@@ -157,10 +121,15 @@ const BASE: Record<string, FunctionSpec> = {
   OR: { minArgs: 1, maxArgs: Infinity, impl: (a) => logical(a, 'or') },
   NOT: { minArgs: 1, maxArgs: 1, impl: not },
   CONCAT: { minArgs: 1, maxArgs: Infinity, impl: concat },
+  ...MATH_FUNCTIONS,
+  ...TEXT_FUNCTIONS,
+  ...DATE_FUNCTIONS,
+  ...LOOKUP_FUNCTIONS,
+  ...INFO_FUNCTIONS,
 }
 
 /** Alias : noms courts de la spec (AVG) et noms Excel français. */
-const ALIASES: Record<string, string> = {
+export const ALIASES: Record<string, string> = {
   AVG: 'AVERAGE',
   CONCATENATE: 'CONCAT',
   SOMME: 'SUM',
@@ -172,6 +141,82 @@ const ALIASES: Record<string, string> = {
   OU: 'OR',
   NON: 'NOT',
   CONCATENER: 'CONCAT',
+  // Mathématiques et statistiques
+  ENT: 'INT',
+  TRONQUE: 'TRUNC',
+  PUISSANCE: 'POWER',
+  RACINE: 'SQRT',
+  'ARRONDI.SUP': 'ROUNDUP',
+  'ARRONDI.INF': 'ROUNDDOWN',
+  PLAFOND: 'CEILING',
+  'PLAFOND.MATH': 'CEILING',
+  'CEILING.MATH': 'CEILING',
+  PLANCHER: 'FLOOR',
+  'PLANCHER.MATH': 'FLOOR',
+  'FLOOR.MATH': 'FLOOR',
+  SIGNE: 'SIGN',
+  PRODUIT: 'PRODUCT',
+  MEDIANE: 'MEDIAN',
+  'GRANDE.VALEUR': 'LARGE',
+  'PETITE.VALEUR': 'SMALL',
+  SOMMEPROD: 'SUMPRODUCT',
+  'NB.VIDE': 'COUNTBLANK',
+  // Texte
+  GAUCHE: 'LEFT',
+  DROITE: 'RIGHT',
+  STXT: 'MID',
+  NBCAR: 'LEN',
+  MAJUSCULE: 'UPPER',
+  MINUSCULE: 'LOWER',
+  NOMPROPRE: 'PROPER',
+  SUPPRESPACE: 'TRIM',
+  SUBSTITUE: 'SUBSTITUTE',
+  REMPLACER: 'REPLACE',
+  TROUVE: 'FIND',
+  CHERCHE: 'SEARCH',
+  'JOINDRE.TEXTE': 'TEXTJOIN',
+  TEXTE: 'TEXT',
+  CNUM: 'VALUE',
+  CAR: 'CHAR',
+  // Dates
+  AUJOURDHUI: 'TODAY',
+  ANNEE: 'YEAR',
+  MOIS: 'MONTH',
+  JOUR: 'DAY',
+  JOURSEM: 'WEEKDAY',
+  'MOIS.DECALER': 'EDATE',
+  'FIN.MOIS': 'EOMONTH',
+  JOURS: 'DAYS',
+  'NB.JOURS.OUVRES': 'NETWORKDAYS',
+  'SERIE.JOUR.OUVRE': 'WORKDAY',
+  'NO.SEMAINE.ISO': 'ISOWEEKNUM',
+  // Recherche et agrégats conditionnels
+  'SOMME.SI': 'SUMIF',
+  'SOMME.SI.ENS': 'SUMIFS',
+  'NB.SI': 'COUNTIF',
+  'NB.SI.ENS': 'COUNTIFS',
+  'MOYENNE.SI': 'AVERAGEIF',
+  'MOYENNE.SI.ENS': 'AVERAGEIFS',
+  'MAX.SI.ENS': 'MAXIFS',
+  'MIN.SI.ENS': 'MINIFS',
+  RECHERCHEV: 'VLOOKUP',
+  RECHERCHEH: 'HLOOKUP',
+  RECHERCHEX: 'XLOOKUP',
+  EQUIV: 'MATCH',
+  CHOISIR: 'CHOOSE',
+  // Information et logique
+  ESTVIDE: 'ISBLANK',
+  ESTNUM: 'ISNUMBER',
+  ESTTEXTE: 'ISTEXT',
+  ESTLOGIQUE: 'ISLOGICAL',
+  ESTERREUR: 'ISERROR',
+  ESTNA: 'ISNA',
+  'SI.NON.DISP': 'IFNA',
+  'SI.CONDITIONS': 'IFS',
+  'SI.MULTIPLE': 'SWITCH',
+  OUX: 'XOR',
+  VRAI: 'TRUE',
+  FAUX: 'FALSE',
 }
 
 /** Fonctions à évaluation paresseuse, traitées par l'évaluateur. */

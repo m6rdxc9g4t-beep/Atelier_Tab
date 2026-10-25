@@ -85,7 +85,7 @@ const fieldSchema = z.object({
       choices: z.array(z.object({ id, label: z.string(), color: badgeColor })).optional(),
       currency: z.enum(['EUR', 'USD', 'GBP', 'CHF']).optional(),
       decimals: z.number().int().min(0).max(10).optional(),
-      resultFormat: z.enum(['number', 'currency', 'percent', 'text']).optional(),
+      resultFormat: z.enum(['number', 'currency', 'percent', 'text', 'date']).optional(),
     })
     .optional(),
   columnFormula: z.string().optional(),

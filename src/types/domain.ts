@@ -30,7 +30,7 @@ export interface FieldOptions {
   /** Nombre de décimales affichées (number, currency, percent, formula). */
   decimals?: number
   /** Champ `formula` : format d'affichage du résultat. */
-  resultFormat?: 'number' | 'currency' | 'percent' | 'text'
+  resultFormat?: 'number' | 'currency' | 'percent' | 'text' | 'date'
 }
 
 /** Rôle d'une colonne côté `atelier_projets`. */

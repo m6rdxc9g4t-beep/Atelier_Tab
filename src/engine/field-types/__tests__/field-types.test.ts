@@ -125,6 +125,13 @@ describe('formatValue', () => {
     expect(formatValue(f('number'), new FormulaError('#DIV/0!'))).toBe('#DIV/0!')
   })
 
+  it('date : numéro de série (Date + 7) et formule au format date', () => {
+    expect(formatValue(f('date'), 46356)).toBe('30/11/2026')
+    const end = f('formula', { options: { resultFormat: 'date' } })
+    expect(formatValue(end, '2026-12-07')).toBe('07/12/2026')
+    expect(formatValue(end, 46363)).toBe('07/12/2026')
+  })
+
   it('format compact du pied de grille', () => {
     expect(plain(formatCompact(194700))).toBe('194,7 k')
   })

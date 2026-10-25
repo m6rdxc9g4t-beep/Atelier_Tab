@@ -1,5 +1,5 @@
 /** Formatage d'affichage (fr-FR) d'une valeur calculée selon le type de champ. */
-import { formatNumberAsText, isError, type CellValue } from '@/engine/formula'
+import { formatNumberAsText, isError, serialToIso, type CellValue } from '@/engine/formula'
 import type { Field } from '@/types/domain'
 
 const LOCALE = 'fr-FR'
@@ -75,11 +75,19 @@ export function formatValue(field: Field, value: CellValue): string {
         return formatPercent(value, decimals)
       case 'text':
         return formatNumberAsText(value)
+      case 'date':
+        // Numéro de série (ex. `=Échéance + 7`) : affiché comme une date.
+        return formatDate(serialToIso(value))
       default:
         return formatNumber(value, decimals)
     }
   }
 
-  if (field.type === 'date') return formatDate(value)
+  if (
+    field.type === 'date' ||
+    (field.type === 'formula' && field.options?.resultFormat === 'date')
+  ) {
+    return formatDate(value)
+  }
   return value
 }

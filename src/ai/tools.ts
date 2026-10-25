@@ -203,6 +203,17 @@ const MAPPING_VALUES = [
   'time_spent',
 ] as const
 
+type ResultFormat = NonNullable<NonNullable<Field['options']>['resultFormat']>
+
+/** Affichage du résultat d'une colonne-formule. */
+const RESULT_FORMATS = [
+  'number',
+  'currency',
+  'percent',
+  'text',
+  'date',
+] as const satisfies readonly ResultFormat[]
+
 const DEFAULT_CHOICE_LABELS = DEFAULT_STATUS_CHOICES.map((c) => c.label)
 
 const statusPreset = z
@@ -552,7 +563,7 @@ export const TOOLS = [
         .optional()
         .describe('Obligatoire pour type=formula : formule de la ligne 1'),
       format: z
-        .enum(['number', 'currency', 'percent', 'text'])
+        .enum(RESULT_FORMATS)
         .optional()
         .describe('Affichage du résultat d’une formule (défaut number)'),
       choices: z
@@ -623,7 +634,7 @@ export const TOOLS = [
       formula: z.string().optional(),
       choices: z.array(z.string()).optional(),
       preset: statusPreset,
-      format: z.enum(['number', 'currency', 'percent', 'text']).optional(),
+      format: z.enum(RESULT_FORMATS).optional(),
       mapping: z.enum(MAPPING_VALUES).optional(),
     }),
     run(args, host) {
@@ -698,7 +709,7 @@ export const TOOLS = [
             label: z.string().min(1),
             type: z.enum(FIELD_TYPE_VALUES),
             formula: z.string().optional(),
-            format: z.enum(['number', 'currency', 'percent', 'text']).optional(),
+            format: z.enum(RESULT_FORMATS).optional(),
             choices: z.array(z.string()).optional(),
             preset: statusPreset,
             mapping: z.enum(MAPPING_VALUES).optional(),
