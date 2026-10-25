@@ -4,8 +4,8 @@
  * Chacune est une étape annulable (⌘Z), y compris la suppression.
  */
 import { parseFormula } from '@/engine/formula'
-import type { ConversionReport } from '@/engine/table'
-import type { Field, FieldOptions, FieldType } from '@/types/domain'
+import { choicesForConversion, conversionTexts, type ConversionReport } from '@/engine/table'
+import type { Field, FieldOptions, FieldType, SelectChoice } from '@/types/domain'
 import { undoable, undo } from './history'
 import { getSheet, useDataStore, useNotices } from './index'
 import { useUIStore } from './ui.store'
@@ -33,6 +33,22 @@ export function checkColumnFormula(
   } catch (e) {
     return { ok: false, reason: e instanceof Error ? e.message : 'Formule invalide' }
   }
+}
+
+/**
+ * Choix qu'aurait une colonne convertie en Statut (un par valeur distincte, mêmes ids que la
+ * conversion) : l'éditeur de champ les montre avant d'enregistrer.
+ */
+export function conversionChoices(tableId: string, fieldId: string): SelectChoice[] {
+  const data = useDataStore.getState()
+  const table = data.tables[tableId]
+  const field = table?.fields[fieldId]
+  if (!table || !field) return []
+  const sheet = getSheet(tableId)
+  const texts = conversionTexts(table, field, { collaborators: data.collaborators }, (r, f) =>
+    sheet ? sheet.value(r, f) : null,
+  )
+  return choicesForConversion(texts)
 }
 
 /** Libellé libre, dérivé de `base` (« Texte 2 »…). */
@@ -89,7 +105,8 @@ export function saveField(
     const current = useDataStore.getState().tables[tableId]?.fields[fieldId]
     data.updateField(tableId, fieldId, {
       label: draft.label,
-      options: { ...(current?.options ?? {}), ...(draft.options ?? {}) },
+      // Les options de l'éditeur sont complètes : elles remplacent les anciennes.
+      options: draft.options ?? current?.options ?? {},
       ...(draft.type === 'formula' && draft.columnFormula
         ? { columnFormula: draft.columnFormula }
         : {}),

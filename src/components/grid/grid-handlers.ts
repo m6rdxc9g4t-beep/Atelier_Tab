@@ -16,5 +16,6 @@ export interface GridHandlers {
   rowHeaderMouseEnter(recordId: string): void
   expandRecord(recordId: string): void
   rowDragStart(recordId: string, e: DragEvent): void
+  rowDragEnd(): void
   focusGrid(): void
 }

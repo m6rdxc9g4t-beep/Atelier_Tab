@@ -19,7 +19,7 @@ import {
   type LookupContext,
 } from '@/engine/field-types'
 import { isError, isFormula, type CellInput, type CellValue } from '@/engine/formula'
-import type { Field, FieldType, Table } from '@/types/domain'
+import type { Field, FieldType, SelectChoice, Table } from '@/types/domain'
 import { operatorsFor } from './view'
 
 export interface ConversionReport {
@@ -44,6 +44,37 @@ function computedText(v: CellValue): string | null {
   return v
 }
 
+/**
+ * Texte de départ de chaque cellule non vide d'une colonne, tel qu'on le retaperait (les
+ * formules saisies dans une cellule sont exclues ; une colonne-formule donne ses résultats).
+ */
+export function conversionTexts(
+  table: Table,
+  field: Field,
+  ctx: LookupContext,
+  computed?: ConversionOptions['computed'],
+): Map<string, string> {
+  const texts = new Map<string, string>()
+  for (const recordId of table.rowOrder) {
+    const record = table.records[recordId]
+    if (!record) continue
+    const stored = record.cells[field.id] ?? null
+    if (isFormula(stored)) continue
+    let text: string | null = null
+    if (stored !== null) text = toEditText(field, stored, ctx)
+    else if (field.type === 'formula' && record.kind === 'data' && computed) {
+      text = computedText(computed(recordId, field.id))
+    }
+    if (text !== null && text.trim() !== '') texts.set(recordId, text)
+  }
+  return texts
+}
+
+/** Choix créés par la conversion d'une colonne en Statut : un par valeur distincte. */
+export function choicesForConversion(texts: Map<string, string>): SelectChoice[] {
+  return choicesFromLabels([...new Set([...texts.values()].map((t) => t.trim()))])
+}
+
 export function changeFieldType(
   table: Table,
   fieldId: string,
@@ -55,27 +86,13 @@ export function changeFieldType(
   const old = table.fields[fieldId]
   if (!old || old.type === type) return report
 
-  // Texte de départ de chaque cellule non vide (formules exclues).
-  const texts = new Map<string, string>()
-  for (const recordId of table.rowOrder) {
-    const record = table.records[recordId]
-    if (!record) continue
-    const stored = record.cells[fieldId] ?? null
-    if (isFormula(stored)) continue
-    let text: string | null = null
-    if (stored !== null) text = toEditText(old, stored, ctx)
-    else if (old.type === 'formula' && record.kind === 'data' && options.computed) {
-      text = computedText(options.computed(recordId, fieldId))
-    }
-    if (text !== null && text.trim() !== '') texts.set(recordId, text)
-  }
+  const texts = conversionTexts(table, old, ctx, options.computed)
 
   const next: Field = { ...old, type }
   const opts = { ...(old.options ?? {}) }
   delete next.columnFormula
   if (type === 'select') {
-    const labels = [...new Set([...texts.values()].map((t) => t.trim()))]
-    opts.choices = old.type === 'select' ? (opts.choices ?? []) : choicesFromLabels(labels)
+    opts.choices = choicesForConversion(texts)
   } else {
     delete opts.choices
   }

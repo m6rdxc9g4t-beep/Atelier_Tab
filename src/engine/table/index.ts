@@ -33,4 +33,10 @@ export {
 } from './view'
 export { parseTsv, tileToSelection, toTsv } from './clipboard'
 export { fillPlan, fillValues, type FillOptions, type FillStep } from './fill'
-export { changeFieldType, type ConversionOptions, type ConversionReport } from './field-convert'
+export {
+  changeFieldType,
+  choicesForConversion,
+  conversionTexts,
+  type ConversionOptions,
+  type ConversionReport,
+} from './field-convert'

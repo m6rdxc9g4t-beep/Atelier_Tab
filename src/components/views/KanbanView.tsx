@@ -226,14 +226,12 @@ function DraggableCard(props: {
 }) {
   const { attributes, listeners, setNodeRef } = useDraggable({ id: props.recordId })
   return (
-    <div
-      ref={setNodeRef}
-      {...attributes}
-      {...listeners}
+    <Card
+      {...props}
+      nodeRef={setNodeRef}
+      dragProps={{ ...attributes, ...listeners }}
       className={cn(props.hidden && 'opacity-30')}
-    >
-      <Card {...props} />
-    </div>
+    />
   )
 }
 
@@ -244,6 +242,9 @@ const Card = memo(function Card({
   cardFields,
   overlay,
   onOpen,
+  nodeRef,
+  dragProps,
+  className,
 }: {
   table: Table
   recordId: string
@@ -251,21 +252,32 @@ const Card = memo(function Card({
   cardFields: Field[]
   overlay?: boolean
   onOpen: (recordId: string) => void
+  /** Glisser-déposer (dnd-kit) : nœud et attributs posés sur la carte elle-même. */
+  nodeRef?: (el: HTMLElement | null) => void
+  dragProps?: Record<string, unknown>
+  className?: string
 }) {
   const title = useCellValue(table.id, recordId, primary?.id ?? '')
   const titleText = primary && title !== null ? formatValue(primary, title) : ''
   return (
     <div
+      ref={nodeRef}
+      {...dragProps}
       role="button"
       tabIndex={0}
+      aria-roledescription="carte déplaçable"
       aria-label={`Ouvrir ${titleText || 'la fiche'}`}
       onClick={() => onOpen(recordId)}
       onKeyDown={(e) => {
-        if (e.key === 'Enter') onOpen(recordId)
+        // Entrée ouvre la fiche ; Espace et les flèches restent au glisser-déposer au clavier.
+        if (e.key === 'Enter') return onOpen(recordId)
+        const drag = dragProps?.onKeyDown as ((event: typeof e) => void) | undefined
+        drag?.(e)
       }}
       className={cn(
         'flex cursor-pointer flex-col gap-1.5 rounded-lg border border-line-strong bg-surface p-2.5 text-left hover:border-edge hover:shadow-glow',
         overlay && 'rotate-1 border-edge shadow-glow-strong',
+        className,
       )}
     >
       <p className={cn('font-medium', titleText ? 'text-ink' : 'text-faint')}>

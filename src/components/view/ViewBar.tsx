@@ -334,7 +334,7 @@ function UndoButtons() {
         className="btn-icon"
         disabled={!last}
         onClick={() => undo()}
-        aria-label="Annuler"
+        aria-label="Annuler la dernière action"
         title={last ? `Annuler : ${last} (${shortcut('Z')})` : 'Rien à annuler'}
       >
         <Undo2 size={15} />
@@ -344,7 +344,7 @@ function UndoButtons() {
         className="btn-icon"
         disabled={!next}
         onClick={() => redo()}
-        aria-label="Rétablir"
+        aria-label="Rétablir l’action annulée"
         title={next ? `Rétablir : ${next} (${shortcut('Z', { shift: true })})` : 'Rien à rétablir'}
       >
         <Redo2 size={15} />

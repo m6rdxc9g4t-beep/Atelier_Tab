@@ -520,8 +520,14 @@ export function pasteText(text: string): PasteReport | null {
   const table = getActiveTable()
   const rect = selectionRect(table)
   if (!table || !rect) return null
+  // Ce que l'app vient de copier dans cette table : valeurs et formules d'origine. Sinon (autre
+  // table, autre application) : le texte, retapé dans le type de chaque colonne.
   const internal =
-    clipboard && normalizeText(clipboard.text) === normalizeText(text) ? clipboard : null
+    clipboard &&
+    clipboard.tableId === table.id &&
+    normalizeText(clipboard.text) === normalizeText(text)
+      ? clipboard
+      : null
   const raw: (string | { input: CellInput; from: CellPosition })[][] = internal
     ? internal.inputs.map((line, r) =>
         line.map((input, c) => ({ input, from: internal.cells[r]?.[c] as CellPosition })),
@@ -554,6 +560,8 @@ export function pasteText(text: string): PasteReport | null {
     const fresh = useDataStore.getState().tables[table.id] as Table
     const ctx = lookup()
     const writes: CellWrite[] = []
+    // Couper : cellules sources effectivement recopiées (à vider ensuite).
+    const moved: CellPosition[] = []
     block.forEach((line, r) => {
       const recordId = targets[r]
       if (!recordId) return
@@ -585,21 +593,22 @@ export function pasteText(text: string): PasteReport | null {
             return
           }
           input = converted
+          moved.push(cell.from)
         }
         writes.push({ recordId, fieldId, input })
       })
     })
-    // Couper : la source est vidée (sauf les cellules qui viennent d'être écrites).
-    if (internal?.cut && internal.tableId === table.id) {
+    // Couper : les sources recopiées sont vidées (sauf celles qui viennent d'être écrites).
+    if (internal?.cut) {
       const written = new Set(writes.map((w) => `${w.recordId}:${w.fieldId}`))
-      for (const c of internal.cells.flat()) {
+      for (const c of moved) {
         if (!written.has(`${c.recordId}:${c.fieldId}`)) writes.unshift({ ...c, input: null })
       }
     }
     report.written = writes.length
     data.setCells(table.id, writes)
   })
-  if (internal?.cut) clipboard = null
+  if (internal?.cut && report.written > 0) clipboard = null
   pinIfFiltered(table, targets)
 
   const first = targets[0]

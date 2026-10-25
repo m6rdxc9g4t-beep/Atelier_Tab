@@ -12,6 +12,7 @@ import { getSheet, useDataStore } from '@/store'
 import { DEFAULT_STATUS_CHOICES } from '@/store/factories'
 import {
   checkColumnFormula,
+  conversionChoices,
   createField,
   freeLabel,
   saveField,
@@ -94,7 +95,10 @@ export function FieldEditor({ tableId, fieldId, index, anchor, onClose }: FieldE
     setError(null)
     if (!labelTouched) setLabel(freeLabel(tableId, DEFAULT_LABELS[next]))
     if (next === 'select' && !options.choices?.length) {
-      setOptions((o) => ({ ...o, choices: DEFAULT_STATUS_CHOICES.map((c) => ({ ...c })) }))
+      // Colonne existante : les choix que créera la conversion (un par valeur distincte).
+      const fromValues = field && fieldId ? conversionChoices(tableId, fieldId) : []
+      const choices = fromValues.length ? fromValues : DEFAULT_STATUS_CHOICES.map((c) => ({ ...c }))
+      setOptions((o) => ({ ...o, choices }))
     }
     if (next === 'currency' && !options.currency) setOptions((o) => ({ ...o, currency: 'EUR' }))
     if (next === 'formula' && !options.resultFormat) {

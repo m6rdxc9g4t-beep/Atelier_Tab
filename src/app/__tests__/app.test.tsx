@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { App } from '@/app/App'
 import { useDataStore, useUIStore } from '@/store'
 import { useAssistant } from '@/store/assistant.store'
+import { clearHistory } from '@/store/history'
 
 // jsdom ne calcule pas de mise en page : on donne une taille au conteneur de la grille
 // pour que la virtualisation rende les lignes.
@@ -32,10 +33,16 @@ beforeEach(() => {
     useUIStore.setState({
       activeTableId: 'tbl_planning_lots',
       selection: null,
+      rangeEnd: null,
       editing: null,
       inputError: null,
       sidebarCollapsed: false,
+      search: '',
+      pinnedRecordIds: [],
+      expandedRecordId: null,
+      paletteOpen: false,
     })
+    clearHistory()
   })
 })
 afterEach(cleanup)
@@ -386,5 +393,144 @@ describe('assistant Ollama', () => {
     fireEvent.click(screen.getByRole('button', { name: /Assistant/ }))
     expect(await screen.findByText('Ollama n’est pas lancé')).toBeTruthy()
     expect(screen.getByText('ollama serve')).toBeTruthy()
+  })
+})
+
+describe('fonctions Excel de la grille', () => {
+  it('Maj + flèches sélectionne une plage ; la barre d’état en donne la somme', () => {
+    render(<App />)
+    fireEvent.mouseDown(cell('rec_01', 'cost_ht'))
+    fireEvent.keyDown(grid(), { key: 'ArrowDown', shiftKey: true })
+    fireEvent.keyDown(grid(), { key: 'ArrowDown', shiftKey: true })
+    expect(screen.getByText('C1:C3')).toBeTruthy()
+    expect(text(screen.getByText(/^Somme :/))).toBe('Somme : 88 500 €')
+  })
+
+  it('copier : texte au format d’Excel dans le presse-papiers', () => {
+    render(<App />)
+    fireEvent.mouseDown(cell('rec_01', 'task_name'))
+    fireEvent.keyDown(grid(), { key: 'ArrowRight', shiftKey: true })
+    const data = new Map<string, string>()
+    fireEvent.copy(grid(), {
+      clipboardData: { setData: (k: string, v: string) => data.set(k, v), getData: () => '' },
+    })
+    expect(data.get('text/plain')).toBe('Gros œuvre\tEn cours')
+  })
+
+  it('coller depuis Excel puis annuler avec ⌘Z', () => {
+    render(<App />)
+    fireEvent.mouseDown(cell('rec_03', 'cost_ht'))
+    fireEvent.paste(grid(), {
+      clipboardData: { getData: () => '20 000\r\n', setData: () => {} },
+    })
+    expect(text(cell('rec_total', 'cost_ht'))).toBe('93 500 €')
+    fireEvent.keyDown(grid(), { key: 'z', metaKey: true })
+    expect(text(cell('rec_total', 'cost_ht'))).toBe('88 500 €')
+    fireEvent.keyDown(grid(), { key: 'z', metaKey: true, shiftKey: true })
+    expect(text(cell('rec_total', 'cost_ht'))).toBe('93 500 €')
+  })
+
+  it('menu contextuel : insérer une ligne au-dessus', () => {
+    render(<App />)
+    // Un clic droit commence par un mousedown du bouton droit, qui sélectionne la cellule.
+    fireEvent.mouseDown(cell('rec_02', 'task_name'), { button: 2 })
+    fireEvent.contextMenu(cell('rec_02', 'task_name'))
+    fireEvent.click(screen.getByRole('menuitem', { name: /Insérer une ligne au-dessus/ }))
+    const table = useDataStore.getState().tables.tbl_planning_lots!
+    expect(table.rowOrder).toHaveLength(5)
+    expect(table.rowOrder[2]).toBe('rec_02')
+  })
+
+  it('supprimer une ligne affiche « Annuler »', () => {
+    render(<App />)
+    fireEvent.mouseDown(cell('rec_02', 'task_name'), { button: 2 })
+    fireEvent.contextMenu(cell('rec_02', 'task_name'))
+    fireEvent.click(screen.getByRole('menuitem', { name: /Supprimer la ligne/ }))
+    expect(useDataStore.getState().tables.tbl_planning_lots!.rowOrder).toHaveLength(3)
+    fireEvent.click(screen.getByRole('button', { name: 'Annuler' }))
+    expect(useDataStore.getState().tables.tbl_planning_lots!.rowOrder).toHaveLength(4)
+  })
+
+  it('autocomplétion des fonctions dans la barre de formules', () => {
+    render(<App />)
+    fireEvent.mouseDown(cell('rec_01', 'task_name'))
+    const bar = screen.getByRole('textbox', { name: 'Barre de formules' }) as HTMLInputElement
+    fireEvent.focus(bar)
+    fireEvent.change(bar, { target: { value: '=somme.s', selectionStart: 8 } })
+    const list = screen.getByRole('listbox', { name: 'Fonctions' })
+    expect(within(list).getByText('SOMME.SI')).toBeTruthy()
+    fireEvent.keyDown(bar, { key: 'Tab' })
+    expect(useUIStore.getState().editing?.draft).toBe('=SOMME.SI(')
+  })
+})
+
+describe('fonctions Airtable', () => {
+  it('Espace ouvre la fiche de la ligne ; une modification y est enregistrée', () => {
+    render(<App />)
+    fireEvent.mouseDown(cell('rec_02', 'task_name'))
+    fireEvent.keyDown(grid(), { key: ' ' })
+    const panel = screen.getByRole('dialog', { name: 'Fiche de la ligne 2' })
+    const name = within(panel).getByRole('textbox', { name: 'Lot / Tâche' })
+    fireEvent.change(name, { target: { value: 'Charpente métallique' } })
+    fireEvent.blur(name)
+    expect(text(cell('rec_02', 'task_name'))).toBe('Charpente métallique')
+    fireEvent.click(within(panel).getByRole('button', { name: 'Ligne suivante' }))
+    expect(screen.getByRole('dialog', { name: 'Fiche de la ligne 3' })).toBeTruthy()
+  })
+
+  it('filtre la vue depuis la barre d’outils', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: /^Filtrer/ }))
+    const panel = screen.getByRole('dialog', { name: 'Filtres' })
+    fireEvent.click(within(panel).getByRole('button', { name: /Ajouter un filtre/ }))
+    fireEvent.change(within(panel).getByRole('combobox', { name: 'Champ du filtre' }), {
+      target: { value: 'status' },
+    })
+    fireEvent.change(within(panel).getByRole('combobox', { name: 'Valeur du filtre' }), {
+      target: { value: 'opt_doing' },
+    })
+    expect(cell('rec_01', 'task_name')).toBeTruthy()
+    expect(cell('rec_02', 'task_name')).toBeNull()
+    expect(screen.getByText(/1 ligne sur 3/)).toBeTruthy()
+  })
+
+  it('recherche rapide dans la vue', () => {
+    render(<App />)
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Rechercher dans la vue' }), {
+      target: { value: 'charpente' },
+    })
+    expect(cell('rec_02', 'task_name')).toBeTruthy()
+    expect(cell('rec_01', 'task_name')).toBeNull()
+  })
+
+  it('tri depuis le menu d’une colonne, sans changer les numéros de ligne', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Options de la colonne Coût HT' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /Trier par ordre croissant/ }))
+    const rows = screen.getAllByRole('row').slice(1)
+    expect(text(rows[0] as HTMLElement)).toContain('Isolation thermique')
+    // L'isolation garde son numéro de ligne (3) : les formules lisent toujours C3.
+    expect(text(rows[0] as HTMLElement)).toMatch(/^3/)
+  })
+
+  it('Kanban : une colonne par statut, une carte par ligne', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('tab', { name: /Kanban/ }))
+    const board = screen.getByRole('region', { name: 'Kanban de Planning & Lots' })
+    const doing = within(board).getByRole('region', { name: 'En cours' })
+    expect(within(doing).getByRole('button', { name: 'Ouvrir Gros œuvre' })).toBeTruthy()
+    fireEvent.click(within(doing).getByRole('button', { name: 'Ouvrir Gros œuvre' }))
+    expect(screen.getByRole('dialog', { name: 'Fiche de la ligne 1' })).toBeTruthy()
+  })
+
+  it('palette de commandes (⌘K) : ouvrir une table', () => {
+    render(<App />)
+    fireEvent.keyDown(window, { key: 'k', metaKey: true })
+    const input = screen.getByPlaceholderText('Ouvrir une table ou lancer une action…')
+    fireEvent.change(input, { target: { value: 'surfaces' } })
+    fireEvent.click(screen.getByRole('option', { name: /Calculs Surfaces/ }))
+    return new Promise((r) => requestAnimationFrame(r)).then(() => {
+      expect(useUIStore.getState().activeTableId).toBe('tbl_calculs_surfaces')
+    })
   })
 })

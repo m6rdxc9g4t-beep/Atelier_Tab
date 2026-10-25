@@ -28,7 +28,7 @@ import {
   selectColumns,
   selectEdge,
   selectRows,
-  toggleCheckbox,
+  toggleCheckbox as toggleCheckboxAt,
   toggleSelectedCheckboxes,
 } from '@/store/grid-actions'
 import { moveRowsTo } from '@/store/field-actions'
@@ -205,6 +205,8 @@ export function HybridGrid({ table, plain }: HybridGridProps) {
 
   // ------------------------------------------------------------------ souris
   const drag = useRef<{ kind: 'select' | 'fill' | 'rows'; anchorRow?: string } | null>(null)
+  // Cible de la poignée de recopie, aussi gardée hors de l'état pour le relâchement de la souris.
+  const fillTargetRef = useRef<{ r: number; c: number } | null>(null)
   const latest = useRef({ rows, fieldIds, rect })
   useLayoutEffect(() => {
     latest.current = { rows, fieldIds, rect }
@@ -214,16 +216,13 @@ export function HybridGrid({ table, plain }: HybridGridProps) {
     const up = () => {
       const d = drag.current
       drag.current = null
-      if (d?.kind === 'fill') {
-        setFillTarget((target) => {
-          if (target) {
-            const recordId = latest.current.rows[target.r]
-            const fieldId = latest.current.fieldIds[target.c]
-            if (recordId && fieldId) queueMicrotask(() => fillTo({ recordId, fieldId }))
-          }
-          return null
-        })
-      }
+      if (d?.kind !== 'fill') return
+      const target = fillTargetRef.current
+      fillTargetRef.current = null
+      setFillTarget(null)
+      const recordId = target ? latest.current.rows[target.r] : undefined
+      const fieldId = target ? latest.current.fieldIds[target.c] : undefined
+      if (recordId && fieldId) fillTo({ recordId, fieldId })
     }
     window.addEventListener('mouseup', up)
     return () => window.removeEventListener('mouseup', up)
@@ -257,10 +256,12 @@ export function HybridGrid({ table, plain }: HybridGridProps) {
         if (!d) return
         if (d.kind === 'select') useUIStore.getState().extendTo(cell)
         else if (d.kind === 'fill') {
-          setFillTarget({
+          const target = {
             r: latest.current.rows.indexOf(cell.recordId),
             c: latest.current.fieldIds.indexOf(cell.fieldId),
-          })
+          }
+          fillTargetRef.current = target
+          setFillTarget(target)
         } else if (d.kind === 'rows' && d.anchorRow) {
           selectRows(d.anchorRow, cell.recordId)
         }
@@ -273,7 +274,7 @@ export function HybridGrid({ table, plain }: HybridGridProps) {
         setMenu({ x: e.clientX, y: e.clientY })
       },
       toggleCheckbox(cell) {
-        toggleCheckbox(cell)
+        toggleCheckboxAt(cell)
       },
       fillHandleMouseDown(e) {
         e.preventDefault()
@@ -302,6 +303,10 @@ export function HybridGrid({ table, plain }: HybridGridProps) {
         e.dataTransfer.setData('application/x-atelier-row', recordId)
         e.dataTransfer.effectAllowed = 'move'
         setDragRow(recordId)
+      },
+      rowDragEnd() {
+        setDragRow(null)
+        setDropRow(null)
       },
       focusGrid,
     }),
@@ -460,7 +465,7 @@ export function HybridGrid({ table, plain }: HybridGridProps) {
         e.preventDefault()
         if (e.shiftKey) return selectRows(selection.recordId)
         if (table.fields[selection.fieldId]?.type === 'checkbox') {
-          return ui.rangeEnd ? toggleSelectedCheckboxes() : toggleCheckbox(selection)
+          return ui.rangeEnd ? toggleSelectedCheckboxes() : toggleCheckboxAt(selection)
         }
         // Espace : fiche détaillée de la ligne, comme Airtable.
         return openRecord(selection.recordId)
@@ -711,6 +716,7 @@ const GridRow = memo(function GridRow({
           <span
             draggable
             onDragStart={(e) => handlers.rowDragStart(recordId, e)}
+            onDragEnd={() => handlers.rowDragEnd()}
             title="Glisser pour déplacer la ligne"
             className="cursor-grab text-faint opacity-0 group-hover:opacity-100 active:cursor-grabbing"
           >

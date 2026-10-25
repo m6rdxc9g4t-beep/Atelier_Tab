@@ -106,7 +106,9 @@ export const GridCell = memo(function GridCell({
         summary
           ? 'bg-surface-sunken font-semibold'
           : isComputed && !plain
-            ? 'bg-surface-sunken/60'
+            ? frozenLeft !== null
+              ? 'bg-surface-sunken'
+              : 'bg-surface-sunken/60'
             : frozenLeft !== null
               ? 'bg-surface group-hover:bg-row-hover'
               : 'group-hover:bg-row-hover',
@@ -130,16 +132,16 @@ export const GridCell = memo(function GridCell({
       )}
       {rangeEdges && (
         <span
-          className="pointer-events-none absolute -inset-px z-10"
+          className="pointer-events-none absolute inset-0 z-10"
           style={edgeStyle(rangeEdges, 1.5, 'solid')}
         />
       )}
       {active && !editing && (
-        <span className="pointer-events-none absolute -inset-px z-10 border-2 border-accent" />
+        <span className="pointer-events-none absolute inset-0 z-10 border-2 border-accent" />
       )}
       {fillEdges && (
         <span
-          className="pointer-events-none absolute -inset-px z-10"
+          className="pointer-events-none absolute inset-0 z-10"
           style={edgeStyle(fillEdges, 1.5, 'dashed')}
         />
       )}
@@ -148,7 +150,7 @@ export const GridCell = memo(function GridCell({
           role="presentation"
           title="Poignée de recopie : glissez pour prolonger (séries 1, 2, 3…, dates)"
           onMouseDown={(e) => handlers.fillHandleMouseDown(e)}
-          className="absolute -right-[4px] -bottom-[4px] z-20 size-[8px] cursor-crosshair border border-surface bg-accent"
+          className="absolute right-0 bottom-0 z-20 size-[7px] cursor-crosshair rounded-[1px] bg-accent ring-1 ring-surface"
         />
       )}
     </div>
