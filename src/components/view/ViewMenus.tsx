@@ -135,7 +135,7 @@ export function Switch({
 // ---------------------------------------------------------------------------
 
 /** Libellé d'un opérateur, adapté au type de colonne. */
-export function operatorLabel(field: Field, op: FilterOperator): string {
+function operatorLabel(field: Field, op: FilterOperator): string {
   const dated = field.type === 'date' || field.options?.resultFormat === 'date'
   switch (op) {
     case 'contains':

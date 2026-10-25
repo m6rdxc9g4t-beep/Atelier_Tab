@@ -316,7 +316,8 @@ function mapInterval(
 function merged(pieces: Interval[]): Interval | null {
   if (pieces.length === 0) return null
   const sorted = [...pieces].sort((x, y) => x[0] - y[0])
-  let [lo, hi] = sorted[0] as Interval
+  const [lo, first] = sorted[0] as Interval
+  let hi = first
   for (const [a, b] of sorted.slice(1)) {
     if (a > hi + 1) return null
     hi = Math.max(hi, b)

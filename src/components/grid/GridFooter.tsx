@@ -1,7 +1,5 @@
 import { memo, useState } from 'react'
 import { Plus } from 'lucide-react'
-import { FIELD_TYPES, formatValue } from '@/engine/field-types'
-import { isError, type CellValue } from '@/engine/formula'
 import { addRowAndSelect } from '@/store/grid-actions'
 import { getSheet, useComputed } from '@/store'
 import { activeView } from '@/store/view-rows'
@@ -12,60 +10,9 @@ import { MenuItem, MenuLabel } from '@/components/ui/Popover'
 import { fieldWidth } from '@/lib/field-icons'
 import { cn } from '@/lib/cn'
 import { ADD_COLUMN_WIDTH, GUTTER_WIDTH } from './GridHeader'
+import { defaultSummary, SUMMARY_LABELS, summarize, summaryKinds } from './summary'
 
 export const FOOTER_HEIGHT = 36
-
-const LABELS: Record<SummaryKind, string> = {
-  none: 'Aucun',
-  sum: 'Somme',
-  average: 'Moyenne',
-  min: 'Min',
-  max: 'Max',
-  count: 'Nombres',
-  filled: 'Remplies',
-  empty: 'Vides',
-}
-
-function isNumeric(field: Field): boolean {
-  if (field.type === 'formula') {
-    const f = field.options?.resultFormat ?? 'number'
-    return f === 'number' || f === 'currency' || f === 'percent'
-  }
-  return FIELD_TYPES[field.type].numeric
-}
-
-export function summaryKinds(field: Field): SummaryKind[] {
-  return isNumeric(field)
-    ? ['none', 'sum', 'average', 'min', 'max', 'count', 'filled', 'empty']
-    : ['none', 'filled', 'empty']
-}
-
-/** Agrégat par défaut : la somme des colonnes numériques, rien ailleurs. */
-export function defaultSummary(field: Field): SummaryKind {
-  return isNumeric(field) ? 'sum' : 'none'
-}
-
-/** Valeur d'un agrégat sur des valeurs calculées (lignes de total exclues par l'appelant). */
-export function summarize(field: Field, values: CellValue[], kind: SummaryKind): string | null {
-  const blank = (v: CellValue) =>
-    v === null || v === '' || (field.type === 'checkbox' && v !== true)
-  if (kind === 'none') return null
-  if (kind === 'filled') return String(values.filter((v) => !blank(v)).length)
-  if (kind === 'empty') return String(values.filter(blank).length)
-  const nums = values.filter((v): v is number => typeof v === 'number' && !isError(v))
-  if (kind === 'count') return String(nums.length)
-  if (nums.length === 0) return '—'
-  const total = nums.reduce((a, b) => a + b, 0)
-  const value =
-    kind === 'sum'
-      ? total
-      : kind === 'average'
-        ? total / nums.length
-        : kind === 'min'
-          ? Math.min(...nums)
-          : Math.max(...nums)
-  return formatValue(field, Number(value.toPrecision(15)))
-}
 
 /**
  * Pied de grille : bouton d'ajout de ligne et, pour chaque colonne, un agrégat au choix
@@ -151,14 +98,14 @@ function FooterCell({
       <button
         type="button"
         onClick={(e) => setAnchor((a) => (a ? null : e.currentTarget))}
-        aria-label={`Résumé de ${field.label} : ${text === null ? 'aucun' : `${LABELS[kind]} ${text}`}`}
+        aria-label={`Résumé de ${field.label} : ${text === null ? 'aucun' : `${SUMMARY_LABELS[kind]} ${text}`}`}
         className="group flex size-full items-center justify-end gap-1.5 px-2 tabular-nums hover:bg-surface-hover"
       >
         {text === null ? (
           <span className="text-[11px] text-faint opacity-0 group-hover:opacity-100">Résumé</span>
         ) : (
           <>
-            <span className="text-[11px] text-muted">{LABELS[kind]}</span>
+            <span className="text-[11px] text-muted">{SUMMARY_LABELS[kind]}</span>
             <span className="truncate font-medium text-ink">{text}</span>
           </>
         )}
@@ -180,7 +127,7 @@ function FooterCell({
               setAnchor(null)
             }}
           >
-            {LABELS[k]}
+            {SUMMARY_LABELS[k]}
           </MenuItem>
         ))}
       </Floating>

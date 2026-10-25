@@ -49,6 +49,44 @@ Voir [`FORMULA_ENGINE.md`](FORMULA_ENGINE.md).
 
 Les opérations structurelles (`engine/table/table-ops.ts`) réécrivent les formules comme Excel. Une ligne ajoutée juste au-dessus d'une ligne de synthèse est incluse dans ses plages (`SUM(C1:C3)` → `SUM(C1:C4)`). Limite actuelle : les modèles de colonnes-formules ne suivent que les changements de colonnes (une référence absolue de ligne dans un modèle, ex. `$F$1`, n'est pas décalée par une insertion de ligne).
 
+## Grille, vues et historique
+
+```text
+ clavier / souris ──▶ store/grid-actions.ts ──undoable()──▶ data.store (Immer) ──▶ moteur
+                        │  plage (ui.store : selection + rangeEnd)      │
+                        │  presse-papiers (engine/table/clipboard.ts)   └─▶ history.ts : instantané
+                        │  recopie (engine/table/fill.ts)                   de la table avant / après
+                        ▼
+              store/view-rows.ts : lignes de la vue (engine/table/view.ts : filtres, tri, recherche)
+```
+
+- **Vue ≠ table.** Une vue (`View` : filtres, tri, champs masqués, hauteur des lignes, résumés,
+  regroupement Kanban) ne change jamais `rowOrder` : les formules lisent des adresses A1 qui en
+  dépendent. `viewRecordIds` (pur) donne l'ordre d'affichage ; les lignes de total ne sont ni
+  filtrées ni triées. Toute coordonnée de la grille (navigation, plage, collage, recopie) est une
+  coordonnée de vue ; le numéro affiché d'une ligne reste son adresse dans la table. Une ligne
+  modifiée sous un filtre reste visible (`pinnedRecordIds`) jusqu'au prochain changement de filtre.
+- **Annuler / rétablir** (`store/history.ts`) : chaque action de l'interface passe par
+  `undoable(libellé, tableId, fn)`, qui garde la table avant et après (partage structurel
+  d'Immer : un instantané ne coûte que les objets modifiés). Les réglages de vue ne sont pas dans
+  l'historique et sont conservés quand on annule. Une table modifiée hors de l'historique
+  (assistant, fichier externe) perd son historique, pour qu'annuler n'écrase jamais ces
+  modifications.
+- **Presse-papiers** : texte TSV d'Excel (`toTsv` / `parseTsv`, `toClipboardText` pour des
+  valeurs relues sans perte). Un collage de ce que l'app vient de copier dans la même table
+  reprend les valeurs stockées et décale les formules selon les adresses A1 ; un texte venu
+  d'ailleurs est retapé dans le type de chaque colonne (statut inconnu : choix créé).
+- **Recopie** (`fillPlan`) : séries (nombres par moindres carrés, dates, « Lot 1 »), sinon motif
+  répété ; les formules sont décalées selon les adresses A1, jamais selon l'affichage. Une
+  recopie ne touche pas une ligne de total.
+- **Structure** : `changeFieldType` (valeurs retapées dans le nouveau type, non convertibles
+  gardées), `moveRecords` / `moveField` avec `moveReferences` (les références suivent les
+  cellules ; une plage dont les éléments restent contigus est inchangée).
+- **Interface** : `HybridGrid` (lignes virtualisées, première colonne figée, poignée de recopie,
+  glisser-déposer de lignes et de colonnes), `ViewBar` (outils de vue), `KanbanView` (dnd-kit),
+  `RecordPanel` (fiche), `FieldEditor`, `CommandPalette` (cmdk), `StatusBar`. Les panneaux
+  flottants (`ui/Floating`) sont rendus dans `<body>` pour ne jamais être rognés par la grille.
+
 ## Persistance
 
 `StorageAdapter` (getItem / setItem) est branché sur le middleware `persist` de Zustand.
@@ -60,7 +98,7 @@ Les opérations structurelles (`engine/table/table-ops.ts`) réécrivent les for
 
 ## IA
 
-`src/ai/tools.ts` définit 19 outils (schémas Zod convertis en JSON Schema) qui agissent sur un `DataStore` à travers ses actions : mêmes conversions de saisie, mêmes réécritures de formules, même moteur que l'interface.
+`src/ai/tools.ts` définit 25 outils (schémas Zod convertis en JSON Schema) qui agissent sur un `DataStore` à travers ses actions : mêmes conversions de saisie, mêmes réécritures de formules, même moteur que l'interface.
 
 ```text
 Claude Code ──stdio──▶ atelier-mcp (desktop/mcp-server.ts)

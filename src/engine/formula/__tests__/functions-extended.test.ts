@@ -101,7 +101,7 @@ describe('texte', () => {
 
   it('TEXTE : nombres, pourcentages et dates', () => {
     expect(v('=TEXTE(1234.5; "0,00")')).toBe('1234,50')
-    expect(v('=TEXTE(1234.5; "# ##0,00 €")')).toBe('1 234,50 €')
+    expect(v('=TEXTE(1234.5; "# ##0,00 €")')).toBe('1\u202f234,50 €')
     expect(v('=TEXTE(0.256; "0,0%")')).toBe('25,6%')
     expect(v('=TEXTE(7; "000")')).toBe('007')
     expect(v('=TEXTE("2026-11-30"; "jj/mm/aaaa")')).toBe('30/11/2026')

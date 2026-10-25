@@ -30,7 +30,7 @@ import type {
 import { Floating, type FloatingAnchor } from '@/components/ui/Floating'
 import { StatusBadge } from '@/components/ui/Badge'
 import { MAPPING_LABELS } from '@/components/dataflow/labels'
-import { useFormulaAssist } from '@/components/formula/FormulaAssist'
+import { useFormulaAssist } from '@/components/formula/useFormulaAssist'
 import { FIELD_ICONS } from '@/lib/field-icons'
 import { newId } from '@/lib/ids'
 import { cn } from '@/lib/cn'

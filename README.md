@@ -10,16 +10,36 @@ Atelier Tab réunit la liberté de calcul d'Excel (formules, références `A1:C1
 
 ## Fonctionnalités
 
-| Domaine                | Ce que ça fait                                                                                                                                                                                                                                                              |
-| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Moteur de formules** | `SUM`, `AVG`/`AVERAGE`, `MIN`, `MAX`, `IF`, `COUNT`, `ROUND`, `ABS`, opérateurs `+ - * / ^ &`, comparaisons, références et plages. Recalcul incrémental, détection des cycles, erreurs Excel (`#REF!`, `#DIV/0!`, `#VALUE!`, `#NAME?`, `#CYCLE!`). Aucun `eval()`.          |
-| **Colonnes typées**    | Texte, nombre, devise, pourcentage, statut (badge aux couleurs officielles de la suite, préréglage « Statuts Atelier »), date, case à cocher, responsable, formule.                                                                                                         |
-| **Vues**               | Grille hybride, tableur pur, Kanban groupé par statut, fiche détaillée.                                                                                                                                                                                                     |
-| **Navigation**         | Espaces de travail › Projets › Tables, recherche rapide `Ctrl/Cmd + K`.                                                                                                                                                                                                     |
-| **Import CSV**         | Fichier déposé, choisi ou collé depuis Excel : séparateur et encodage détectés (Windows-1252 compris), formats français, types et statuts déduits, correspondance des colonnes, ajout ou mise à jour par colonne clé. Le CSV enrichi d'Atelier Tab se réimporte sans perte. |
-| **DataFlow**           | Export JSON normalisé (schéma `atelier_projets` v2.1.0), CSV enrichi, envoi direct à Atelier Projets (préréglage local, résumé d'import). Instantanés pour Atelier Viz.                                                                                                     |
-| **Persistance**        | App de bureau : fichiers JSON dans `~/Atelier_Tab`, synchronisés en direct. Navigateur : IndexedDB.                                                                                                                                                                         |
-| **IA**                 | Serveur MCP pour Claude Code et assistant intégré (Ollama local, ou Claude en ligne) : mêmes 21 outils, mêmes règles que la grille. Nœud Atelier pour les workflows d'Atelier Nexus.                                                                                        |
+| Domaine                | Ce que ça fait                                                                                                                                                                                                                                                                                                       |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Moteur de formules** | Une centaine de fonctions, en anglais ou en français (`SOMME.SI`, `NB.SI.ENS`, `RECHERCHEV`, `RECHERCHEX`, `INDEX`/`EQUIV`, `GAUCHE`, `TEXTE`, `AUJOURDHUI`, `DATEDIF`, `NB.JOURS.OUVRES`…), références et plages, arithmétique sur les dates. Recalcul incrémental, cycles détectés, erreurs Excel. Aucun `eval()`. |
+| **Saisie comme Excel** | Plages (souris, Maj + flèches, en-têtes), copier / couper / coller avec Excel et Google Sheets, poignée de recopie avec séries, ⌘D / ⌘R, annuler / rétablir (⌘Z), autocomplétion des fonctions, barre d'état Moyenne / Nb / Somme, menu contextuel, colonnes redimensionnables et déplaçables.                       |
+| **Colonnes typées**    | Texte, nombre, devise, pourcentage, statut (badges aux couleurs officielles, préréglage « Statuts Atelier »), date, case à cocher, responsable, formule. Éditeur de champ : changer de type sans perdre les valeurs, choix colorés, formule de colonne avec aperçu.                                                  |
+| **Vues**               | Grille hybride, tableur pur, Kanban (glisser une carte change son statut), fiche détaillée d'une ligne (Espace). Champs masqués, filtres, tri, hauteur des lignes, recherche et résumé de colonne, enregistrés avec la vue.                                                                                          |
+| **Navigation**         | Espaces de travail › Projets › Tables (renommage par double-clic), palette de commandes `Ctrl/Cmd + K`.                                                                                                                                                                                                              |
+| **Import CSV**         | Fichier déposé, choisi ou collé depuis Excel : séparateur et encodage détectés (Windows-1252 compris), formats français, types et statuts déduits, correspondance des colonnes, ajout ou mise à jour par colonne clé. Le CSV enrichi d'Atelier Tab se réimporte sans perte.                                          |
+| **DataFlow**           | Export JSON normalisé (schéma `atelier_projets` v2.1.0), CSV enrichi, envoi direct à Atelier Projets (préréglage local, résumé d'import). Instantanés pour Atelier Viz.                                                                                                                                              |
+| **Persistance**        | App de bureau : fichiers JSON dans `~/Atelier_Tab`, synchronisés en direct. Navigateur : IndexedDB.                                                                                                                                                                                                                  |
+| **IA**                 | Serveur MCP pour Claude Code et assistant intégré (Ollama local, ou Claude en ligne) : mêmes 25 outils, mêmes règles que la grille. Nœud Atelier pour les workflows d'Atelier Nexus.                                                                                                                                 |
+
+### Raccourcis de la grille
+
+| Touche                      | Action                                                      |
+| --------------------------- | ----------------------------------------------------------- |
+| Flèches, Tab, Entrée        | Se déplacer ; Entrée ou F2 modifie la cellule               |
+| Maj + flèches, Maj + clic   | Étendre la sélection                                        |
+| ⌘ + flèches (Maj : étendre) | Aller au bord de la table                                   |
+| ⌘A                          | Tout sélectionner                                           |
+| ⌘C / ⌘X / ⌘V                | Copier, couper, coller (avec Excel, Google Sheets ou l'app) |
+| ⌘D / ⌘R                     | Recopier vers le bas / vers la droite                       |
+| ⌘Z / ⇧⌘Z (Ctrl+Y)           | Annuler / rétablir                                          |
+| Suppr                       | Vider la sélection                                          |
+| Espace                      | Fiche de la ligne (case à cocher : cocher)                  |
+| Maj + Espace / ⌘ + Espace   | Sélectionner la ligne / la colonne                          |
+| ⌘;                          | Date du jour                                                |
+| ⌘F / ⌘K / ⌘J                | Rechercher dans la vue / palette de commandes / assistant   |
+
+Sous Windows et Linux, ⌘ = Ctrl. Le tri et les filtres ne changent que l'affichage : les numéros de ligne et les formules (`=SOMME(C1:C3)`) restent ceux de la table.
 
 ## Démarrage
 
@@ -226,12 +246,12 @@ React 19 · TypeScript (strict) · Vite · Electron (app macOS) · Tailwind CSS 
 - [x] **Phase 1** — Modèle de domaine, store, persistance IndexedDB
 - [x] **Phase 2** — Moteur de formules
 - [x] **Phase 3** — Grille hybride et barre de formules
-- [ ] **Phase 4** — Sidebar et navigation clavier
+- [x] **Phase 4** — Sidebar et navigation clavier (palette ⌘K, renommage, plages au clavier)
 - [x] **Phase 5** — DataFlow → `atelier_projets`
 - [x] **Import CSV** — Assistant d'import, glisser-déposer, collage Excel, outil `import_csv`
 - [x] **IA** — Données en fichiers, serveur MCP (Claude Code), assistant Ollama
-- [ ] **Phase 6** — Kanban, fiche détaillée, filtres
-- [ ] **Phase 7** — Undo/redo, copier-coller, accessibilité, tests e2e
+- [x] **Phase 6** — Kanban, fiche détaillée, filtres, tri, champs masqués, éditeur de champ
+- [x] **Phase 7** — Undo/redo, copier-coller, poignée de recopie, ~100 fonctions de formule ; reste : tests e2e dans un vrai navigateur, accessibilité approfondie, regroupement en grille
 
 ## Contribuer
 

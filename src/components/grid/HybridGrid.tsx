@@ -40,13 +40,14 @@ import type { Field, RowHeight, Table } from '@/types/domain'
 import { fieldWidth, refHue } from '@/lib/field-icons'
 import { cn } from '@/lib/cn'
 import { GridCell } from './GridCell'
-import { GridContextMenu, reportPaste } from './GridContextMenu'
+import { reportPaste } from './clipboard-actions'
+import { GridContextMenu } from './GridContextMenu'
 import { FOOTER_HEIGHT, GridFooter } from './GridFooter'
 import { ADD_COLUMN_WIDTH, GridHeader, GUTTER_WIDTH, HEADER_HEIGHT } from './GridHeader'
 import type { GridHandlers } from './grid-handlers'
 import { areaIndexAt, useActiveFormulaAreas } from './useActiveFormula'
 
-export const ROW_HEIGHTS: Record<RowHeight, number> = { compact: 30, standard: 36, tall: 68 }
+const ROW_HEIGHTS: Record<RowHeight, number> = { compact: 30, standard: 36, tall: 68 }
 
 interface HybridGridProps {
   table: Table

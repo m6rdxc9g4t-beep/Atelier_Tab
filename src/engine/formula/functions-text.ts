@@ -253,7 +253,7 @@ function formatDatePattern(serial: number, pattern: string): string {
 
 /** Format numérique : 0 / # / séparateurs / %, avec texte avant et après (« 0,00 € »). */
 function formatNumberPattern(n: number, pattern: string): string | null {
-  const m = /^([^0#]*)([0#][0#\s.,  ]*)([^0#]*)$/.exec(pattern)
+  const m = /^([^0#]*)([0#][0#\s.,\u00a0\u202f]*)([^0#]*)$/.exec(pattern)
   if (!m) return null
   const [, prefixRaw = '', body = '', suffixRaw = ''] = m
   const literal = (s: string) => s.replace(/"([^"]*)"/g, '$1')
@@ -267,7 +267,7 @@ function formatNumberPattern(n: number, pattern: string): string | null {
   const [intPart = '', decPart = ''] = decimalSep ? core.split(decimalSep) : [core, '']
   const decimals = (decPart.match(/[0#]/g) ?? []).length
   const minDecimals = (decPart.match(/0/g) ?? []).length
-  const grouping = /[#0][\s,  ][#0]/.test(intPart)
+  const grouping = /[#0][\s,\u00a0\u202f][#0]/.test(intPart)
   const minInt = (intPart.match(/0/g) ?? []).length
   const out = new Intl.NumberFormat('fr-FR', {
     minimumFractionDigits: minDecimals,

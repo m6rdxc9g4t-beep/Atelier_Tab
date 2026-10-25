@@ -4,7 +4,7 @@ import { cancelEdit, commitEdit, commitWithNewOption, type Move } from '@/store/
 import { useDataStore, useUIStore } from '@/store'
 import type { Field } from '@/types/domain'
 import { OwnerChip, StatusBadge } from '@/components/ui/Badge'
-import { useFormulaAssist } from '@/components/formula/FormulaAssist'
+import { useFormulaAssist } from '@/components/formula/useFormulaAssist'
 import { cn } from '@/lib/cn'
 
 interface CellEditorProps {
