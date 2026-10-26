@@ -112,6 +112,7 @@ export function saveField(
         : {}),
       atelierMapping: draft.atelierMapping,
     })
+    dropRemovedChoices(tableId, fieldId, current?.options?.choices ?? [])
     return converted
   })
   if (report && report.kept > 0) {
@@ -130,6 +131,35 @@ export function saveField(
     )
   }
   return report
+}
+
+/**
+ * Choix retirés d'une colonne Statut (par rapport à `before`) : leurs cellules sont vidées, dans
+ * l'étape annulable en cours, et les filtres de vue qui les visaient sont retirés. Sans cela, les
+ * cellules garderaient un id orphelin (vides en apparence, mais qui reviendraient avec un nouveau
+ * choix du même libellé) et le filtre masquerait toutes les lignes.
+ */
+function dropRemovedChoices(tableId: string, fieldId: string, before: SelectChoice[]): void {
+  const data = useDataStore.getState()
+  const table = data.tables[tableId]
+  const field = table?.fields[fieldId]
+  if (!table || field?.type !== 'select') return
+  const kept = new Set((field.options?.choices ?? []).map((c) => c.id))
+  const removed = new Set(before.map((c) => c.id).filter((id) => !kept.has(id)))
+  if (removed.size === 0) return
+  const writes = table.rowOrder.flatMap((recordId) => {
+    const input = table.records[recordId]?.cells[fieldId]
+    return typeof input === 'string' && removed.has(input)
+      ? [{ recordId, fieldId, input: null }]
+      : []
+  })
+  if (writes.length > 0) data.setCells(tableId, writes)
+  for (const view of table.views) {
+    const filters = view.filters.filter(
+      (f) => f.fieldId !== fieldId || typeof f.value !== 'string' || !removed.has(f.value),
+    )
+    if (filters.length !== view.filters.length) data.updateView(tableId, view.id, { filters })
+  }
 }
 
 export function renameField(tableId: string, fieldId: string, label: string): void {
@@ -154,34 +184,13 @@ export function insertFieldBeside(
 }
 
 export function duplicateField(tableId: string, fieldId: string): string | null {
-  const table = useDataStore.getState().tables[tableId]
-  const field = table?.fields[fieldId]
-  if (!table || !field) return null
-  return undoable(`Dupliquer « ${field.label} »`, tableId, () => {
-    const data = useDataStore.getState()
-    const copyId = data.addField(
-      tableId,
-      {
-        label: freeLabel(tableId, `${field.label} (copie)`),
-        type: field.type,
-        ...(field.options ? { options: structuredClone(field.options) } : {}),
-        ...(field.columnFormula ? { columnFormula: field.columnFormula } : {}),
-        ...(field.width ? { width: field.width } : {}),
-      },
-      table.fieldOrder.indexOf(fieldId) + 1,
-    )
-    const fresh = useDataStore.getState().tables[tableId]
-    if (fresh) {
-      data.setCells(
-        tableId,
-        fresh.rowOrder.flatMap((recordId) => {
-          const input = fresh.records[recordId]?.cells[fieldId]
-          return input === undefined ? [] : [{ recordId, fieldId: copyId, input }]
-        }),
-      )
-    }
-    return copyId
-  })
+  const field = useDataStore.getState().tables[tableId]?.fields[fieldId]
+  if (!field) return null
+  return undoable(`Dupliquer « ${field.label} »`, tableId, () =>
+    useDataStore
+      .getState()
+      .duplicateField(tableId, fieldId, freeLabel(tableId, `${field.label} (copie)`)),
+  )
 }
 
 export function deleteField(tableId: string, fieldId: string): void {

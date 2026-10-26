@@ -15,6 +15,7 @@
 import {
   choicesFromLabels,
   parseUserInput,
+  toClipboardText,
   toEditText,
   type LookupContext,
 } from '@/engine/field-types'
@@ -36,12 +37,15 @@ export interface ConversionOptions {
   formula?: string
 }
 
-/** Texte d'une valeur calculée, tel qu'on le taperait. */
-function computedText(v: CellValue): string | null {
+/**
+ * Texte d'une valeur de colonne-formule, tel qu'on le taperait : selon son format de résultat,
+ * comme à l'écran (« 45 % » pour 0,45, « 07/12/2026 » pour un numéro de série de date), pour
+ * que la conversion relise la valeur affichée et non le nombre brut.
+ */
+function computedText(field: Field, v: CellValue): string | null {
   if (v === null || isError(v)) return null
-  if (typeof v === 'number') return String(v).replace('.', ',')
   if (typeof v === 'boolean') return v ? 'oui' : 'non'
-  return v
+  return toClipboardText(field, v)
 }
 
 /**
@@ -61,9 +65,11 @@ export function conversionTexts(
     const stored = record.cells[field.id] ?? null
     if (isFormula(stored)) continue
     let text: string | null = null
-    if (stored !== null) text = toEditText(field, stored, ctx)
-    else if (field.type === 'formula' && record.kind === 'data' && computed) {
-      text = computedText(computed(recordId, field.id))
+    // Valeur forcée dans une colonne-formule : lue avec le format de résultat, comme un calcul.
+    if (stored !== null) {
+      text = field.type === 'formula' ? computedText(field, stored) : toEditText(field, stored, ctx)
+    } else if (field.type === 'formula' && record.kind === 'data' && computed) {
+      text = computedText(field, computed(recordId, field.id))
     }
     if (text !== null && text.trim() !== '') texts.set(recordId, text)
   }

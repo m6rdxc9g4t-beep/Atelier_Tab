@@ -1,6 +1,7 @@
 /**
  * Adressage A1 : conversions, plages, et réécriture des références lors d'une
- * recopie (`translateFormula`) ou d'une insertion/suppression (`shiftReferences`).
+ * recopie (`translateFormula`), d'une insertion/suppression (`shiftReferences`), d'un
+ * déplacement (`moveReferences`) ou d'une duplication de colonne (`retargetColumn`).
  *
  * Convention : `col` et `row` sont des index 0-based. `A1` ↔ { col: 0, row: 0 }.
  */
@@ -186,6 +187,21 @@ export interface StructuralChange {
   expandAdjacent?: boolean
 }
 
+export interface RewriteOptions {
+  /**
+   * Ne réécrit que les références absolues sur l'axe du changement (`$4` pour les lignes). Sert
+   * aux modèles de colonnes-formules : leurs références relatives valent pour « la ligne
+   * courante » et ne bougent pas, mais `$C$4` (le total) doit suivre sa ligne.
+   */
+  absoluteOnly?: boolean
+}
+
+/** Bornes d'une référence que `absoluteOnly` laisse en place (relatives sur l'axe). */
+function fixedOnAxis(axis: 'row' | 'col', options: RewriteOptions): (ref: CellRef) => boolean {
+  if (options.absoluteOnly !== true) return () => false
+  return axis === 'row' ? (ref) => ref.absRow !== true : (ref) => ref.absCol !== true
+}
+
 /**
  * Met à jour les références après insertion ou suppression de lignes/colonnes.
  * Contrairement à la recopie, les références absolues bougent aussi (comportement Excel).
@@ -193,9 +209,14 @@ export interface StructuralChange {
  * - Plage partiellement supprimée → plage réduite
  * - Insertion au milieu d'une plage → plage agrandie
  */
-export function shiftReferences(formula: string, change: StructuralChange): string {
+export function shiftReferences(
+  formula: string,
+  change: StructuralChange,
+  options: RewriteOptions = {},
+): string {
   if (change.count === 0) return formula
   const key = change.axis === 'row' ? 'row' : 'col'
+  const fixed = fixedOnAxis(change.axis, options)
   const { index, count } = change
   const deletedEnd = index - count // exclusif, utilisé seulement si count < 0
 
@@ -208,6 +229,7 @@ export function shiftReferences(formula: string, change: StructuralChange): stri
 
   return rewriteReferences(formula, (target) => {
     if (target.kind === 'cell') {
+      if (fixed(target.ref)) return null
       const p = shiftOne(target.ref[key])
       if (p === null) return '#REF!'
       if (p === target.ref[key]) return null
@@ -218,6 +240,9 @@ export function shiftReferences(formula: string, change: StructuralChange): stri
     const loIsStart = target.start[key] <= target.end[key]
     const lo = loIsStart ? target.start : target.end
     const hi = loIsStart ? target.end : target.start
+    const loFixed = fixed(lo)
+    const hiFixed = fixed(hi)
+    if (loFixed && hiFixed) return null
     let newLo: number
     let newHi: number
 
@@ -228,10 +253,13 @@ export function shiftReferences(formula: string, change: StructuralChange): stri
     } else {
       const loDeleted = lo[key] >= index && lo[key] < deletedEnd
       const hiDeleted = hi[key] >= index && hi[key] < deletedEnd
-      if (loDeleted && hiDeleted) return '#REF!'
+      if (loDeleted && hiDeleted && !loFixed && !hiFixed) return '#REF!'
       newLo = loDeleted ? index : (shiftOne(lo[key]) ?? index)
       newHi = hiDeleted ? index - 1 : (shiftOne(hi[key]) ?? index - 1)
     }
+    // Plage mixte (`$C$1:C1`, cumul) : seule la borne absolue bouge.
+    if (loFixed) newLo = lo[key]
+    if (hiFixed) newHi = hi[key]
 
     if (newLo === lo[key] && newHi === hi[key]) return null
     const a = refToString({ ...lo, [key]: newLo })
@@ -332,18 +360,35 @@ function merged(pieces: Interval[]): Interval | null {
  * total ne change pas `SUM(C1:C3)`) ; un élément qui sort d'une plage la réduit ; un élément
  * déposé au milieu d'une plage l'agrandit.
  */
-export function moveReferences(formula: string, change: MoveChange): string {
+export function moveReferences(
+  formula: string,
+  change: MoveChange,
+  options: RewriteOptions = {},
+): string {
   if (moveSegments(change).length === 0 || change.count <= 0) return formula
   const key = change.axis === 'row' ? 'row' : 'col'
+  const fixed = fixedOnAxis(change.axis, options)
   const mapOne = (pos: number): number => {
     for (const seg of moveSegments(change))
       if (pos >= seg.lo && pos <= seg.hi) return pos + seg.shift
     return pos
   }
+  const follow = (ref: CellRef): string => refToString({ ...ref, [key]: mapOne(ref[key]) })
   return rewriteReferences(formula, (target) => {
     if (target.kind === 'cell') {
+      if (fixed(target.ref)) return null
       const p = mapOne(target.ref[key])
       return p === target.ref[key] ? null : refToString({ ...target.ref, [key]: p })
+    }
+    const startFixed = fixed(target.start)
+    const endFixed = fixed(target.end)
+    if (startFixed && endFixed) return null
+    // Plage mixte (`$C$1:C1`, cumul) : la borne absolue suit sa cellule, l'autre reste.
+    if (startFixed || endFixed) {
+      const next = startFixed
+        ? `${refToString(target.start)}:${follow(target.end)}`
+        : `${follow(target.start)}:${refToString(target.end)}`
+      return next === `${refToString(target.start)}:${refToString(target.end)}` ? null : next
     }
     const loIsStart = target.start[key] <= target.end[key]
     const lo = loIsStart ? target.start : target.end
@@ -359,5 +404,22 @@ export function moveReferences(formula: string, change: MoveChange): string {
     const a = refToString({ ...lo, [key]: newLo })
     const b = refToString({ ...hi, [key]: newHi })
     return loIsStart ? `${a}:${b}` : `${b}:${a}`
+  })
+}
+
+/**
+ * Fait viser la colonne `to` aux références de la colonne `from` (cellule seule, ou plage tenant
+ * dans cette colonne) ; les autres références ne changent pas. Sert à dupliquer une colonne : la
+ * copie se réfère à elle-même là où l'original se référait à lui-même (`SUM(C1:C3)` d'un total
+ * devient `SUM(D1:D3)`), et lit les mêmes autres colonnes que lui.
+ */
+export function retargetColumn(formula: string, from: number, to: number): string {
+  if (from === to || !inBounds(to, 0)) return formula
+  return rewriteReferences(formula, (target) => {
+    if (target.kind === 'cell') {
+      return target.ref.col === from ? refToString({ ...target.ref, col: to }) : null
+    }
+    if (target.start.col !== from || target.end.col !== from) return null
+    return `${refToString({ ...target.start, col: to })}:${refToString({ ...target.end, col: to })}`
   })
 }

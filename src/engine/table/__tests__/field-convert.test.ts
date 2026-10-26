@@ -59,6 +59,51 @@ describe('changeFieldType', () => {
     expect(t.records.rec_total!.cells.cost_ttc).toBe('=SUM(D1:D3)')
   })
 
+  it('formule au format pourcentage → pourcentage, nombre, texte : la valeur affichée', () => {
+    const percentFormula = () => {
+      const t = planning()
+      t.fields.cost_ttc = {
+        ...t.fields.cost_ttc!,
+        columnFormula: '=C1/100000',
+        options: { resultFormat: 'percent' },
+      }
+      const sheet = new TableSheet()
+      sheet.sync(t, ctx)
+      return { t, computed: (r: string, f: string) => sheet.value(r, f) }
+    }
+    const convert = (type: 'percent' | 'number' | 'text') => {
+      const { t, computed } = percentFormula()
+      const report = changeFieldType(t, 'cost_ttc', type, ctx, { computed })
+      return { report, stored: t.records.rec_01!.cells.cost_ttc }
+    }
+    // 45 % calculé (0,45) : pas 0,45 % (0,0045).
+    expect(convert('percent')).toEqual({ report: { converted: 3, kept: 0 }, stored: 0.45 })
+    expect(convert('number').stored).toBe(45)
+    expect(convert('text').stored).toBe('45 %')
+  })
+
+  it('formule au format date → date, texte : la date affichée, pas le numéro de série', () => {
+    const dateFormula = () => {
+      const t = planning()
+      t.fields.cost_ttc = {
+        ...t.fields.cost_ttc!,
+        columnFormula: '=F1+7',
+        options: { resultFormat: 'date' },
+      }
+      const sheet = new TableSheet()
+      sheet.sync(t, ctx)
+      return { t, computed: (r: string, f: string) => sheet.value(r, f) }
+    }
+    const convert = (type: 'date' | 'text') => {
+      const { t, computed } = dateFormula()
+      const report = changeFieldType(t, 'cost_ttc', type, ctx, { computed })
+      return { report, stored: t.records.rec_01!.cells.cost_ttc }
+    }
+    // 30/11/2026 + 7 : le 07/12/2026, et non « 46363 ».
+    expect(convert('date')).toEqual({ report: { converted: 3, kept: 0 }, stored: '2026-12-07' })
+    expect(convert('text').stored).toBe('07/12/2026')
+  })
+
   it('nombre → formule : la formule de colonne remplace les valeurs des lignes de données', () => {
     const t = planning()
     changeFieldType(t, 'cost_ht', 'formula', ctx, { formula: '=1+1' })

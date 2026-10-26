@@ -12,6 +12,8 @@ import { immer } from 'zustand/middleware/immer'
 import { applyImport, type ImportChanges } from '@/dataflow/import'
 import {
   changeFieldType,
+  duplicateField,
+  duplicateRecord,
   insertField,
   insertRecord,
   insertRecords,
@@ -73,6 +75,11 @@ export interface DataActions {
     index?: number,
   ): string
   updateField(tableId: string, fieldId: string, patch: Partial<Omit<Field, 'id'>>): void
+  /**
+   * Copie d'une colonne (type, options, formule, valeurs) insérée juste à droite, sous le
+   * libellé `label` ; ses références à elle-même visent la copie. Renvoie l'id de la copie.
+   */
+  duplicateField(tableId: string, fieldId: string, label: string): string | null
   deleteField(tableId: string, fieldId: string): void
 
   addRecord(
@@ -81,7 +88,7 @@ export interface DataActions {
   ): string
   /** Ajoute plusieurs lignes en une fois (une seule réécriture des formules). Renvoie leurs ids. */
   addRecords(tableId: string, cellsList: TableRecord['cells'][], index?: number): string[]
-  /** Copie d'une ligne, insérée juste en dessous. */
+  /** Copie d'une ligne, insérée juste en dessous (formules décalées d'une ligne, comme Excel). */
   duplicateRecord(tableId: string, recordId: string): string | null
   deleteRecords(tableId: string, recordIds: string[]): void
   setCell(tableId: string, recordId: string, fieldId: string, input: CellInput): void
@@ -302,6 +309,23 @@ export function createDataStore(options: { adapter?: StorageAdapter; initialData
             if (f) Object.assign(f, patch)
           }),
 
+        duplicateField: (tableId, fieldId, label) => {
+          const field = get().tables[tableId]?.fields[fieldId]
+          if (!field) return null
+          const copy = createField({
+            label,
+            type: field.type,
+            ...(field.options ? { options: structuredClone(field.options) } : {}),
+            ...(field.width ? { width: field.width } : {}),
+          })
+          let done = false
+          set((s) => {
+            const t = s.tables[tableId]
+            if (t) done = duplicateField(t, fieldId, copy)
+          })
+          return done ? copy.id : null
+        },
+
         deleteField: (tableId, fieldId) =>
           set((s) => {
             const t = s.tables[tableId]
@@ -328,15 +352,16 @@ export function createDataStore(options: { adapter?: StorageAdapter; initialData
         },
 
         duplicateRecord: (tableId, recordId) => {
-          const table = get().tables[tableId]
-          const source = table?.records[recordId]
-          if (!table || !source) return null
-          const copy = createRecord({ ...source.cells }, source.kind)
+          const source = get().tables[tableId]?.records[recordId]
+          if (!source) return null
+          // Cellules recopiées dans le producteur, formules décalées pour la nouvelle ligne.
+          const copy = createRecord({}, source.kind)
+          let done = false
           set((s) => {
             const t = s.tables[tableId]
-            if (t) insertRecord(t, copy, t.rowOrder.indexOf(recordId) + 1)
+            if (t) done = duplicateRecord(t, recordId, copy)
           })
-          return copy.id
+          return done ? copy.id : null
         },
 
         deleteRecords: (tableId, recordIds) =>
