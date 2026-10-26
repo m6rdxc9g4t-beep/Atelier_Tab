@@ -3,19 +3,25 @@
  *
  * Chaque action de l'interface sur une table passe par `undoable` : on garde la table avant
  * et après. Le store étant immuable (Immer, partage structurel), un instantané ne coûte que
- * les objets modifiés. Annuler remet la table d'avant, rétablir celle d'après : toute action
- * (saisie, collage, suppression de lignes ou de colonnes, déplacement, changement de type…)
- * est donc annulable, formules comprises.
+ * les objets modifiés. Annuler remet les données d'avant (colonnes, lignes, ordres), rétablir
+ * celles d'après : toute action (saisie, collage, import, suppression de lignes ou de colonnes,
+ * déplacement, changement de type…) est donc annulable, formules comprises.
  *
  * Une table modifiée hors de l'historique (assistant IA, fichier modifié par Claude Code)
  * perd son historique : annuler ne doit jamais écraser ces modifications.
  *
  * Les réglages de vue (filtres, tri, champs masqués…) ne font pas partie de l'historique :
- * annuler une saisie ne retire pas un filtre posé ensuite, comme dans Excel.
+ * annuler une saisie ne retire pas un filtre posé ensuite, comme dans Excel. Une vue que
+ * l'action a changée elle-même (filtre retiré avec sa colonne) revient avec les données si
+ * personne ne l'a retouchée depuis. Le nom de la table non plus : annuler ne défait pas un
+ * renommage fait ensuite.
  */
 import { create } from 'zustand'
-import type { Table } from '@/types/domain'
+import { operatorsFor } from '@/engine/table'
+import { shortcut } from '@/lib/keys'
+import type { Table, View } from '@/types/domain'
 import { useDataStore } from './index'
+import { useNotices, type Notice } from './notices.store'
 import { useUIStore, type CellPosition } from './ui.store'
 
 export interface HistoryEntry {
@@ -44,7 +50,19 @@ let depth = 0
  * Les appels imbriqués comptent dans l'étape la plus extérieure.
  */
 export function undoable<T>(label: string, tableId: string, fn: () => T): T {
-  if (depth > 0) return fn()
+  return undoableStep(label, tableId, fn).result
+}
+
+/**
+ * Comme `undoable`, et renvoie aussi l'étape enregistrée : null si l'action n'a rien changé ou
+ * si elle fait partie d'une étape plus large (appel imbriqué).
+ */
+export function undoableStep<T>(
+  label: string,
+  tableId: string,
+  fn: () => T,
+): { result: T; step: HistoryEntry | null } {
+  if (depth > 0) return { result: fn(), step: null }
   const before = useDataStore.getState().tables[tableId]
   const selection = useUIStore.getState().selection
   depth++
@@ -55,13 +73,10 @@ export function undoable<T>(label: string, tableId: string, fn: () => T): T {
     depth--
   }
   const after = useDataStore.getState().tables[tableId]
-  if (before && after && !sameData(before, after)) {
-    useHistory.setState((s) => ({
-      past: [...s.past.slice(-(LIMIT - 1)), { label, tableId, before, after, selection }],
-      future: [],
-    }))
-  }
-  return result
+  if (!before || !after || sameData(before, after)) return { result, step: null }
+  const step: HistoryEntry = { label, tableId, before, after, selection }
+  useHistory.setState((s) => ({ past: [...s.past.slice(-(LIMIT - 1)), step], future: [] }))
+  return { result, step }
 }
 
 /** Mêmes données (colonnes, lignes, ordre) ; les vues peuvent différer. */
@@ -94,23 +109,85 @@ useDataStore.subscribe((state, prev) => {
   if ([...past, ...future].some((e) => changed.has(e.tableId))) forget(changed)
 })
 
-/** Remet les données d'une table (en gardant ses vues actuelles) et ramène l'interface dessus. */
-function restore(entry: HistoryEntry, table: Table, selection: CellPosition | null): void {
+/**
+ * Réglages d'une vue retouchée depuis l'action, sans ceux qui ne valent plus pour les colonnes
+ * rendues (`table`), comme après une suppression ou un changement de type : colonne absente,
+ * type différent de celui de `was` (la table que l'on quitte), statut retiré, regroupement
+ * Kanban hors d'une colonne Statut.
+ */
+function fitView(view: View, table: Table, was: Table): View {
+  const filters = view.filters.filter((f) => {
+    const field = table.fields[f.fieldId]
+    if (!field) return false
+    if (was.fields[f.fieldId]?.type !== field.type) {
+      return operatorsFor(field).includes(f.operator) && f.value === undefined
+    }
+    if (field.type === 'select' && typeof f.value === 'string') {
+      return (field.options?.choices ?? []).some((c) => c.id === f.value)
+    }
+    return true
+  })
+  const sorts = view.sorts.filter((s) => table.fields[s.fieldId])
+  const hiddenFieldIds = view.hiddenFieldIds.filter((id) => table.fields[id])
+  const group = view.groupByFieldId
+  const keepGroup = group === undefined || table.fields[group]?.type === 'select'
+  if (
+    keepGroup &&
+    filters.length === view.filters.length &&
+    sorts.length === view.sorts.length &&
+    hiddenFieldIds.length === view.hiddenFieldIds.length
+  ) {
+    return view
+  }
+  const fitted: View = { ...view, filters, sorts, hiddenFieldIds }
+  if (!keepGroup) delete fitted.groupByFieldId
+  return fitted
+}
+
+/**
+ * Vues après un retour à `target` depuis `leaving` : une vue restée telle que `leaving` l'avait
+ * laissée reprend son état de `target` (le filtre retiré avec sa colonne revient avec elle) ;
+ * une vue retouchée depuis garde ses réglages, ajustés aux colonnes rendues.
+ */
+function restoreViews(current: Table, target: Table, leaving: Table): View[] {
+  return current.views.map((view) => {
+    const untouched = leaving.views.find((v) => v.id === view.id) === view
+    const back = untouched ? target.views.find((v) => v.id === view.id) : undefined
+    return back ?? fitView(view, target, current)
+  })
+}
+
+/**
+ * Remet les données de `target` (colonnes, lignes, ordres) et ramène l'interface sur la table.
+ * Le nom, le projet et la vue active restent ceux d'aujourd'hui.
+ */
+function restore(
+  entry: HistoryEntry,
+  target: Table,
+  leaving: Table,
+  selection: CellPosition | null,
+): void {
   const ui = useUIStore.getState()
   if (ui.activeTableId !== entry.tableId) ui.openTable(entry.tableId)
   const current = useDataStore.getState().tables[entry.tableId]
+  const next: Table = current
+    ? {
+        ...current,
+        fields: target.fields,
+        records: target.records,
+        rowOrder: target.rowOrder,
+        fieldOrder: target.fieldOrder,
+        views: restoreViews(current, target, leaving),
+      }
+    : target
   depth++
   try {
-    useDataStore
-      .getState()
-      .replaceTable(
-        current ? { ...table, views: current.views, activeViewId: current.activeViewId } : table,
-      )
+    useDataStore.getState().replaceTable(next)
   } finally {
     depth--
   }
   const keep =
-    selection && table.records[selection.recordId] && table.fields[selection.fieldId]
+    selection && target.records[selection.recordId] && target.fields[selection.fieldId]
       ? selection
       : null
   useUIStore.setState({ editing: null, inputError: null, rangeEnd: null, selection: keep })
@@ -125,7 +202,7 @@ export function undo(): string | null {
     return null
   }
   useHistory.setState((s) => ({ past: s.past.slice(0, -1), future: [...s.future, entry] }))
-  restore(entry, entry.before, entry.selection)
+  restore(entry, entry.before, entry.after, entry.selection)
   return entry.label
 }
 
@@ -138,8 +215,59 @@ export function redo(): string | null {
     return null
   }
   useHistory.setState((s) => ({ future: s.future.slice(0, -1), past: [...s.past, entry] }))
-  restore(entry, entry.after, useUIStore.getState().selection ?? entry.selection)
+  restore(entry, entry.after, entry.before, useUIStore.getState().selection ?? entry.selection)
   return entry.label
+}
+
+/**
+ * Annule `step` seulement s'il est encore la dernière étape : le bouton « Annuler » d'un
+ * message ne doit jamais annuler une autre action que celle qu'il annonce. Sinon rien n'est
+ * annulé et un message le dit. Renvoie le libellé annulé, ou null.
+ */
+export function undoStep(step: HistoryEntry): string | null {
+  const { past, future } = useHistory.getState()
+  if (past.at(-1) === step) return undo()
+  useNotices.getState().push({
+    tone: 'info',
+    title: 'Rien n’a été annulé',
+    detail: future.includes(step)
+      ? 'Cette action est déjà annulée.'
+      : past.includes(step)
+        ? `D’autres modifications ont suivi : annulez-les d’abord (${shortcut('Z')}).`
+        : 'La table a été modifiée ailleurs depuis : cette action ne peut plus être annulée.',
+  })
+  return null
+}
+
+/**
+ * Message avec un bouton « Annuler » qui n'annule que `step`, l'action annoncée. Le message
+ * disparaît si l'étape est annulée (⌘Z) ; le bouton disparaît si une autre étape la suit ou si
+ * elle est oubliée (table modifiée ailleurs). Sans étape (rien n'a changé), pas de bouton.
+ */
+export function notifyUndoable(
+  step: HistoryEntry | null,
+  notice: Omit<Notice, 'id' | 'action'>,
+  ttlMs = 8000,
+): void {
+  const notices = useNotices.getState()
+  if (!step || useHistory.getState().past.at(-1) !== step) {
+    notices.push(notice, ttlMs)
+    return
+  }
+  const id = notices.push(
+    { ...notice, action: { label: 'Annuler', run: () => void undoStep(step) } },
+    ttlMs,
+  )
+  const stop = useHistory.subscribe((s) => {
+    if (s.past.at(-1) === step) return
+    stop()
+    const shown = useNotices.getState()
+    if (!shown.notices.some((n) => n.id === id)) return
+    if (s.future.includes(step)) shown.dismiss(id)
+    else shown.clearAction(id)
+  })
+  // Message fermé de lui-même : plus rien à suivre.
+  if (ttlMs > 0) setTimeout(stop, ttlMs)
 }
 
 /** Vide l'historique (changement complet des données). */

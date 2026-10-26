@@ -7,7 +7,7 @@ import type { CellValue } from '@/engine/formula'
 import { getDesktopApi } from '@/services/desktop'
 import { desktopAdapter } from '@/services/persistence/desktop.adapter'
 import { connectComputed, selectCellValue, type ComputedState } from './computed.store'
-import { createDataStore, pickData } from './data.store'
+import { createDataStore, keepUnchanged, pickData } from './data.store'
 import { useNotices } from './notices.store'
 
 const desktop = getDesktopApi()
@@ -18,7 +18,8 @@ export const useDataStore = createDataStore(desktop ? { adapter: desktopAdapter(
 if (desktop) {
   // Fichiers modifiés par un autre programme (Claude Code, un éditeur…) : on recharge.
   desktop.onExternalChange((data) => {
-    useDataStore.setState(pickData(data))
+    // Seules les tables modifiées sont remplacées : les autres gardent calculs et historique.
+    useDataStore.setState(pickData(keepUnchanged(useDataStore.getState(), data)))
     useNotices
       .getState()
       .push({ tone: 'info', title: 'Données mises à jour depuis le dossier Atelier_Tab' }, 3000)

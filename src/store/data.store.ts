@@ -158,6 +158,58 @@ export function pickData(s: AppData): AppData {
   }
 }
 
+/** Même contenu une fois écrit en JSON (ordre des clés et valeurs `undefined` ignorés). */
+function sameContent(a: unknown, b: unknown): boolean {
+  if (a === b) return true
+  if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false
+  if (Array.isArray(a) || Array.isArray(b)) {
+    return (
+      Array.isArray(a) &&
+      Array.isArray(b) &&
+      a.length === b.length &&
+      a.every((x, i) => sameContent(x, b[i]))
+    )
+  }
+  const x = a as Record<string, unknown>
+  const y = b as Record<string, unknown>
+  const keys = Object.keys(x).filter((k) => x[k] !== undefined)
+  return (
+    keys.length === Object.keys(y).filter((k) => y[k] !== undefined).length &&
+    keys.every((k) => sameContent(x[k], y[k]))
+  )
+}
+
+/**
+ * Données relues après une modification externe : ce qui n'a pas changé (une table, ou ses
+ * colonnes, lignes, ordres et vues) garde son objet actuel. Une table que l'autre programme n'a
+ * pas touchée n'est ainsi ni recalculée ni privée de son historique d'annulation, qui compare
+ * les objets.
+ */
+export function keepUnchanged(current: AppData, next: AppData): AppData {
+  const tables: AppData['tables'] = {}
+  for (const [id, table] of Object.entries(next.tables)) {
+    const was = current.tables[id]
+    if (!was || sameContent(was, table)) {
+      tables[id] = was ?? table
+      continue
+    }
+    const part = <K extends keyof Table>(key: K): Table[K] =>
+      sameContent(was[key], table[key]) ? was[key] : table[key]
+    tables[id] = {
+      ...table,
+      fields: part('fields'),
+      records: part('records'),
+      rowOrder: part('rowOrder'),
+      fieldOrder: part('fieldOrder'),
+      views: part('views'),
+    }
+  }
+  const collaborators = sameContent(current.collaborators, next.collaborators)
+    ? current.collaborators
+    : next.collaborators
+  return { ...next, tables, collaborators }
+}
+
 /** Copie profonde d'une table avec un nouvel identifiant (champs et lignes conservent les leurs). */
 function cloneTable(table: Table, projectId: string, name = table.name): Table {
   const copy = structuredClone(table)

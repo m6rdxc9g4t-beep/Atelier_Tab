@@ -35,6 +35,20 @@ export function effectiveInput(record: TableRecord, field: Field, rowIndex: numb
   return null
 }
 
+/**
+ * Entrée donnée au moteur. Une case jamais cochée d'une ligne de données vaut FAUX, comme une
+ * case décochée (et comme dans Excel) : NB.SI(…;FAUX), `=FAUX` et les filtres sont d'accord.
+ */
+function engineInput(
+  record: TableRecord,
+  field: Field,
+  rowIndex: number,
+  ctx: LookupContext,
+): CellInput {
+  const input = toEngineInput(field, effectiveInput(record, field, rowIndex), ctx)
+  return input === null && field.type === 'checkbox' && record.kind === 'data' ? false : input
+}
+
 export interface ColumnSummary {
   sum: number
   average: number | null
@@ -90,7 +104,7 @@ export class TableSheet {
         const key = cellKey(recordId, fieldId)
         this.addressByKey.set(key, address)
         this.keyByAddress.set(address, key)
-        const input = toEngineInput(field, effectiveInput(record, field, r), ctx)
+        const input = engineInput(record, field, r, ctx)
         if (input !== null) {
           entries.push([address, input])
           this.pushed.set(address, input)
@@ -110,7 +124,7 @@ export class TableSheet {
         const field = table.fields[fieldId]
         const address = this.addressByKey.get(cellKey(recordId, fieldId))
         if (!field || !address) continue
-        const input = toEngineInput(field, effectiveInput(record, field, r), ctx)
+        const input = engineInput(record, field, r, ctx)
         if (input !== (this.pushed.get(address) ?? null)) {
           updates.push([address, input])
           if (input === null) this.pushed.delete(address)

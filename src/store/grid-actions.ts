@@ -17,8 +17,8 @@ import { isFormula, translateFormula, type CellInput } from '@/engine/formula'
 import { fillPlan, parseTsv, tileToSelection, toTsv } from '@/engine/table'
 import type { Table, TableRecord } from '@/types/domain'
 import type { CellWrite } from './data.store'
-import { undo, undoable } from './history'
-import { getSheet, useDataStore, useNotices } from './index'
+import { notifyUndoable, undoable, undoableStep } from './history'
+import { getSheet, useDataStore } from './index'
 import { useUIStore, type CellPosition } from './ui.store'
 import { activeView, getViewRows, visibleFieldIds } from './view-rows'
 
@@ -454,14 +454,15 @@ export function deleteRows(recordIds: string[] = selectedRecordIds()): void {
   const rows = getViewRows(table)
   const firstIndex = Math.min(...recordIds.map((id) => rows.indexOf(id)).filter((i) => i >= 0))
   const after = rows.slice(firstIndex).find((id) => !recordIds.includes(id))
-  undoable(label, table.id, () => useDataStore.getState().deleteRecords(table.id, recordIds))
+  const { step } = undoableStep(label, table.id, () =>
+    useDataStore.getState().deleteRecords(table.id, recordIds),
+  )
   const ui = useUIStore.getState()
   const fieldId = ui.selection?.fieldId
   if (ui.expandedRecordId && recordIds.includes(ui.expandedRecordId)) ui.openRecord(null)
   ui.select(after && fieldId ? { recordId: after, fieldId } : null)
-  useNotices
-    .getState()
-    .push({ tone: 'info', title: label, action: { label: 'Annuler', run: () => undo() } }, 8000)
+  // « Annuler » n'annule que cette suppression, jamais une action faite depuis.
+  notifyUndoable(step, { tone: 'info', title: label })
 }
 
 export function setRowsKind(

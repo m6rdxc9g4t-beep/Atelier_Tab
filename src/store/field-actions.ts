@@ -6,8 +6,8 @@
 import { parseFormula } from '@/engine/formula'
 import { choicesForConversion, conversionTexts, type ConversionReport } from '@/engine/table'
 import type { Field, FieldOptions, FieldType, SelectChoice } from '@/types/domain'
-import { undoable, undo } from './history'
-import { getSheet, useDataStore, useNotices } from './index'
+import { notifyUndoable, undoable, undoableStep } from './history'
+import { getSheet, useDataStore } from './index'
 import { useUIStore } from './ui.store'
 
 /** Ce que l'éditeur de champ enregistre. */
@@ -92,7 +92,7 @@ export function saveField(
 ): ConversionReport | null {
   const field = useDataStore.getState().tables[tableId]?.fields[fieldId]
   if (!field) return null
-  const report = undoable(`Modifier la colonne « ${draft.label} »`, tableId, () => {
+  const saved = undoableStep(`Modifier la colonne « ${draft.label} »`, tableId, () => {
     const data = useDataStore.getState()
     const sheet = getSheet(tableId)
     const converted =
@@ -115,20 +115,17 @@ export function saveField(
     dropRemovedChoices(tableId, fieldId, current?.options?.choices ?? [])
     return converted
   })
+  const report = saved.result
   if (report && report.kept > 0) {
-    useNotices.getState().push(
-      {
-        tone: 'warning',
-        title:
-          report.kept === 1
-            ? '1 valeur gardée telle quelle'
-            : `${report.kept} valeurs gardées telles quelles`,
-        detail:
-          'Elles ne se convertissent pas dans le nouveau type : le texte d’origine est conservé.',
-        action: { label: 'Annuler', run: () => undo() },
-      },
-      8000,
-    )
+    notifyUndoable(saved.step, {
+      tone: 'warning',
+      title:
+        report.kept === 1
+          ? '1 valeur gardée telle quelle'
+          : `${report.kept} valeurs gardées telles quelles`,
+      detail:
+        'Elles ne se convertissent pas dans le nouveau type : le texte d’origine est conservé.',
+    })
   }
   return report
 }
@@ -196,19 +193,12 @@ export function duplicateField(tableId: string, fieldId: string): string | null 
 export function deleteField(tableId: string, fieldId: string): void {
   const field = useDataStore.getState().tables[tableId]?.fields[fieldId]
   if (!field) return
-  undoable(`Supprimer la colonne « ${field.label} »`, tableId, () =>
+  const { step } = undoableStep(`Supprimer la colonne « ${field.label} »`, tableId, () =>
     useDataStore.getState().deleteField(tableId, fieldId),
   )
   const ui = useUIStore.getState()
   if (ui.selection?.fieldId === fieldId || ui.rangeEnd?.fieldId === fieldId) ui.select(null)
-  useNotices.getState().push(
-    {
-      tone: 'info',
-      title: `Colonne « ${field.label} » supprimée`,
-      action: { label: 'Annuler', run: () => undo() },
-    },
-    8000,
-  )
+  notifyUndoable(step, { tone: 'info', title: `Colonne « ${field.label} » supprimée` })
 }
 
 export function resizeField(tableId: string, fieldId: string, width: number): void {

@@ -24,7 +24,8 @@ import {
 } from '@/dataflow'
 import { prepareExport, runExport, type ExportOutcome } from '@/store/export-actions'
 import { useComputed, useDataStore, useUIStore } from '@/store'
-import type { AtelierMapping, ExportMethod, Table } from '@/types/domain'
+import { undoable } from '@/store/history'
+import type { AtelierMapping, ExportMethod, Field, Table } from '@/types/domain'
 import { Dialog } from '@/components/ui/Dialog'
 import { MAPPING_LABELS } from './labels'
 import { columnToLetters } from '@/engine/formula'
@@ -449,7 +450,12 @@ function ImportSummary({ summary }: { summary: ProjetsImportSummary }) {
 }
 
 function ColumnMapping({ table }: { table: Table }) {
-  const updateField = useDataStore((s) => s.updateField)
+  // Une étape annulable (⌘Z), comme toute modification d'une colonne : sans elle, la table
+  // serait vue comme modifiée ailleurs et perdrait tout son historique.
+  const setMapping = (field: Field, atelierMapping: AtelierMapping) =>
+    undoable(`Rôle d’export de « ${field.label} »`, table.id, () =>
+      useDataStore.getState().updateField(table.id, field.id, { atelierMapping }),
+    )
   return (
     <div className="overflow-hidden rounded-lg border border-line">
       {table.fieldOrder.map((fieldId, i) => {
@@ -468,9 +474,7 @@ function ColumnMapping({ table }: { table: Table }) {
             <span className="min-w-0 flex-1 truncate">{field.label}</span>
             <select
               value={field.atelierMapping ?? 'custom'}
-              onChange={(e) =>
-                updateField(table.id, fieldId, { atelierMapping: e.target.value as AtelierMapping })
-              }
+              onChange={(e) => setMapping(field, e.target.value as AtelierMapping)}
               aria-label={`Rôle de la colonne ${field.label} dans Atelier Projets`}
               className="h-7 w-36 shrink-0 rounded-md border border-line-strong bg-field px-1.5 outline-none focus:border-focus focus:shadow-focus sm:w-48"
             >

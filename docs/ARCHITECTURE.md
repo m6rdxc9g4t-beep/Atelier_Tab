@@ -47,7 +47,7 @@ Voir [`FORMULA_ENGINE.md`](FORMULA_ENGINE.md).
 
 `store/computed.store.ts` s'abonne au store de données et publie les valeurs calculées par clé `recordId:fieldId`. Seules les entrées dont la valeur a changé sont remplacées, donc `useCellValue()` ne re-rend que les cellules concernées.
 
-Les opérations structurelles (`engine/table/table-ops.ts`) réécrivent les formules comme Excel. Une ligne ajoutée juste au-dessus d'une ligne de synthèse est incluse dans ses plages (`SUM(C1:C3)` → `SUM(C1:C4)`). Limite actuelle : les modèles de colonnes-formules ne suivent que les changements de colonnes (une référence absolue de ligne dans un modèle, ex. `$F$1`, n'est pas décalée par une insertion de ligne).
+Les opérations structurelles (`engine/table/table-ops.ts`) réécrivent les formules comme Excel. Une ligne ajoutée juste au-dessus d'une ligne de synthèse est incluse dans ses plages (`SUM(C1:C3)` → `SUM(C1:C4)`). Les modèles de colonnes-formules (écrits pour la ligne 1) suivent les colonnes ; pour les lignes, seules leurs références absolues bougent (`$F$1`, `$C$4` suivent une insertion, une suppression ou un déplacement de ligne), les relatives valent pour « la ligne courante » (option `absoluteOnly` de `shiftReferences` / `moveReferences`). Une ligne dupliquée se comporte comme une insertion de cellules copiées dans Excel : ses références relatives descendent d'une ligne, les `$` suivent l'insertion ; une ligne de total dupliquée garde les plages de l'originale. Une colonne dupliquée (`retargetColumn`) fait viser la copie là où l'originale se visait elle-même et lit les mêmes autres colonnes.
 
 ## Grille, vues et historique
 
@@ -68,10 +68,15 @@ Les opérations structurelles (`engine/table/table-ops.ts`) réécrivent les for
   modifiée sous un filtre reste visible (`pinnedRecordIds`) jusqu'au prochain changement de filtre.
 - **Annuler / rétablir** (`store/history.ts`) : chaque action de l'interface passe par
   `undoable(libellé, tableId, fn)`, qui garde la table avant et après (partage structurel
-  d'Immer : un instantané ne coûte que les objets modifiés). Les réglages de vue ne sont pas dans
-  l'historique et sont conservés quand on annule. Une table modifiée hors de l'historique
-  (assistant, fichier externe) perd son historique, pour qu'annuler n'écrase jamais ces
-  modifications.
+  d'Immer : un instantané ne coûte que les objets modifiés). Annuler rend les données (colonnes,
+  lignes, ordres), jamais le nom de la table. Les réglages de vue ne sont pas dans l'historique et
+  sont conservés quand on annule, sauf une vue que l'action a changée elle-même (filtre retiré
+  avec sa colonne) et que personne n'a retouchée depuis : elle revient avec les données ; une vue
+  retouchée garde ses réglages, ajustés aux colonnes rendues. Une table modifiée hors de
+  l'historique (assistant, fichier externe) perd son historique, pour qu'annuler n'écrase jamais
+  ces modifications ; au rechargement d'un fichier, les autres tables gardent le leur
+  (`keepUnchanged`). Le bouton « Annuler » d'un message (`notifyUndoable`) n'annule que l'étape
+  qu'il annonce : il disparaît dès qu'une autre étape la suit.
 - **Presse-papiers** : texte TSV d'Excel (`toTsv` / `parseTsv`, `toClipboardText` pour des
   valeurs relues sans perte). Un collage de ce que l'app vient de copier dans la même table
   reprend les valeurs stockées et décale les formules selon les adresses A1 ; un texte venu
