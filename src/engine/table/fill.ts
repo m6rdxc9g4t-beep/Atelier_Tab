@@ -4,7 +4,8 @@
  * - deux nombres ou plus : série linéaire (1, 2 → 3, 4 ; 10, 20 → 30) ;
  * - une date : un jour de plus à chaque cellule ; plusieurs dates : même écart ;
  * - un texte terminé par un nombre (« Lot 1 ») : le nombre augmente ;
- * - le reste (texte, statut, case…) : le motif est répété.
+ * - le reste (texte, statut, responsable, case…) : le motif est répété. Un statut ou un
+ *   responsable n'a jamais de série : ses identifiants (`opt_phase_1`) ne se suivent pas.
  *
  * Module pur : travaille sur les valeurs stockées d'une ligne ou d'une colonne de cellules.
  */
@@ -77,6 +78,8 @@ function seriesOf(
   fieldType: FieldType,
 ): ((p: number) => CellInput) | null {
   if (source.some((v) => v === null || isFormula(v))) return null
+  // Identifiants de choix ou de collaborateurs, booléens : recopiés tels quels (comme Airtable).
+  if (fieldType === 'select' || fieldType === 'owner' || fieldType === 'checkbox') return null
 
   if (source.every((v) => typeof v === 'number')) {
     if (source.length === 1) return null
@@ -93,7 +96,7 @@ function seriesOf(
     return (p) => serialToIso(Math.round(line.a + line.b * p))
   }
 
-  if (source.every((v) => typeof v === 'string')) {
+  if (fieldType === 'text' && source.every((v) => typeof v === 'string')) {
     const parts = source.map((v) => TRAILING_NUMBER.exec(v as string))
     const first = parts[0]
     if (!first || parts.some((m) => !m || m[1] !== first[1] || m[3] !== first[3])) return null

@@ -12,7 +12,9 @@ import {
   fillTo,
   insertRows,
   pasteText,
+  selectColumns,
   selectedCells,
+  selectionRect,
   selectRows,
 } from '../grid-actions'
 import { clearHistory, redo, undo, useHistory } from '../history'
@@ -195,6 +197,103 @@ describe('plage, presse-papiers et recopie', () => {
   })
 })
 
+describe('presse-papiers : cellules calculées, lignes de total, couper', () => {
+  it('cellule calculée : sa valeur collée ailleurs, calculée dans sa colonne', () => {
+    useUIStore.getState().select(cell('rec_01', 'cost_ttc'))
+    const text = copySelection()!
+    useUIStore.getState().select(cell('rec_02', 'cost_ht'))
+    expect(pasteText(text)).toEqual({ written: 1, skipped: 0, addedRows: 0 })
+    expect(table().records.rec_02?.cells.cost_ht).toBe(54000)
+    expect(value('rec_total', 'cost_ht')).toBe(45000 + 54000 + 15000)
+    // Sur la ligne de total : la valeur, jamais l'effacement de la formule du total.
+    useUIStore.getState().select(cell('rec_total', 'cost_ttc'))
+    pasteText(text)
+    expect(table().records.rec_total?.cells.cost_ttc).toBe(54000)
+    // Dans sa colonne, sur une ligne de données : la valeur forcée cède la place à la formule.
+    useDataStore.getState().setCell(T, 'rec_03', 'cost_ttc', 1)
+    useUIStore.getState().select(cell('rec_03', 'cost_ttc'))
+    pasteText(text)
+    expect(table().records.rec_03?.cells.cost_ttc).toBeUndefined()
+    expect(value('rec_03', 'cost_ttc')).toBe(18000)
+  })
+
+  it('coller sur une colonne entière n’ajoute pas de ligne et ne recopie pas le total', () => {
+    // Clic sur l'en-tête : la sélection comprend la ligne de total, qui est sautée.
+    selectColumns('cost_ht')
+    expect(pasteText('1000')).toEqual({ written: 3, skipped: 0, addedRows: 0 })
+    expect(table().rowOrder).toHaveLength(4)
+    expect(value('rec_total', 'cost_ht')).toBe(3000)
+    // Colonne entière copiée sur une autre : la formule du total source reste où elle est.
+    selectColumns('cost_ht')
+    const text = copySelection()!
+    selectColumns('task_name')
+    expect(pasteText(text)?.addedRows).toBe(0)
+    expect(table().rowOrder).toHaveLength(4)
+    expect(table().records.rec_03?.cells.task_name).toBe('1000')
+    expect(table().records.rec_total?.cells.task_name).toBe('TOTAL')
+  })
+
+  it('les lignes ajoutées par un long collage suivent la zone collée', () => {
+    const data = useDataStore.getState()
+    const sub = data.addRecord(T, {
+      index: 1,
+      kind: 'summary',
+      cells: { task_name: 'Sous-total', cost_ht: '=SUM(C1:C1)' },
+    })
+    data.setCell(T, 'rec_total', 'cost_ht', '=SUM(C3:C4)')
+    useUIStore.getState().select(cell('rec_02', 'cost_ht'))
+    expect(pasteText('1\r\n2\r\n3')?.addedRows).toBe(1)
+    const added = table().rowOrder[4]!
+    expect(table().rowOrder).toEqual(['rec_01', sub, 'rec_02', 'rec_03', added, 'rec_total'])
+    expect(table().records[added]?.cells.cost_ht).toBe(3)
+    // Le sous-total de la première section ne bouge pas ; le total suivant inclut la ligne.
+    expect(table().records[sub]?.cells.cost_ht).toBe('=SUM(C1:C1)')
+    expect(value('rec_total', 'cost_ht')).toBe(6)
+    expect(useUIStore.getState().rangeEnd).toEqual(cell(added, 'cost_ht'))
+  })
+
+  it('couper puis modifier la source : le collage devient une copie', () => {
+    useUIStore.getState().select(cell('rec_01', 'task_name'))
+    const text = copySelection(true)!
+    type('rec_01', 'task_name', 'Fondations')
+    useUIStore.getState().select(cell('rec_02', 'task_name'))
+    pasteText(text)
+    expect(table().records.rec_02?.cells.task_name).toBe('Gros œuvre')
+    expect(table().records.rec_01?.cells.task_name).toBe('Fondations')
+  })
+})
+
+describe('recopie entre colonnes de types différents', () => {
+  it('une cellule calculée donne sa valeur, ou rien si elle ne se convertit pas', () => {
+    useUIStore.getState().select(cell('rec_01', 'cost_ttc'))
+    fillTo(cell('rec_01', 'owner'))
+    expect(table().records.rec_01?.cells.owner).toBe('usr_md')
+    useUIStore.getState().select(cell('rec_02', 'cost_ttc'))
+    fillTo(cell('rec_02', 'cost_ht'))
+    expect(table().records.rec_02?.cells.cost_ht).toBe(34200)
+  })
+
+  it('une valeur est retapée dans le type de la colonne, ou la cellule est gardée', () => {
+    // Statut → montant : incompatible, le montant reste.
+    useUIStore.getState().selectRange(cell('rec_01', 'status'), cell('rec_01', 'cost_ht'))
+    fillSelection('right')
+    expect(table().records.rec_01?.cells.cost_ht).toBe(45000)
+    // Texte → statut : relu par son libellé.
+    useDataStore.getState().setCell(T, 'rec_02', 'task_name', 'En cours')
+    useUIStore.getState().selectRange(cell('rec_02', 'task_name'), cell('rec_02', 'status'))
+    fillSelection('right')
+    expect(table().records.rec_02?.cells.status).toBe('opt_doing')
+  })
+
+  it('recopiée dans sa colonne, une cellule calculée le reste', () => {
+    useDataStore.getState().setCell(T, 'rec_02', 'cost_ttc', 1)
+    useUIStore.getState().selectRange(cell('rec_01', 'cost_ttc'), cell('rec_02', 'cost_ttc'))
+    fillSelection('down')
+    expect(table().records.rec_02?.cells.cost_ttc).toBeUndefined()
+    expect(value('rec_02', 'cost_ttc')).toBe(34200)
+  })
+})
+
 describe('vues filtrées', () => {
   it('la navigation suit l’ordre de la vue et une ligne modifiée reste visible', () => {
     addFilter(T, 'status')
@@ -206,5 +305,27 @@ describe('vues filtrées', () => {
     expect(getViewRows(table())).toEqual(['rec_01', 'rec_total'])
     updateFilter(T, filter.id, { value: 'opt_doing' })
     expect(getViewRows(table())).toEqual(['rec_total'])
+  })
+
+  it('Suppr garde visible la ligne vidée, et la sélection avec elle', () => {
+    addFilter(T, 'owner')
+    const filter = table().views.find((v) => v.id === table().activeViewId)!.filters[0]!
+    updateFilter(T, filter.id, { operator: 'is_not_empty' })
+    useUIStore.getState().select(cell('rec_02', 'owner'))
+    clearSelection()
+    expect(table().records.rec_02?.cells.owner).toBeUndefined()
+    expect(getViewRows(table())).toContain('rec_02')
+    expect(selectionRect()).not.toBeNull()
+  })
+
+  it('une recopie garde visible la ligne qui ne correspond plus au filtre', () => {
+    addFilter(T, 'status')
+    const filter = table().views.find((v) => v.id === table().activeViewId)!.filters[0]!
+    updateFilter(T, filter.id, { value: 'opt_doing' })
+    useDataStore.getState().setCell(T, 'rec_01', 'task_name', 'Terminée')
+    useUIStore.getState().selectRange(cell('rec_01', 'task_name'), cell('rec_01', 'status'))
+    fillSelection('right')
+    expect(table().records.rec_01?.cells.status).toBe('opt_done')
+    expect(getViewRows(table())).toEqual(['rec_01', 'rec_total'])
   })
 })

@@ -111,4 +111,20 @@ describe('fillValues (poignée de recopie)', () => {
       null,
     ])
   })
+
+  it('statut et responsable : l’identifiant est recopié, jamais incrémenté', () => {
+    // « Phase 1 » a l'id opt_phase_1 ; un collaborateur créé peut finir par un chiffre.
+    const select = { axis: 'row' as const, fieldType: 'select' as const }
+    expect(fillValues(['opt_phase_1'], 2, select)).toEqual(['opt_phase_1', 'opt_phase_1'])
+    expect(fillValues(['opt_phase_1', 'opt_phase_2'], 2, select)).toEqual([
+      'opt_phase_1',
+      'opt_phase_2',
+    ])
+    expect(fillValues(['usr_k3j9x0a1b7'], 2, { axis: 'row', fieldType: 'owner' })).toEqual([
+      'usr_k3j9x0a1b7',
+      'usr_k3j9x0a1b7',
+    ])
+    // Seule une colonne Texte prolonge « Lot 1 ».
+    expect(fillValues(['Lot 1'], 1, { axis: 'row', fieldType: 'formula' })).toEqual(['Lot 1'])
+  })
 })

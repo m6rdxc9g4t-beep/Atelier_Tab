@@ -63,6 +63,24 @@ function pinIfFiltered(table: Table, recordIds: string[]): void {
   }
 }
 
+/** Lignes touchées par des écritures (sans doublon). */
+const rowsOf = (writes: CellWrite[]) => [...new Set(writes.map((w) => w.recordId))]
+
+/**
+ * Cellule calculée par la formule de sa colonne : rien n'y est stocké (ligne de données d'une
+ * colonne-formule). Collée ou recopiée dans une autre colonne, c'est sa valeur qui compte.
+ */
+function isComputed(table: Table, cell: CellPosition): boolean {
+  const field = table.fields[cell.fieldId]
+  const record = table.records[cell.recordId]
+  return (
+    field?.type === 'formula' &&
+    !!field.columnFormula &&
+    record?.kind === 'data' &&
+    (record.cells[cell.fieldId] ?? null) === null
+  )
+}
+
 // ---------------------------------------------------------------------------
 // Coordonnées et plage sélectionnée
 // ---------------------------------------------------------------------------
@@ -331,6 +349,7 @@ export function clearSelection(): void {
     .filter((c) => (table.records[c.recordId]?.cells[c.fieldId] ?? null) !== null)
     .map((c) => ({ ...c, input: null }))
   if (writes.length === 0) return
+  pinIfFiltered(table, rowsOf(writes))
   undoable(
     writes.length === 1 ? 'Effacer la cellule' : `Effacer ${writes.length} cellules`,
     table.id,
@@ -369,6 +388,7 @@ export function toggleSelectedCheckboxes(): void {
     .filter((c) => !isFormula(table.records[c.recordId]?.cells[c.fieldId] ?? null))
     .map((c) => ({ ...c, input: target }))
   if (writes.length === 0) return
+  pinIfFiltered(table, rowsOf(writes))
   undoable(target ? 'Cocher' : 'Décocher', table.id, () =>
     useDataStore.getState().setCells(table.id, writes),
   )
@@ -463,13 +483,22 @@ export function setRowsKind(
 // Presse-papiers
 // ---------------------------------------------------------------------------
 
+/** Cellule copiée dans l'app. */
+interface CopiedCell {
+  /** Valeur stockée (null : vide ou calculée par la formule de colonne). */
+  input: CellInput
+  /** Calculée par la formule de colonne : collée ailleurs, sa valeur (`text`) compte. */
+  computed: boolean
+  /** Texte de la cellule dans le presse-papiers (valeur affichée). */
+  text: string
+  /** Cellule source, pour décaler les formules et vider la source d'un couper. */
+  from: CellPosition
+}
+
 interface InternalClipboard {
   text: string
   tableId: string
-  /** Valeurs stockées des cellules copiées (null : vide ou formule de colonne). */
-  inputs: CellInput[][]
-  /** Cellules sources, pour décaler les formules et vider la source d'un couper. */
-  cells: CellPosition[][]
+  cells: CopiedCell[][]
   cut: boolean
 }
 
@@ -484,26 +513,23 @@ const normalizeText = (t: string) => t.replace(/\r\n?/g, '\n').replace(/\n$/, ''
 export function copySelection(cut = false): string | null {
   const table = getActiveTable()
   if (!table) return null
-  const cells = selectedCells(table)
-  if (cells.length === 0) return null
+  const selected = selectedCells(table)
+  if (selected.length === 0) return null
   const sheet = getSheet(table.id)
-  const text = toTsv(
-    cells.map((line) =>
-      line.map((c) => {
-        const field = table.fields[c.fieldId]
-        return field ? toClipboardText(field, sheet?.value(c.recordId, c.fieldId) ?? null) : ''
-      }),
-    ),
+  const cells = selected.map((line) =>
+    line.map((from): CopiedCell => {
+      const field = table.fields[from.fieldId]
+      const value = sheet?.value(from.recordId, from.fieldId) ?? null
+      return {
+        input: table.records[from.recordId]?.cells[from.fieldId] ?? null,
+        computed: isComputed(table, from),
+        text: field ? toClipboardText(field, value) : '',
+        from,
+      }
+    }),
   )
-  clipboard = {
-    text,
-    tableId: table.id,
-    inputs: cells.map((line) =>
-      line.map((c) => table.records[c.recordId]?.cells[c.fieldId] ?? null),
-    ),
-    cells,
-    cut,
-  }
+  const text = toTsv(cells.map((line) => line.map((c) => c.text)))
+  clipboard = { text, tableId: table.id, cells, cut }
   return text
 }
 
@@ -528,22 +554,40 @@ export function pasteText(text: string): PasteReport | null {
     normalizeText(clipboard.text) === normalizeText(text)
       ? clipboard
       : null
-  const raw: (string | { input: CellInput; from: CellPosition })[][] = internal
-    ? internal.inputs.map((line, r) =>
-        line.map((input, c) => ({ input, from: internal.cells[r]?.[c] as CellPosition })),
-      )
-    : parseTsv(text)
-  if (raw.length === 0) return null
-  const block = tileToSelection(raw, rect.r1 - rect.r0 + 1, rect.c1 - rect.c0 + 1)
+  // Couper : annulé si une cellule source a changé depuis (comme Excel), pour ne pas effacer la
+  // nouvelle saisie ; le collage devient une copie.
+  const cut =
+    !!internal?.cut &&
+    internal.cells.every((line) =>
+      line.every(
+        (c) => (table.records[c.from.recordId]?.cells[c.from.fieldId] ?? null) === c.input,
+      ),
+    )
 
-  // Lignes de destination : celles de la vue à partir de la sélection (les lignes de total sont
-  // sautées, sauf si le collage commence sur l'une d'elles), puis de nouvelles lignes.
+  // Les lignes de total sont sautées, sauf si le collage commence sur l'une d'elles : en
+  // destination, et en source pour un bloc de l'app qui contient aussi des lignes de données.
+  const isData = (id: string) => table.records[id]?.kind === 'data'
   const startsOnSummary = table.records[rect.rows[rect.r0] ?? '']?.kind === 'summary'
+  let raw: (string | CopiedCell)[][] = internal ? internal.cells : parseTsv(text)
+  if (internal && !startsOnSummary) {
+    const dataLines = internal.cells.filter(
+      (line) => table.records[line[0]?.from.recordId ?? '']?.kind !== 'summary',
+    )
+    if (dataLines.length > 0) raw = dataLines
+  }
+  if (raw.length === 0) return null
+  const selectedRows = rect.rows.slice(rect.r0, rect.r1 + 1)
+  const height = startsOnSummary ? selectedRows.length : selectedRows.filter(isData).length
+  const block = tileToSelection(raw, height, rect.c1 - rect.c0 + 1)
+
+  // Lignes de destination : celles de la vue à partir de la sélection, puis de nouvelles lignes
+  // insérées juste après la dernière (au-dessus du total qui la suit, inclus dans ses plages).
   const targets = rect.rows
     .slice(rect.r0)
-    .filter((id) => startsOnSummary || table.records[id]?.kind === 'data')
+    .filter((id) => startsOnSummary || isData(id))
     .slice(0, block.length)
   const missing = block.length - targets.length
+  const lastTarget = table.rowOrder.indexOf(targets.at(-1) ?? '')
   const cols = rect.cols.slice(rect.c0, rect.c0 + (block[0]?.length ?? 0))
 
   const report: PasteReport = { written: 0, skipped: 0, addedRows: Math.max(0, missing) }
@@ -555,6 +599,7 @@ export function pasteText(text: string): PasteReport | null {
         ...data.addRecords(
           table.id,
           Array.from({ length: missing }, () => ({})),
+          lastTarget === -1 ? undefined : lastTarget + 1,
         ),
       )
     const fresh = useDataStore.getState().tables[table.id] as Table
@@ -572,34 +617,40 @@ export function pasteText(text: string): PasteReport | null {
           : undefined
         if (!fieldId || !field) return
         let input: CellInput
-        if (typeof cell === 'string') {
-          const parsed = parseUserInput(field, cell, ctx)
-          if (parsed.ok) input = parsed.input
-          else if (field.type === 'select') input = data.addChoice(table.id, fieldId, cell)
-          else {
-            report.skipped++
-            return
-          }
-        } else {
-          const converted = convertCopied(
-            fresh,
-            cell.input,
-            cell.from,
-            { recordId, fieldId },
-            internal?.cut ?? false,
-          )
+        if (typeof cell !== 'string' && !cell.computed) {
+          const converted = convertCopied(fresh, cell.input, cell.from, { recordId, fieldId }, cut)
           if (converted === undefined) {
             report.skipped++
             return
           }
           input = converted
           moved.push(cell.from)
+        } else if (
+          typeof cell !== 'string' &&
+          cell.from.fieldId === fieldId &&
+          fresh.records[recordId]?.kind === 'data'
+        ) {
+          // Cellule calculée collée dans sa colonne, sur une ligne de données : reste calculée.
+          input = null
+        } else {
+          // Texte d'une autre application, ou valeur d'une cellule calculée : retapé dans le type
+          // de la colonne (un statut inconnu devient un nouveau choix).
+          const typed = typeof cell === 'string' ? cell : cell.text
+          const parsed = parseUserInput(field, typed, ctx)
+          if (parsed.ok) input = parsed.input
+          else if (field.type === 'select') input = data.addChoice(table.id, fieldId, typed)
+          else {
+            report.skipped++
+            return
+          }
+          // Une cellule calculée vide n'efface rien (une ligne de total encore moins).
+          if (input === null && typeof cell !== 'string') return
         }
         writes.push({ recordId, fieldId, input })
       })
     })
     // Couper : les sources recopiées sont vidées (sauf celles qui viennent d'être écrites).
-    if (internal?.cut) {
+    if (cut) {
       const written = new Set(writes.map((w) => `${w.recordId}:${w.fieldId}`))
       for (const c of moved) {
         if (!written.has(`${c.recordId}:${c.fieldId}`)) writes.unshift({ ...c, input: null })
@@ -636,21 +687,48 @@ function convertCopied(
   to: CellPosition,
   cut: boolean,
 ): CellInput | undefined {
-  if (input === null) return null
   if (isFormula(input)) {
     if (cut) return input
     const dRow = table.rowOrder.indexOf(to.recordId) - table.rowOrder.indexOf(from.recordId)
     const dCol = table.fieldOrder.indexOf(to.fieldId) - table.fieldOrder.indexOf(from.fieldId)
     return translateFormula(input, dRow, dCol)
   }
-  if (from.fieldId === to.fieldId) return input
-  const source = table.fields[from.fieldId]
-  const target = table.fields[to.fieldId]
+  return retype(table, input, from.fieldId, to.fieldId)
+}
+
+/**
+ * Valeur stockée d'une colonne → valeur pour une autre colonne : le texte de l'éditeur, relu
+ * dans le type de la colonne cible (un statut devient son libellé…). Même colonne ou cellule
+ * vide : telle quelle. `undefined` : incompatible (jamais un vide à la place d'une valeur).
+ */
+function retype(
+  table: Table,
+  input: CellInput,
+  fromFieldId: string,
+  toFieldId: string,
+): CellInput | undefined {
+  if (input === null || fromFieldId === toFieldId) return input
+  const source = table.fields[fromFieldId]
+  const target = table.fields[toFieldId]
   if (!target) return undefined
   const ctx = lookup()
   const text = source ? toEditText(source, input, ctx) : String(input)
   const parsed = parseUserInput(target, text, ctx)
-  return parsed.ok ? parsed.input : undefined
+  return parsed.ok && parsed.input !== null ? parsed.input : undefined
+}
+
+/** Valeur d'une cellule calculée, retapée pour une autre colonne ; `undefined` : rien. */
+function computedValueFor(
+  table: Table,
+  source: CellPosition,
+  toFieldId: string,
+): CellInput | undefined {
+  const field = table.fields[source.fieldId]
+  const target = table.fields[toFieldId]
+  if (!field || !target) return undefined
+  const value = getSheet(table.id)?.value(source.recordId, source.fieldId) ?? null
+  const parsed = parseUserInput(target, toClipboardText(field, value), lookup())
+  return parsed.ok && parsed.input !== null ? parsed.input : undefined
 }
 
 // ---------------------------------------------------------------------------
@@ -659,7 +737,9 @@ function convertCopied(
 
 /**
  * Remplit des cellules à partir de cellules sources de la même colonne (ou ligne) : séries
- * ou recopie, formules décalées selon les adresses A1.
+ * ou recopie, formules décalées selon les adresses A1. Dans une autre colonne, une valeur est
+ * retapée dans son type (la cellule est sautée si elle ne s'y convertit pas) et une cellule
+ * calculée donne sa valeur ; dans sa propre colonne, elle reste calculée.
  */
 function fillLine(
   table: Table,
@@ -668,9 +748,9 @@ function fillLine(
   axis: 'row' | 'col',
   options: { backward: boolean; series: boolean },
 ): CellWrite[] {
-  const first = sources[0] ?? targets[0]
+  const first = sources[0]
   const field = first ? table.fields[first.fieldId] : undefined
-  if (!field || sources.length === 0 || targets.length === 0) return []
+  if (!first || !field || targets.length === 0) return []
   const inputs = sources.map((c) => table.records[c.recordId]?.cells[c.fieldId] ?? null)
   const plan = fillPlan(inputs, targets.length, {
     axis,
@@ -678,17 +758,31 @@ function fillLine(
     series: options.series,
     fieldType: field.type,
   })
-  return targets.map((target, i) => {
+  const writes: CellWrite[] = []
+  targets.forEach((target, i) => {
     const s = plan[i]
-    if (!s) return { ...target, input: null }
-    if (s.kind === 'value') return { ...target, input: s.input }
-    const source = sources[s.source] as CellPosition
-    const input = inputs[s.source] ?? null
-    if (!isFormula(input)) return { ...target, input }
-    const dRow = table.rowOrder.indexOf(target.recordId) - table.rowOrder.indexOf(source.recordId)
-    const dCol = table.fieldOrder.indexOf(target.fieldId) - table.fieldOrder.indexOf(source.fieldId)
-    return { ...target, input: translateFormula(input, dRow, dCol) }
+    if (!s) return
+    let input: CellInput | undefined
+    if (s.kind === 'value') {
+      input = retype(table, s.input, first.fieldId, target.fieldId)
+    } else {
+      const source = sources[s.source] as CellPosition
+      const stored = inputs[s.source] ?? null
+      if (isFormula(stored)) {
+        const dRow =
+          table.rowOrder.indexOf(target.recordId) - table.rowOrder.indexOf(source.recordId)
+        const dCol =
+          table.fieldOrder.indexOf(target.fieldId) - table.fieldOrder.indexOf(source.fieldId)
+        input = translateFormula(stored, dRow, dCol)
+      } else if (source.fieldId !== target.fieldId && isComputed(table, source)) {
+        input = computedValueFor(table, source, target.fieldId)
+      } else {
+        input = retype(table, stored, source.fieldId, target.fieldId)
+      }
+    }
+    if (input !== undefined) writes.push({ ...target, input })
   })
+  return writes
 }
 
 /** Lignes de données seulement : une recopie ne touche jamais une ligne de total. */
@@ -740,6 +834,7 @@ export function fillSelection(direction: 'down' | 'right'): void {
     }
   }
   if (writes.length === 0) return
+  pinIfFiltered(table, rowsOf(writes))
   undoable(direction === 'down' ? 'Recopier vers le bas' : 'Recopier à droite', table.id, () =>
     useDataStore.getState().setCells(table.id, writes),
   )
@@ -808,6 +903,7 @@ export function fillTo(target: CellPosition): void {
   }
 
   if (writes.length > 0) {
+    pinIfFiltered(table, rowsOf(writes))
     undoable('Recopier', table.id, () => useDataStore.getState().setCells(table.id, writes))
   }
   useUIStore
