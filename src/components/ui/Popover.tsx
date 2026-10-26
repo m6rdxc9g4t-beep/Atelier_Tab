@@ -78,7 +78,7 @@ export function MenuItem({
       disabled={disabled}
       onClick={onSelect}
       className={cn(
-        'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-surface-hover disabled:pointer-events-none disabled:opacity-45',
+        'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-surface-hover focus-visible:bg-surface-hover disabled:pointer-events-none disabled:opacity-45',
         danger ? 'text-danger' : 'text-ink',
       )}
     >

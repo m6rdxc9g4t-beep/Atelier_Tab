@@ -350,6 +350,7 @@ function RenameInput({
       onFocus={(e) => e.currentTarget.select()}
       onBlur={(e) => onDone(e.target.value.trim() || null)}
       onKeyDown={(e) => {
+        if (e.nativeEvent.isComposing || e.keyCode === 229) return
         if (e.key === 'Enter') e.currentTarget.blur()
         if (e.key === 'Escape') onDone(null)
       }}
@@ -373,6 +374,8 @@ function NameInput({
       placeholder={placeholder}
       onBlur={(e) => onSubmit(e.target.value)}
       onKeyDown={(e) => {
+        // Saisie en cours dans un éditeur de méthode (IME) : Entrée valide le mot.
+        if (e.nativeEvent.isComposing || e.keyCode === 229) return
         if (e.key === 'Enter') onSubmit(e.currentTarget.value)
         if (e.key === 'Escape') onCancel()
       }}

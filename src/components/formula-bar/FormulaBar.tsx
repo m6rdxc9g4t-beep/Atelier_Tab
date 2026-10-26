@@ -64,6 +64,8 @@ export function FormulaBar({ table, onCommit }: { table: Table; onCommit: () => 
   })
 
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    // Composition en cours (méthode de saisie japonaise, chinoise…) : Entrée la valide, elle.
+    if (e.nativeEvent.isComposing || e.keyCode === 229) return
     if (editing && assist.onKeyDown(e)) return
     if (e.key === 'Enter') {
       e.preventDefault()
@@ -124,7 +126,8 @@ export function FormulaBar({ table, onCommit }: { table: Table; onCommit: () => 
           }}
           disabled={!selection}
           onFocus={() => {
-            if (selection && !editing) beginEdit(selection, undefined, 'bar')
+            // Texte explicite : sur une case à cocher, beginEdit sans texte la cocherait.
+            if (selection && !editing) beginEdit(selection, editTextOf(table.id, selection), 'bar')
           }}
           onChange={(e) => {
             if (!editing && selection) beginEdit(selection, e.target.value, 'bar')

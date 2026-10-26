@@ -14,7 +14,7 @@ import {
 import { activeFilters, activeSorts } from '@/engine/table'
 import { useDataStore, useUIStore } from '@/store'
 import { redo, undo, useHistory } from '@/store/history'
-import { activeView } from '@/store/view-rows'
+import { activeView, hiddenFieldSet } from '@/store/view-rows'
 import { setGroupBy, setRowHeight } from '@/store/view-actions'
 import type { RowHeight, Table, ViewMode } from '@/types/domain'
 import { Floating } from '@/components/ui/Floating'
@@ -58,7 +58,8 @@ export function ViewBar({ table, mode }: { table: Table; mode: ViewMode }) {
   const closePanel = useCallback(() => setPanel(null), [])
   const closeExport = useCallback(() => setExportOpen(false), [])
   const view = activeView(table)
-  const hiddenCount = view?.hiddenFieldIds.length ?? 0
+  // Comme la grille et le menu Champs : la première colonne n'est jamais masquée.
+  const hiddenCount = hiddenFieldSet(table).size
   const filterCount = activeFilters(table, view).length
   const sortCount = activeSorts(table, view).length
   const toggle = (kind: Panel) => (el: HTMLElement) =>
@@ -71,7 +72,8 @@ export function ViewBar({ table, mode }: { table: Table; mode: ViewMode }) {
     const onOpen = (e: Event) => {
       const kind = (e as CustomEvent<string>).detail
       if (kind === 'export') return setExportOpen(true)
-      if (kind === 'search') return document.getElementById(VIEW_SEARCH_ID)?.focus()
+      // La recherche s'ouvre elle-même (SearchBox), repliée ou non.
+      if (kind === 'search') return
       const el = barRef.current?.querySelector<HTMLElement>(`[data-tool="${kind}"]`)
       if (el) setPanel({ kind: kind as Panel, anchor: el })
     }
@@ -283,44 +285,97 @@ function Tool({
   )
 }
 
-/** Recherche rapide dans la vue (non enregistrée), comme la loupe d'Airtable. */
+/**
+ * Recherche rapide dans la vue (non enregistrée), comme la loupe d'Airtable. Barre étroite :
+ * repliée en une loupe, dépliée au clic, par ⌘F ou par la palette de commandes.
+ */
 function SearchBox() {
   const search = useUIStore((s) => s.search)
   const setSearch = useUIStore((s) => s.setSearch)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [expanded, setExpanded] = useState(false)
+  // Demande de focus, traitée après le rendu qui déplie le champ (un champ masqué ne le prend pas).
+  const [focusRequest, setFocusRequest] = useState(0)
+  const open = expanded || search !== ''
+  const reveal = useCallback(() => {
+    setExpanded(true)
+    setFocusRequest((n) => n + 1)
+  }, [])
+
+  useEffect(() => {
+    const onOpen = (e: Event) => {
+      if ((e as CustomEvent<string>).detail === 'search') reveal()
+    }
+    window.addEventListener(OPEN_VIEW_PANEL, onOpen)
+    return () => window.removeEventListener(OPEN_VIEW_PANEL, onOpen)
+  }, [reveal])
+  useEffect(() => {
+    if (focusRequest === 0) return
+    inputRef.current?.focus()
+    inputRef.current?.select()
+  }, [focusRequest])
+
   return (
-    <div className="relative ml-1 hidden w-44 shrink-0 @[36rem]:block @[64rem]:w-56">
-      <Search
-        size={13}
-        className="pointer-events-none absolute top-1/2 left-2 -translate-y-1/2 text-faint"
-        aria-hidden
-      />
-      <input
-        id={VIEW_SEARCH_ID}
-        type="search"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Escape') {
-            setSearch('')
-            document.querySelector<HTMLElement>('[role="grid"]')?.focus()
-          }
-          if (e.key === 'Enter') document.querySelector<HTMLElement>('[role="grid"]')?.focus()
-        }}
-        placeholder="Rechercher…"
-        aria-label="Rechercher dans la vue"
-        className={cn('field-input h-7 pr-7 pl-7', search && 'border-focus')}
-      />
-      {search && (
+    <>
+      {!open && (
         <button
           type="button"
-          aria-label="Effacer la recherche"
-          onClick={() => setSearch('')}
-          className="absolute top-1/2 right-1 -translate-y-1/2 rounded p-0.5 text-muted hover:text-ink"
+          onClick={reveal}
+          aria-label="Ouvrir la recherche"
+          title={`Rechercher dans la vue (${shortcut('F')})`}
+          className="btn-icon ml-1 @[36rem]:hidden"
         >
-          <X size={12} />
+          <Search size={15} />
         </button>
       )}
-    </div>
+      <div
+        className={cn(
+          'relative ml-1 w-44 shrink-0 @[64rem]:w-56',
+          !open && 'hidden @[36rem]:block',
+        )}
+      >
+        <Search
+          size={13}
+          className="pointer-events-none absolute top-1/2 left-2 -translate-y-1/2 text-faint"
+          aria-hidden
+        />
+        <input
+          ref={inputRef}
+          id={VIEW_SEARCH_ID}
+          type="search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          // Quittée vide, la recherche se replie de nouveau (barre étroite).
+          onBlur={() => {
+            if (useUIStore.getState().search === '') setExpanded(false)
+          }}
+          onKeyDown={(e) => {
+            if (e.nativeEvent.isComposing || e.keyCode === 229) return
+            if (e.key === 'Escape') {
+              setSearch('')
+              document.querySelector<HTMLElement>('[role="grid"]')?.focus()
+            }
+            if (e.key === 'Enter') document.querySelector<HTMLElement>('[role="grid"]')?.focus()
+          }}
+          placeholder="Rechercher…"
+          aria-label="Rechercher dans la vue"
+          className={cn('field-input h-7 pr-7 pl-7', search && 'border-focus')}
+        />
+        {search && (
+          <button
+            type="button"
+            aria-label="Effacer la recherche"
+            onClick={() => {
+              setSearch('')
+              inputRef.current?.focus()
+            }}
+            className="absolute top-1/2 right-1 -translate-y-1/2 rounded p-0.5 text-muted hover:text-ink"
+          >
+            <X size={12} />
+          </button>
+        )}
+      </div>
+    </>
   )
 }
 

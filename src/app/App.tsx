@@ -4,6 +4,7 @@ import { Toaster } from '@/components/ui/Toaster'
 import { useAssistant } from '@/store/assistant.store'
 import { CommandPalette } from '@/components/command/CommandPalette'
 import { FormulaBar } from '@/components/formula-bar/FormulaBar'
+import { OPEN_VIEW_PANEL } from '@/components/grid/GridHeader'
 import { HybridGrid } from '@/components/grid/HybridGrid'
 import { Header } from '@/components/layout/Header'
 import { StatusBar } from '@/components/layout/StatusBar'
@@ -85,10 +86,10 @@ export function App() {
         if (key === 'y' || e.shiftKey) redo()
         else undo()
       } else if (key === 'f' && target?.closest('[role="grid"]')) {
-        const search = document.getElementById(VIEW_SEARCH_ID)
-        if (search) {
+        // La barre de vue déplie sa recherche (repliée en loupe quand elle est étroite).
+        if (document.getElementById(VIEW_SEARCH_ID)) {
           e.preventDefault()
-          search.focus()
+          window.dispatchEvent(new CustomEvent(OPEN_VIEW_PANEL, { detail: 'search' }))
         }
       }
     }

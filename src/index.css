@@ -65,6 +65,8 @@
   --range: color-mix(in oklab, var(--atelier-signature) 11%, transparent);
   --row-hover: color-mix(in oklab, var(--atelier-signature) 4%, var(--atelier-surface));
   --frozen-shadow: color-mix(in oklab, var(--atelier-text) 22%, transparent);
+  /* Voile sous une fenêtre modale (palette de commandes, dialogues, fiche) : encre de la marque. */
+  --scrim: color-mix(in oklab, var(--atelier-ink-black) 30%, transparent);
 
   /* États (couleurs officielles : inchangées) */
   --success: var(--status-closed);
@@ -93,6 +95,7 @@
   --range: color-mix(in oklab, var(--atelier-signature) 16%, transparent);
   --row-hover: color-mix(in oklab, var(--atelier-signature) 7%, var(--atelier-surface));
   --frozen-shadow: color-mix(in oklab, var(--atelier-ink-black) 70%, transparent);
+  --scrim: color-mix(in oklab, var(--atelier-ink-black) 60%, transparent);
 }
 
 @theme inline {
@@ -121,6 +124,7 @@
   --color-success: var(--success);
   --color-range: var(--range);
   --color-row-hover: var(--row-hover);
+  --color-scrim: var(--scrim);
 
   /* rounded-md / -lg / -xl → 6 / 10 / 16 px */
   --radius-md: var(--ds-radius-sm);

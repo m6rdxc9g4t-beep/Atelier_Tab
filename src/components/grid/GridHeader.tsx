@@ -1,4 +1,4 @@
-import { memo, useRef, useState, type DragEvent, type MouseEvent } from 'react'
+import { memo, useRef, useState, type DragEvent, type MouseEvent, type SyntheticEvent } from 'react'
 import {
   ArrowDown,
   ArrowUp,
@@ -17,7 +17,7 @@ import {
 } from 'lucide-react'
 import { columnToLetters } from '@/engine/formula'
 import { activeFilters, activeSorts } from '@/engine/table'
-import { selectAll, selectColumns } from '@/store/grid-actions'
+import { commitEdit, selectAll, selectColumns } from '@/store/grid-actions'
 import {
   deleteField,
   duplicateField,
@@ -42,6 +42,18 @@ export const HEADER_HEIGHT = 36
 
 /** Événement demandant à la barre de vue d'ouvrir un panneau (filtres…). */
 export const OPEN_VIEW_PANEL = 'atelier:open-view-panel'
+
+const focusGrid = () =>
+  document.querySelector<HTMLElement>('[role="grid"]')?.focus({ preventScroll: true })
+
+/** Saisie en cours dans une cellule : validée avant tout clic sur l'en-tête, comme Excel. */
+const commitPendingEdit = () => !useUIStore.getState().editing || commitEdit('none')
+
+/**
+ * Événement venu d'un portail (éditeur de champ, menu de la colonne) : React le fait remonter
+ * jusqu'à l'en-tête qui l'a rendu, alors qu'il ne s'est pas produit sur lui.
+ */
+const fromPortal = (e: SyntheticEvent) => !e.currentTarget.contains(e.target as Node)
 
 interface GridHeaderProps {
   table: Table
@@ -80,6 +92,8 @@ export const GridHeader = memo(function GridHeader({
   const filters = activeFilters(table, view)
 
   const onDrop = (e: DragEvent) => {
+    // Autre dépôt (texte dans un champ de l'éditeur de colonne…) : comportement par défaut.
+    if (!dragging) return
     e.preventDefault()
     const fieldId = e.dataTransfer.getData('application/x-atelier-field') || dragging
     setDragging(null)
@@ -105,7 +119,13 @@ export const GridHeader = memo(function GridHeader({
         type="button"
         aria-label="Tout sélectionner"
         title="Tout sélectionner (⌘A)"
-        onClick={selectAll}
+        // Le focus reste à la grille (ou à la saisie refusée), pour le clavier.
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => {
+          if (!commitPendingEdit()) return
+          selectAll()
+          focusGrid()
+        }}
         className="sticky left-0 z-30 shrink-0 border-r border-line-strong bg-surface-sunken text-[10px] text-faint hover:text-accent-fg"
         style={{ width: GUTTER_WIDTH }}
       >
@@ -203,12 +223,18 @@ function ColumnHeader({
   const SortIcon = sort === 'desc' ? ArrowDown : ArrowUp
 
   const onMouseDown = (e: MouseEvent<HTMLDivElement>) => {
+    if (fromPortal(e)) return
+    if (!commitPendingEdit()) {
+      // Saisie refusée : elle reste ouverte et garde le focus.
+      e.preventDefault()
+      return
+    }
     if (e.button !== 0 || renaming) return
     if ((e.target as HTMLElement).closest('button, input, [data-resize]')) return
     const ui = useUIStore.getState()
     if (e.shiftKey && ui.selection) selectColumns(ui.selection.fieldId, field.id)
     else selectColumns(field.id)
-    document.querySelector<HTMLElement>('[role="grid"]')?.focus({ preventScroll: true })
+    focusGrid()
   }
 
   const startResize = (e: MouseEvent) => {
@@ -237,15 +263,24 @@ function ColumnHeader({
       role="columnheader"
       aria-label={plain ? letter : `${letter} ${field.label}`}
       draggable={!renaming}
-      onDragStart={onDragStartColumn}
-      onDragOver={onDragOverColumn}
-      onDragEnd={onDragEndColumn}
+      onDragStart={(e) => {
+        if (!fromPortal(e)) onDragStartColumn(e)
+      }}
+      onDragOver={(e) => {
+        if (!fromPortal(e)) onDragOverColumn(e)
+      }}
+      onDragEnd={(e) => {
+        if (!fromPortal(e)) onDragEndColumn()
+      }}
       onMouseDown={onMouseDown}
       onDoubleClick={(e) => {
+        if (fromPortal(e)) return
         if ((e.target as HTMLElement).closest('button, input, [data-resize]')) return
         setEditor(e.currentTarget)
       }}
       onContextMenu={(e) => {
+        // Clic droit dans l'éditeur de colonne ou le menu : menu natif (coller…).
+        if (fromPortal(e)) return
         e.preventDefault()
         setMenu({ x: e.clientX, y: e.clientY })
       }}
@@ -282,6 +317,8 @@ function ColumnHeader({
                 setRenaming(false)
               }}
               onKeyDown={(e) => {
+                // Composition en cours (méthode de saisie japonaise…) : Entrée la valide, elle.
+                if (e.nativeEvent.isComposing || e.keyCode === 229) return
                 if (e.key === 'Enter') e.currentTarget.blur()
                 if (e.key === 'Escape') setRenaming(false)
               }}

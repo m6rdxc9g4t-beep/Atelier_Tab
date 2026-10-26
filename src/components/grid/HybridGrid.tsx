@@ -284,10 +284,15 @@ export function HybridGrid({ table, plain }: HybridGridProps) {
       },
       rowHeaderMouseDown(recordId, e) {
         if (e.button !== 0) return
+        const ui = useUIStore.getState()
+        // Clic dans la marge pendant une saisie (numéro, ⤢, poignée) : on valide d'abord. Refusée,
+        // la saisie reste ouverte et garde le focus.
+        if (ui.editing && !commitEdit('none')) {
+          e.preventDefault()
+          return
+        }
         if ((e.target as HTMLElement).closest('button, [draggable="true"]')) return
         e.preventDefault()
-        const ui = useUIStore.getState()
-        if (ui.editing && !commitEdit('none')) return
         if (e.shiftKey && ui.selection) selectRows(ui.selection.recordId, recordId)
         else selectRows(recordId)
         drag.current = { kind: 'rows', anchorRow: e.shiftKey ? ui.selection?.recordId : recordId }
@@ -298,6 +303,8 @@ export function HybridGrid({ table, plain }: HybridGridProps) {
         if (d?.kind === 'rows' && d.anchorRow) selectRows(d.anchorRow, recordId)
       },
       expandRecord(recordId) {
+        // La fiche ferme l'éditeur : la saisie en cours est validée, pas perdue.
+        if (useUIStore.getState().editing && !commitEdit('none')) return
         openRecord(recordId)
       },
       rowDragStart(recordId, e) {
@@ -323,6 +330,8 @@ export function HybridGrid({ table, plain }: HybridGridProps) {
     setDropRow(Math.max(0, Math.min(rows.length, Math.round(y / rowHeight))))
   }
   const onRowsDrop = (e: DragEvent<HTMLDivElement>) => {
+    // Autre dépôt (texte dans un champ, fichier CSV…) : comportement par défaut.
+    if (!dragRow) return
     e.preventDefault()
     const recordId = dragRow
     const to = dropRow
@@ -373,7 +382,9 @@ export function HybridGrid({ table, plain }: HybridGridProps) {
     const mod = e.metaKey || e.ctrlKey
     const ui = useUIStore.getState()
 
-    if (!selection) {
+    // Sélection hors de la vue (ligne filtrée, colonne masquée) : comme sans sélection, pour
+    // qu'une touche tapée ne commence jamais la saisie d'une cellule invisible.
+    if (!selection || !rows.includes(selection.recordId) || !fieldIds.includes(selection.fieldId)) {
       if (e.key.startsWith('Arrow') || e.key === 'Enter' || e.key === 'Tab') {
         e.preventDefault()
         const recordId = rows[0]

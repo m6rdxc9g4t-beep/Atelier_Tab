@@ -128,6 +128,7 @@ export const GridCell = memo(function GridCell({
           collaborators={collaborators}
           plain={plain}
           wrap={wrap}
+          blankCheckbox={!summary}
         />
       )}
       {rangeEdges && (

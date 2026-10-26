@@ -68,7 +68,7 @@ export function CommandPalette() {
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-black/30 px-4 pt-[12vh] dark:bg-black/60"
+      className="fixed inset-0 z-50 flex items-start justify-center bg-scrim px-4 pt-[12vh]"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) setOpen(false)
       }}

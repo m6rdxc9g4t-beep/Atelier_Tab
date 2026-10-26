@@ -67,6 +67,7 @@ export function Header({ table }: { table: Table }) {
             onFocus={(e) => e.currentTarget.select()}
             onBlur={(e) => rename(e.target.value)}
             onKeyDown={(e) => {
+              if (e.nativeEvent.isComposing || e.keyCode === 229) return
               if (e.key === 'Enter') e.currentTarget.blur()
               if (e.key === 'Escape') setRenaming(false)
             }}

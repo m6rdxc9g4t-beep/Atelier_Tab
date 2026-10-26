@@ -1,6 +1,7 @@
 import { useState, type KeyboardEvent } from 'react'
 import { SquareFunction } from 'lucide-react'
 import { CATEGORY_LABELS } from '@/engine/formula'
+import { Floating } from '@/components/ui/Floating'
 import { cn } from '@/lib/cn'
 import { SignatureHint } from './FormulaAssist'
 import { applySuggestion, formulaContext, type FormulaContext } from './formula-suggest'
@@ -8,15 +9,22 @@ import { applySuggestion, formulaContext, type FormulaContext } from './formula-
 /**
  * Autocomplétion des fonctions et aide sur la syntaxe, pour un champ de saisie de formule.
  * `useFormulaAssist` suit le texte et le curseur ; `onKeyDown` gère ↑ ↓ Tab Échap tant que la
- * liste est ouverte (renvoie vrai si la touche est prise) ; `panel` s'affiche sous le champ.
+ * liste est ouverte (renvoie vrai si la touche est prise) ; `panel` s'affiche sous le champ
+ * (parent `relative`), ou sous `anchor` dans un panneau flottant quand il est fourni.
  */
 export function useFormulaAssist(options: {
   value: string
   onChange: (text: string) => void
   /** Champ de saisie, pour replacer le curseur après une insertion. */
   getInput: () => HTMLInputElement | HTMLTextAreaElement | null
+  /**
+   * Élément sous lequel ouvrir l'aide, rendue dans `<body>` : pour un champ placé dans une zone
+   * qui rogne son contenu (cellule de la grille). `null` tant que l'élément n'est pas monté.
+   * Pas dans un panneau flottant : un clic dans l'aide serait un clic extérieur, qui le ferme.
+   */
+  anchor?: HTMLElement | null
 }) {
-  const { value, onChange, getInput } = options
+  const { value, onChange, getInput, anchor } = options
   const [caret, setCaret] = useState(value.length)
   const [highlight, setHighlight] = useState(0)
   const [dismissed, setDismissed] = useState<string | null>(null)
@@ -70,12 +78,10 @@ export function useFormulaAssist(options: {
     return false
   }
 
-  const panel =
+  const content =
     open || ctx.call ? (
-      <div
-        className="absolute top-full left-0 z-40 mt-1 w-[min(420px,calc(100vw-2rem))] overflow-hidden rounded-lg border border-edge bg-surface-raised text-[12.5px] shadow-glow-strong"
-        onMouseDown={(e) => e.preventDefault()}
-      >
+      // Un clic dans l'aide laisse le focus (et le curseur) dans le champ.
+      <div onMouseDown={(e) => e.preventDefault()}>
         {open ? (
           <ul role="listbox" aria-label="Fonctions" className="max-h-64 overflow-y-auto p-1">
             {ctx.suggestions.map((s, i) => (
@@ -116,5 +122,24 @@ export function useFormulaAssist(options: {
       </div>
     ) : null
 
+  const panel =
+    content === null ? null : anchor !== undefined ? (
+      // Sans fermeture propre : le champ garde le clavier (Échap, ↑ ↓, Tab).
+      <Floating open anchor={anchor} className={cn(PANEL, 'p-0')}>
+        {content}
+      </Floating>
+    ) : (
+      <div
+        className={cn(
+          PANEL,
+          'absolute top-full left-0 z-40 mt-1 rounded-lg border border-edge bg-surface-raised shadow-glow-strong',
+        )}
+      >
+        {content}
+      </div>
+    )
+
   return { onKeyDown, sync, panel, open }
 }
+
+const PANEL = 'w-[min(420px,calc(100vw-2rem))] overflow-hidden text-[12.5px]'

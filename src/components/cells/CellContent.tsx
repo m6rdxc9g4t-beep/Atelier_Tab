@@ -15,6 +15,8 @@ interface CellContentProps {
   plain: boolean
   /** Lignes hautes : le texte passe à la ligne (trois lignes au plus). */
   wrap?: boolean
+  /** Case à cocher vide dessinée décochée, pour la cocher d'un clic (cellule de la grille). */
+  blankCheckbox?: boolean
 }
 
 /** Rendu en lecture d'une cellule, selon son type et le mode d'affichage. */
@@ -25,6 +27,7 @@ export function CellContent({
   collaborators,
   plain,
   wrap = false,
+  blankCheckbox = false,
 }: CellContentProps) {
   if (isError(value)) {
     return (
@@ -33,7 +36,22 @@ export function CellContent({
       </span>
     )
   }
-  if (value === null || value === '') return null
+  const empty = value === null || value === ''
+  // Une case jamais cochée (ou effacée) est une case décochée : elle reste visible et cliquable.
+  if (!plain && field.type === 'checkbox' && (!empty || blankCheckbox)) {
+    return (
+      <span
+        data-check
+        className={cn(
+          'inline-grid size-4 cursor-pointer place-items-center rounded border',
+          value === true ? 'border-accent bg-accent text-accent-ink' : 'border-line-strong',
+        )}
+      >
+        {value === true && <Check size={12} strokeWidth={3} />}
+      </span>
+    )
+  }
+  if (empty) return null
 
   if (!plain) {
     if (field.type === 'select') {
@@ -47,19 +65,6 @@ export function CellContent({
         (typeof stored === 'string' ? collaborators[stored] : undefined) ??
         Object.values(collaborators).find((c) => c.name === value)
       if (person) return <OwnerChip person={person} />
-    }
-    if (field.type === 'checkbox') {
-      return (
-        <span
-          data-check
-          className={cn(
-            'inline-grid size-4 cursor-pointer place-items-center rounded border',
-            value === true ? 'border-accent bg-accent text-accent-ink' : 'border-line-strong',
-          )}
-        >
-          {value === true && <Check size={12} strokeWidth={3} />}
-        </span>
-      )
     }
   }
 
