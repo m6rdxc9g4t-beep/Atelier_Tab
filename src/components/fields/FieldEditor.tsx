@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
-import { ArrowDown, ArrowUp, ListChecks, Plus, Trash2 } from 'lucide-react'
+import { AlertTriangle, ArrowDown, ArrowUp, ListChecks, Plus, Trash2 } from 'lucide-react'
 import {
   ATELIER_STATUS_PRESET_NAME,
   CHOICE_COLORS,
@@ -8,6 +8,7 @@ import {
   mergeAtelierStatuses,
 } from '@/engine/field-types'
 import { columnToLetters, isError } from '@/engine/formula'
+import { valuesReplacedByFormula } from '@/engine/table'
 import { getSheet, useDataStore } from '@/store'
 import { DEFAULT_STATUS_CHOICES } from '@/store/factories'
 import {
@@ -88,9 +89,22 @@ export function FieldEditor({ tableId, fieldId, index, anchor, onClose }: FieldE
   const [formula, setFormula] = useState(field?.columnFormula ?? '=')
   const [mapping, setMapping] = useState<AtelierMapping | undefined>(field?.atelierMapping)
   const [error, setError] = useState<string | null>(null)
+  const [confirmReplace, setConfirmReplace] = useState(false)
+  const replaced = useMemo(
+    () =>
+      table && field && field.type !== 'formula' ? valuesReplacedByFormula(table, field.id) : 0,
+    [table, field],
+  )
   if (!table) return null
+  // Passage en Formule : les valeurs saisies sont remplacées, l'utilisateur doit le confirmer.
+  const replacing = !creating && type === 'formula' && replaced > 0
+  const replaceLabel =
+    replaced === 1
+      ? 'Remplacer cette valeur par la formule'
+      : `Remplacer ces ${replaced} valeurs par la formule`
 
   const changeType = (next: FieldType) => {
+    if (next !== type) setConfirmReplace(false)
     setType(next)
     setError(null)
     if (!labelTouched) setLabel(freeLabel(tableId, DEFAULT_LABELS[next]))
@@ -119,6 +133,7 @@ export function FieldEditor({ tableId, fieldId, index, anchor, onClose }: FieldE
       if (!checked.ok) return setError(`Formule : ${checked.reason}`)
       columnFormula = checked.formula
     }
+    if (replacing && !confirmReplace) return setError(`Cochez « ${replaceLabel} » pour confirmer`)
     const keep: FieldOptions = {}
     if (type === 'select') keep.choices = (options.choices ?? []).filter((c) => c.label.trim())
     if (type === 'currency') keep.currency = options.currency ?? 'EUR'
@@ -203,13 +218,43 @@ export function FieldEditor({ tableId, fieldId, index, anchor, onClose }: FieldE
               })}
             </div>
             <p className="text-[12px] text-muted">{TYPE_HINTS[type]}</p>
-            {!creating && field && field.type !== type && (
-              <p className="rounded-md bg-surface-sunken px-2 py-1.5 text-[12px] text-muted">
-                Les valeurs existantes seront converties ; celles qui ne s’y prêtent pas sont
-                gardées telles quelles.{' '}
-                {field.type === 'formula' && 'Les résultats de la formule sont figés. '}
-                Annulable avec ⌘Z.
-              </p>
+            {replacing ? (
+              <div className="flex flex-col gap-1.5 rounded-md border border-warning/40 bg-warning/10 px-2 py-1.5 text-[12px] text-ink">
+                <p className="flex items-start gap-1.5">
+                  <AlertTriangle size={13} className="mt-0.5 shrink-0 text-warning" aria-hidden />
+                  <span>
+                    {replaced === 1
+                      ? 'La valeur saisie dans cette colonne sera remplacée'
+                      : `Les ${replaced} valeurs saisies dans cette colonne seront remplacées`}{' '}
+                    par la formule ; les lignes de total et les formules de cellule sont gardées.
+                    Annulable avec ⌘Z.
+                  </span>
+                </p>
+                <label className="flex items-center gap-2 font-medium">
+                  <input
+                    type="checkbox"
+                    checked={confirmReplace}
+                    onChange={(e) => {
+                      setConfirmReplace(e.target.checked)
+                      setError(null)
+                    }}
+                    className="accent-[var(--accent)]"
+                  />
+                  {replaceLabel}
+                </label>
+              </div>
+            ) : (
+              !creating &&
+              field &&
+              field.type !== type && (
+                <p className="rounded-md bg-surface-sunken px-2 py-1.5 text-[12px] text-muted">
+                  {type === 'formula'
+                    ? 'La formule remplit chaque ligne ; les formules saisies dans une cellule sont gardées. '
+                    : 'Les valeurs existantes seront converties ; celles qui ne s’y prêtent pas sont gardées telles quelles. '}
+                  {field.type === 'formula' && 'Les résultats de la formule sont figés. '}
+                  Annulable avec ⌘Z.
+                </p>
+              )
             )}
           </div>
 
@@ -517,6 +562,8 @@ function FormulaOptions({
             assist.sync()
           }}
           onKeyDown={(e) => {
+            // Saisie en cours dans un éditeur de méthode (IME) : Entrée valide le mot, pas la colonne.
+            if (e.nativeEvent.isComposing || e.keyCode === 229) return
             if (assist.onKeyDown(e)) return
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault()

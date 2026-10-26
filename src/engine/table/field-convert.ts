@@ -150,3 +150,17 @@ export function changeFieldType(
   }
   return report
 }
+
+/**
+ * Valeurs saisies que la formule de colonne remplace si la colonne passe en Formule : celles
+ * des lignes de données (les formules de cellule et les lignes de total sont gardées).
+ */
+export function valuesReplacedByFormula(table: Table, fieldId: string): number {
+  let count = 0
+  for (const recordId of table.rowOrder) {
+    const record = table.records[recordId]
+    const stored = record?.cells[fieldId] ?? null
+    if (record?.kind === 'data' && stored !== null && stored !== '' && !isFormula(stored)) count++
+  }
+  return count
+}

@@ -10,7 +10,8 @@
  * - appelés par l'**assistant** (`caller: 'assistant'`), `configure_export` et `export_table`
  *   n'acceptent que des adresses de cette machine ; toute autre adresse demande une confirmation
  *   de l'utilisateur dans le panneau (`host.confirm`), de même que les outils destructeurs
- *   (`delete_rows`, `delete_column`). Sans `confirm`, ces actions sont refusées ;
+ *   (`delete_rows`, `delete_column`, `update_column` qui remplace des valeurs saisies par une
+ *   formule ou retire des statuts encore utilisés). Sans `confirm`, ces actions sont refusées ;
  * - quel que soit l'appelant : hors ligne, aucun envoi vers une adresse extérieure ; le jeton
  *   d'accès ne part que vers la route d'import d'Atelier Projets locale (`sendToWebhook`) ;
  * - le serveur MCP (`caller: 'mcp'`) est appelé par Claude Code, qui demande lui-même
@@ -58,7 +59,7 @@ import {
   WORKFLOW_STATUSES,
 } from '@/engine/field-types'
 import { isError, isFormula, parseFormula, serializeValue, type CellInput } from '@/engine/formula'
-import { operatorsFor, type TableSheet } from '@/engine/table'
+import { operatorsFor, valuesReplacedByFormula, type TableSheet } from '@/engine/table'
 import { newId } from '@/lib/ids'
 import type { DataStore } from '@/store/data.store'
 import { DEFAULT_STATUS_CHOICES } from '@/store/factories'
@@ -321,6 +322,29 @@ function toStored(field: Field, value: z.infer<typeof cellValue>, d: AppData): C
 
 function choicesFrom(labels: string[], existing: SelectChoice[] = []): SelectChoice[] {
   return choicesFromLabels(labels, existing)
+}
+
+/** Lignes dont la cellule vise un des statuts `ids` (retirés de la colonne). */
+function rowsWithChoices(table: Table, fieldId: string, ids: Set<string>): string[] {
+  return table.rowOrder.filter((recordId) => {
+    const stored = table.records[recordId]?.cells[fieldId]
+    return typeof stored === 'string' && ids.has(stored)
+  })
+}
+
+/** Statuts de `before` absents de `after`. */
+function removedChoices(before: SelectChoice[], after: SelectChoice[]): SelectChoice[] {
+  const kept = new Set(after.map((c) => c.id))
+  return before.filter((c) => !kept.has(c.id))
+}
+
+/**
+ * Champ qui lit la valeur d'un filtre, comme le menu des filtres : une colonne-formule se
+ * filtre dans le type de son résultat (« 20 % » vaut 0,2 pour un résultat en pourcentage).
+ */
+function filterValueField(field: Field): Field {
+  if (field.type !== 'formula') return field
+  return { ...field, type: field.options?.resultFormat ?? 'number' }
 }
 
 function checkFormula(formula: string): string {
@@ -645,7 +669,7 @@ export const TOOLS = [
   tool({
     name: 'update_column',
     description:
-      'Modifie une colonne : libellé, type (les valeurs sont converties comme si on les retapait ; celles qui ne se convertissent pas sont gardées telles quelles), formule de colonne, liste des statuts (les lignes gardent leur statut si son libellé est conservé) ou préréglage « Statuts Atelier » (les statuts reconnus, ex. « Bloqué », sont convertis ; les autres sont gardés à la fin), format du résultat ou rôle d’export.',
+      'Modifie une colonne : libellé, type (les valeurs sont converties comme si on les retapait ; celles qui ne se convertissent pas sont gardées telles quelles ; vers formula, la formule de colonne remplace les valeurs saisies des lignes de données, comptées dans replaced, après confirmation de l’utilisateur), formule de colonne, liste des statuts (les lignes gardent leur statut si son libellé est conservé ; celles dont le statut est retiré sont vidées, comptées dans cleared, après confirmation de l’utilisateur) ou préréglage « Statuts Atelier » (les statuts reconnus, ex. « Bloqué », sont convertis ; les autres sont gardés à la fin), format du résultat ou rôle d’export.',
     input: z.object({
       table: tableRef,
       column: columnRef,
@@ -660,7 +684,7 @@ export const TOOLS = [
       format: z.enum(RESULT_FORMATS).optional(),
       mapping: z.enum(MAPPING_VALUES).optional(),
     }),
-    run(args, host) {
+    async run(args, host) {
       const table = resolveTable(data(host), args.table)
       const before = resolveColumn(table, args.column)
       const target = args.type ?? before.type
@@ -679,8 +703,46 @@ export const TOOLS = [
         throw new ToolError('Le format ne s’applique qu’aux colonnes de type formula')
       }
       const formula = args.formula !== undefined ? checkFormula(args.formula) : undefined
+      const converting = args.type !== undefined && args.type !== before.type
+      // Statuts retirés alors que des lignes les portent : ces cellules seront vidées.
+      if (args.choices && !converting) {
+        const current = before.options?.choices ?? []
+        const removed = removedChoices(current, choicesFrom(args.choices, current))
+        const rows = rowsWithChoices(table, before.id, new Set(removed.map((c) => c.id)))
+        if (rows.length > 0) {
+          await requireConfirmation(host, {
+            tool: 'update_column',
+            kind: 'delete',
+            message: `L’assistant veut retirer ${removed.map((c) => `« ${c.label} »`).join(', ')} de la colonne ${letterOf(table, before.id)} « ${before.label} » de « ${table.name} » : ${plural(rows.length, 'cellule sera vidée', 'cellules seront vidées')}.`,
+          })
+          if (!freshTable(host, table.id).fields[before.id]) {
+            throw new ToolError('La colonne a été supprimée pendant l’opération')
+          }
+        }
+      }
       let conversion: { converted: number; kept: number } | undefined
-      if (args.type && args.type !== before.type) {
+      let replaced: number | undefined
+      /** Table juste avant la conversion, rendue si la suite est refusée. */
+      let original: Table | undefined
+      if (converting && args.type) {
+        // Vers formula : les valeurs saisies sont détruites (l'assistant n'a pas de ⌘Z).
+        if (args.type === 'formula') {
+          const count = valuesReplacedByFormula(table, before.id)
+          if (count > 0) {
+            await requireConfirmation(host, {
+              tool: 'update_column',
+              kind: 'delete',
+              message: `L’assistant veut transformer la colonne ${letterOf(table, before.id)} « ${before.label} » de « ${table.name} » en formule ${formula ?? ''} : ${plural(count, 'valeur saisie sera remplacée', 'valeurs saisies seront remplacées')}.`,
+            })
+          }
+          // Recompté après la confirmation : l'utilisateur a pu modifier la table entre-temps.
+          const fresh = freshTable(host, table.id)
+          if (!fresh.fields[before.id]) {
+            throw new ToolError('La colonne a été supprimée pendant l’opération')
+          }
+          replaced = valuesReplacedByFormula(fresh, before.id)
+        }
+        original = freshTable(host, table.id)
         const sheet = host.getSheet(table.id)
         conversion = host.store.getState().changeFieldType(table.id, before.id, args.type, {
           computed: (r, f) => sheet?.value(r, f) ?? null,
@@ -692,16 +754,47 @@ export const TOOLS = [
       if (args.preset) options.choices = mergeAtelierStatuses(field.options?.choices)
       else if (args.choices) options.choices = choicesFrom(args.choices, field.options?.choices)
       if (args.format) options.resultFormat = args.format
+      const removed = new Set(
+        removedChoices(field.options?.choices ?? [], options.choices ?? []).map((c) => c.id),
+      )
+      const orphans = args.choices
+        ? rowsWithChoices(freshTable(host, table.id), field.id, removed)
+        : []
+      if (orphans.length > 0 && original) {
+        // Statuts tout juste créés par la conversion : rien n'a été confirmé, on revient en arrière.
+        host.store.getState().replaceTable(original)
+        throw new ToolError(
+          `${plural(orphans.length, 'ligne porte', 'lignes portent')} un statut absent de choices : convertissez d’abord la colonne sans choices, puis modifiez la liste des statuts.`,
+        )
+      }
       host.store.getState().updateField(table.id, field.id, {
         ...(args.label ? { label: args.label } : {}),
         ...(formula !== undefined ? { columnFormula: formula } : {}),
         ...(args.mapping ? { atelierMapping: args.mapping } : {}),
         ...(args.choices || args.preset || args.format ? { options } : {}),
       })
+      if (orphans.length > 0) {
+        // Comme l'éditeur de champ : cellules vidées (sinon un id orphelin), filtres retirés.
+        const store = host.store.getState()
+        store.setCells(
+          table.id,
+          orphans.map((recordId) => ({ recordId, fieldId: field.id, input: null })),
+        )
+        for (const view of freshTable(host, table.id).views) {
+          const filters = view.filters.filter(
+            (f) => f.fieldId !== field.id || typeof f.value !== 'string' || !removed.has(f.value),
+          )
+          if (filters.length !== view.filters.length) {
+            store.updateView(table.id, view.id, { filters })
+          }
+        }
+      }
       const now = freshTable(host, table.id)
       return {
         updated: columnInfo(now, now.fields[field.id] as Field),
         ...(conversion ? { converted: conversion.converted, kept_as_is: conversion.kept } : {}),
+        ...(replaced !== undefined ? { replaced } : {}),
+        ...(orphans.length > 0 ? { cleared: orphans.length } : {}),
       }
     },
   }),
@@ -815,17 +908,11 @@ export const TOOLS = [
     run(args, host) {
       const table = resolveTable(data(host), args.table)
       const mode = args.view === 'grid' ? 'hybrid' : args.view
-      const store = host.store.getState()
-      if (mode && table.views.find((v) => v.id === table.activeViewId)?.mode !== mode) {
-        store.setViewMode(table.id, mode)
-      }
-      const current = freshTable(host, table.id)
-      const view = current.views.find((v) => v.id === current.activeViewId)
-      if (!view) throw new ToolError('Vue introuvable')
+      // Tout est vérifié avant de toucher à la vue : un appel refusé ne change rien à l'écran.
       const patch: Partial<Omit<View, 'id' | 'mode'>> = {}
       if (args.filters) {
         patch.filters = args.filters.map((f) => {
-          const field = resolveColumn(current, f.column)
+          const field = resolveColumn(table, f.column)
           if (!operatorsFor(field).includes(f.op)) {
             throw new ToolError(
               `Condition « ${f.op} » impossible sur « ${field.label} » ; possibles : ${operatorsFor(field).join(', ')}`,
@@ -835,7 +922,9 @@ export const TOOLS = [
           if (needsValue && (f.value === undefined || f.value === null || f.value === '')) {
             throw new ToolError(`Le filtre sur « ${field.label} » a besoin d’une valeur`)
           }
-          const stored = needsValue ? toStored(field, f.value ?? null, data(host)) : null
+          const stored = needsValue
+            ? toStored(filterValueField(field), f.value ?? null, data(host))
+            : null
           return {
             id: newId('flt'),
             fieldId: field.id,
@@ -846,23 +935,30 @@ export const TOOLS = [
       }
       if (args.sorts) {
         patch.sorts = args.sorts.map((s) => ({
-          fieldId: resolveColumn(current, s.column).id,
+          fieldId: resolveColumn(table, s.column).id,
           direction: s.direction ?? 'asc',
         }))
       }
       if (args.hidden_columns) {
-        const hidden = new Set(args.hidden_columns.map((c) => resolveColumn(current, c).id))
-        hidden.delete(current.fieldOrder[0] ?? '')
-        patch.hiddenFieldIds = current.fieldOrder.filter((id) => hidden.has(id))
+        const hidden = new Set(args.hidden_columns.map((c) => resolveColumn(table, c).id))
+        hidden.delete(table.fieldOrder[0] ?? '')
+        patch.hiddenFieldIds = table.fieldOrder.filter((id) => hidden.has(id))
       }
       if (args.row_height) patch.rowHeight = args.row_height
       if (args.group_by) {
-        const field = resolveColumn(current, args.group_by)
+        const field = resolveColumn(table, args.group_by)
         if (field.type !== 'select') {
           throw new ToolError(`« ${field.label} » n’est pas une colonne de statut (type select)`)
         }
         patch.groupByFieldId = field.id
       }
+      const store = host.store.getState()
+      if (mode && table.views.find((v) => v.id === table.activeViewId)?.mode !== mode) {
+        store.setViewMode(table.id, mode)
+      }
+      const current = freshTable(host, table.id)
+      const view = current.views.find((v) => v.id === current.activeViewId)
+      if (!view) throw new ToolError('Vue introuvable')
       store.updateView(table.id, view.id, patch)
       const now = freshTable(host, table.id)
       const v = now.views.find((x) => x.id === view.id) as View
@@ -875,7 +971,8 @@ export const TOOLS = [
           value: f.value ?? null,
         })),
         sorts: v.sorts.map((s) => ({ column: label(s.fieldId), direction: s.direction })),
-        hidden_columns: v.hiddenFieldIds.map(label),
+        // La première colonne n'est jamais masquée (même après un move_column), comme à l'écran.
+        hidden_columns: v.hiddenFieldIds.filter((id) => id !== now.fieldOrder[0]).map(label),
         ...(v.rowHeight ? { row_height: v.rowHeight } : {}),
         ...(v.groupByFieldId ? { group_by: label(v.groupByFieldId) } : {}),
       }

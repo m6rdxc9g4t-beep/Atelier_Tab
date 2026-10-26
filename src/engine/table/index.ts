@@ -41,4 +41,5 @@ export {
   conversionTexts,
   type ConversionOptions,
   type ConversionReport,
+  valuesReplacedByFormula,
 } from './field-convert'

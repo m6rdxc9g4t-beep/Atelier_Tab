@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createDemoData } from '@/fixtures/demo'
 import type { Table } from '@/types/domain'
-import { changeFieldType, TableSheet } from '..'
+import { changeFieldType, TableSheet, valuesReplacedByFormula } from '..'
 
 const data = createDemoData()
 const ctx = { collaborators: data.collaborators }
@@ -106,6 +106,8 @@ describe('changeFieldType', () => {
 
   it('nombre → formule : la formule de colonne remplace les valeurs des lignes de données', () => {
     const t = planning()
+    // Les trois montants saisis ; la formule de la ligne de total est gardée.
+    expect(valuesReplacedByFormula(t, 'cost_ht')).toBe(3)
     changeFieldType(t, 'cost_ht', 'formula', ctx, { formula: '=1+1' })
     expect(t.fields.cost_ht!.columnFormula).toBe('=1+1')
     expect(t.fields.cost_ht!.options?.resultFormat).toBe('currency')
