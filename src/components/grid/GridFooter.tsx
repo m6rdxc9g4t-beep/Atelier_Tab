@@ -10,7 +10,7 @@ import { MenuItem, MenuLabel } from '@/components/ui/Popover'
 import { fieldWidth } from '@/lib/field-icons'
 import { cn } from '@/lib/cn'
 import { ADD_COLUMN_WIDTH, GUTTER_WIDTH } from './GridHeader'
-import { defaultSummary, SUMMARY_LABELS, summarize, summaryKinds } from './summary'
+import { SUMMARY_LABELS, summarize, summaryFor, summaryKinds } from './summary'
 
 export const FOOTER_HEIGHT = 36
 
@@ -61,7 +61,7 @@ export const GridFooter = memo(function GridFooter({
       {fieldIds.slice(1).map((fieldId) => {
         const field = table.fields[fieldId]
         if (!field) return null
-        const kind = view?.summaries?.[fieldId] ?? defaultSummary(field)
+        const kind = summaryFor(field, view?.summaries?.[fieldId])
         const values = dataRows.map((id) => sheet?.value(id, fieldId) ?? null)
         return (
           <FooterCell

@@ -79,7 +79,9 @@ describe('viewRecordIds', () => {
     const labels = ids()
       .slice(0, 3)
       .map((id) => table.records[id]!.cells.status)
-      .map((choiceId) => table.fields.status!.options!.choices!.find((c) => c.id === choiceId)!.label)
+      .map(
+        (choiceId) => table.fields.status!.options!.choices!.find((c) => c.id === choiceId)!.label,
+      )
     expect([...labels].sort((a, b) => order.indexOf(a) - order.indexOf(b))).toEqual(labels)
   })
 
@@ -88,6 +90,34 @@ describe('viewRecordIds', () => {
     expect(ids({ search: 'gros oeuvre' })).toEqual(['rec_01', 'rec_total'])
     expect(ids({ search: 'karim' })).toEqual(['rec_02', 'rec_total'])
     expect(ids({ search: '15/12' })).toEqual(['rec_02', 'rec_total'])
+  })
+
+  it('recherche un nombre tel qu’il est tapé : espace normale ou sans séparateur', () => {
+    const { ids } = setup()
+    // Coût HT de Gros œuvre : 45 000 (espace fine insécable à l'affichage).
+    expect(ids({ search: '45 000' })).toEqual(['rec_01', 'rec_total'])
+    expect(ids({ search: '45000' })).toEqual(['rec_01', 'rec_total'])
+    expect(ids({ search: '28 500' })).toEqual(['rec_02', 'rec_total'])
+  })
+
+  it('trie une case à cocher : jamais cochée et décochée ensemble, « non coché » d’abord', () => {
+    const { table, view } = setup()
+    table.fields.done = { id: 'done', label: 'Fait', type: 'checkbox' }
+    table.fieldOrder.push('done')
+    // rec_01 décochée (false), rec_02 cochée, rec_03 jamais touchée (null).
+    table.records.rec_01!.cells.done = false
+    table.records.rec_02!.cells.done = true
+    const sheet = new TableSheet()
+    sheet.sync(table, ctx)
+    const sorted = (direction: 'asc' | 'desc') =>
+      viewRecordIds(
+        table,
+        { ...view, sorts: [{ fieldId: 'done', direction }] },
+        (r, f) => sheet.value(r, f),
+        ctx,
+      )
+    expect(sorted('asc')).toEqual(['rec_01', 'rec_03', 'rec_02', 'rec_total'])
+    expect(sorted('desc')).toEqual(['rec_02', 'rec_01', 'rec_03', 'rec_total'])
   })
 
   it('une ligne épinglée reste visible malgré le filtre', () => {
@@ -101,12 +131,12 @@ describe('matchesFilter', () => {
   const f = (id: string) => table.fields[id]!
 
   it('texte : contient, sans accents ni ligatures', () => {
-    expect(matchesFilter(f('task_name'), filter('task_name', 'contains', 'OEUV'), 'Gros œuvre', ctx)).toBe(
-      true,
-    )
-    expect(matchesFilter(f('task_name'), filter('task_name', 'contains', 'eléc'), 'Électricité', ctx)).toBe(
-      true,
-    )
+    expect(
+      matchesFilter(f('task_name'), filter('task_name', 'contains', 'OEUV'), 'Gros œuvre', ctx),
+    ).toBe(true)
+    expect(
+      matchesFilter(f('task_name'), filter('task_name', 'contains', 'eléc'), 'Électricité', ctx),
+    ).toBe(true)
   })
 
   it('vide / non vide, case à cocher', () => {
@@ -121,6 +151,33 @@ describe('matchesFilter', () => {
     expect(operatorsFor(f('task_name'))).toContain('contains')
     expect(operatorsFor(f('cost_ht'))).toContain('gt')
     expect(operatorsFor(f('status'))).not.toContain('gt')
+  })
+
+  it('colonne-formule : opérateurs selon le format du résultat', () => {
+    const formula = (resultFormat?: 'text' | 'date' | 'number') => ({
+      id: 'x',
+      label: 'Libellé',
+      type: 'formula' as const,
+      ...(resultFormat ? { options: { resultFormat } } : {}),
+    })
+    expect(operatorsFor(formula('text'))).toContain('contains')
+    expect(operatorsFor(formula('text'))).not.toContain('gt')
+    expect(operatorsFor(formula())).toContain('gt')
+    expect(operatorsFor(formula('date'))).toContain('lt')
+    expect(
+      matchesFilter(formula('text'), filter('x', 'contains', 'lot'), 'Lot 2 - Charpente', ctx),
+    ).toBe(true)
+  })
+
+  it('texte : espaces insécables et espaces normales sont équivalentes', () => {
+    expect(
+      matchesFilter(
+        f('task_name'),
+        filter('task_name', 'contains', '1 500'),
+        'Lot 1\u202f500',
+        ctx,
+      ),
+    ).toBe(true)
   })
 })
 

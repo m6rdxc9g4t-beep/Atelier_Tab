@@ -110,6 +110,20 @@ describe('tolérance aux éditions externes', () => {
     expect(table.activeViewId).toBe('view_planning_grid')
   })
 
+  it('agrégats du pied de grille : une valeur inconnue est ignorée seule', () => {
+    const t = base()
+    t.views[0].summaries = { cost_ht: 'average', cost_ttc: 'median', status: 'filled' }
+    t.views[0].rowHeight = 'géant'
+    const view = parseTableFile('tables/tbl_planning_lots.json', JSON.stringify(t)).views[0]
+    expect(view?.summaries).toEqual({ cost_ht: 'average', status: 'filled' })
+    expect(view?.rowHeight).toBeUndefined()
+    // Pas un objet : ignoré sans empêcher de lire la table.
+    t.views[0].summaries = 'sum'
+    expect(
+      parseTableFile('tables/tbl_planning_lots.json', JSON.stringify(t)).views[0]?.summaries,
+    ).toBeUndefined()
+  })
+
   it('crée une vue si la table n’en a pas', () => {
     const t = base()
     t.views = []

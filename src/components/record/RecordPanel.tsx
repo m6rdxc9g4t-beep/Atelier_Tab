@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { ChevronDown, ChevronUp, CopyPlus, Plus, SquareFunction, Trash2, X } from 'lucide-react'
 import { formatValue, parseUserInput, toEditText } from '@/engine/field-types'
@@ -6,7 +6,7 @@ import { isError, isFormula } from '@/engine/formula'
 import { useCellValue, useDataStore, useUIStore } from '@/store'
 import { deleteRows, duplicateRows, effectiveInputOf } from '@/store/grid-actions'
 import { undoable } from '@/store/history'
-import { activeView, useViewRows } from '@/store/view-rows'
+import { hiddenFieldSet, useViewRows } from '@/store/view-rows'
 import type { Field, Table } from '@/types/domain'
 import { OwnerChip, StatusBadge } from '@/components/ui/Badge'
 import { FIELD_ICONS } from '@/lib/field-icons'
@@ -25,7 +25,7 @@ export function RecordPanel({ table }: { table: Table }) {
   const panelRef = useRef<HTMLDivElement>(null)
   const index = recordId ? rows.indexOf(recordId) : -1
   const rowNumber = recordId ? table.rowOrder.indexOf(recordId) + 1 : 0
-  const hidden = new Set(activeView(table)?.hiddenFieldIds ?? [])
+  const hidden = hiddenFieldSet(table)
   const fields = table.fieldOrder
     .map((id) => table.fields[id])
     .filter((f): f is Field => f !== undefined)
@@ -38,36 +38,55 @@ export function RecordPanel({ table }: { table: Table }) {
     const next = rows[index + delta]
     if (next) openRecord(next)
   }
+  // Dernière version de `go` pour le raccourci clavier, sans relancer l'effet de focus.
+  const goRef = useRef(go)
+  useLayoutEffect(() => {
+    goRef.current = go
+  })
 
+  // Ligne disparue (annulation de son ajout…) : la fiche se ferme pour de bon.
+  const exists = record !== undefined
   useEffect(() => {
-    if (!recordId) return
+    if (recordId && !exists) openRecord(null)
+  }, [recordId, exists, openRecord])
+
+  // Focus dans la fiche à l'ouverture et au changement de ligne, rendu à la fermeture. Ne
+  // dépend que de la ligne affichée : une modification, qui recalcule l'ordre d'une vue triée
+  // ou filtrée, ne doit pas retirer le focus du champ en cours de saisie.
+  useEffect(() => {
+    if (!recordId || !exists) return
     const previous = document.activeElement as HTMLElement | null
     panelRef.current?.focus()
     const onKey = (e: KeyboardEvent) => {
-      const typing = (e.target as HTMLElement).closest('input, textarea, select')
-      if (e.key === 'Escape' && !typing) {
+      if ((e.target as HTMLElement).closest('input, textarea, select')) return
+      if (e.key === 'Escape') {
         e.stopPropagation()
         openRecord(null)
+        return
       }
-      if (!typing && (e.key === 'ArrowDown' || e.key === 'j')) go(1)
-      if (!typing && (e.key === 'ArrowUp' || e.key === 'k')) go(-1)
+      // ⌘K, ⌘J… sont des raccourcis de l'app, pas un changement de ligne.
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      if (e.key === 'ArrowDown' || e.key === 'j') goRef.current(1)
+      if (e.key === 'ArrowUp' || e.key === 'k') goRef.current(-1)
     }
     document.addEventListener('keydown', onKey)
     return () => {
       document.removeEventListener('keydown', onKey)
       previous?.focus?.({ preventScroll: true })
     }
-    // go dépend de rows et index : relu à chaque rendu via la fermeture ci-dessous.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recordId, index, rows])
+  }, [recordId, exists, openRecord])
 
   if (!recordId || !record) return null
 
   return createPortal(
     <div
-      className="fixed inset-0 z-40 flex justify-end bg-black/20 dark:bg-black/50"
+      className="fixed inset-0 z-40 flex justify-end bg-scrim/70"
       onMouseDown={(e) => {
-        if (e.target === e.currentTarget) openRecord(null)
+        if (e.target !== e.currentTarget) return
+        // Le champ en cours de saisie s'enregistre à la sortie : le quitter avant de fermer.
+        const active = document.activeElement
+        if (active instanceof HTMLElement) active.blur()
+        openRecord(null)
       }}
     >
       <div
@@ -230,15 +249,8 @@ function FieldRow({ table, recordId, field }: { table: Table; recordId: string; 
       </button>
     )
   } else if (field.type === 'date') {
-    editor = (
-      <input
-        type="date"
-        aria-label={field.label}
-        value={typeof stored === 'string' ? stored : ''}
-        onChange={(e) => write(e.target.value ? e.target.value.split('-').reverse().join('/') : '')}
-        className="field-input w-48"
-      />
-    )
+    const initial = typeof stored === 'string' ? stored : ''
+    editor = <DateEditor key={initial} field={field} initial={initial} onCommit={write} />
   } else {
     const initial = toEditText(field, stored, {
       collaborators: useDataStore.getState().collaborators,
@@ -302,6 +314,7 @@ function TextEditor({
       {...common}
       rows={Math.min(8, Math.max(2, draft.split('\n').length))}
       onKeyDown={(e) => {
+        if (e.nativeEvent.isComposing || e.keyCode === 229) return
         if (e.key === 'Escape') setDraft(initial)
         if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) e.currentTarget.blur()
       }}
@@ -312,10 +325,48 @@ function TextEditor({
       {...common}
       inputMode={field.type === 'text' ? 'text' : 'decimal'}
       onKeyDown={(e) => {
+        if (e.nativeEvent.isComposing || e.keyCode === 229) return
         if (e.key === 'Enter') e.currentTarget.blur()
         if (e.key === 'Escape') setDraft(initial)
       }}
       className={cn('field-input', field.type !== 'text' && 'w-48 text-right tabular-nums')}
+    />
+  )
+}
+
+/**
+ * Date : enregistrée à la sortie du champ ou sur Entrée, pas à chaque chiffre tapé (le champ
+ * date du navigateur signale des dates intermédiaires, comme l'année 0202 en tapant 2027).
+ */
+function DateEditor({
+  field,
+  initial,
+  onCommit,
+}: {
+  field: Field
+  /** Valeur stockée « AAAA-MM-JJ », ou vide. */
+  initial: string
+  onCommit: (text: string) => boolean
+}) {
+  // Une nouvelle valeur (annuler, autre ligne) remonte le composant : voir `key` chez l'appelant.
+  const [draft, setDraft] = useState(initial)
+  // « AAAA-MM-JJ » transmis tel quel : relue en JJ/MM/AAAA, l'année 0020 deviendrait 2020.
+  const commit = () => {
+    if (draft !== initial) onCommit(draft)
+  }
+  return (
+    <input
+      type="date"
+      aria-label={field.label}
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.nativeEvent.isComposing || e.keyCode === 229) return
+        if (e.key === 'Enter') e.currentTarget.blur()
+        if (e.key === 'Escape') setDraft(initial)
+      }}
+      className="field-input w-48"
     />
   )
 }
@@ -449,6 +500,7 @@ function ChoicePicker({
           placeholder={field.type === 'select' ? 'Nouveau choix' : 'Nom'}
           onBlur={(e) => add(e.target.value)}
           onKeyDown={(e) => {
+            if (e.nativeEvent.isComposing || e.keyCode === 229) return
             if (e.key === 'Enter') add(e.currentTarget.value)
             if (e.key === 'Escape') setAdding(false)
           }}

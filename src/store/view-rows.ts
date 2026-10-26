@@ -13,8 +13,19 @@ export function activeView(table: Table): View | undefined {
   return table.views.find((v) => v.id === table.activeViewId)
 }
 
-export function visibleFieldIds(table: Table): string[] {
+/**
+ * Champs masqués de la vue active. La première colonne (titre) n'en fait jamais partie, même
+ * si un déplacement de colonne (glisser, outil `move_column`) y a amené un champ masqué.
+ */
+export function hiddenFieldSet(table: Table): Set<string> {
   const hidden = new Set(activeView(table)?.hiddenFieldIds ?? [])
+  const first = table.fieldOrder[0]
+  if (first) hidden.delete(first)
+  return hidden
+}
+
+export function visibleFieldIds(table: Table): string[] {
+  const hidden = hiddenFieldSet(table)
   return table.fieldOrder.filter((id) => !hidden.has(id))
 }
 

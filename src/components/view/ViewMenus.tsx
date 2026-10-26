@@ -4,7 +4,7 @@ import { parseUserInput, toEditText } from '@/engine/field-types'
 import { columnToLetters } from '@/engine/formula'
 import { operatorNeedsValue, operatorsFor } from '@/engine/table'
 import { useDataStore } from '@/store'
-import { activeView } from '@/store/view-rows'
+import { activeView, hiddenFieldSet } from '@/store/view-rows'
 import {
   addFilter,
   clearFilters,
@@ -24,7 +24,7 @@ import { cn } from '@/lib/cn'
 
 export function FieldsMenu({ table }: { table: Table }) {
   const [query, setQuery] = useState('')
-  const hidden = new Set(activeView(table)?.hiddenFieldIds ?? [])
+  const hidden = hiddenFieldSet(table)
   const fields = table.fieldOrder
     .map((id) => table.fields[id])
     .filter((f): f is Field => f !== undefined)
@@ -246,7 +246,8 @@ function FilterRow({
       </select>
       <div className="min-w-0 flex-1">
         {operatorNeedsValue(filter.operator) && (
-          <FilterValue table={table} field={field} filter={filter} />
+          // Autre colonne : la valeur est effacée, le brouillon de saisie repart de zéro.
+          <FilterValue key={filter.fieldId} table={table} field={field} filter={filter} />
         )}
       </div>
       <button

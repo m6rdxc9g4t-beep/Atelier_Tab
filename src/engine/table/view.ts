@@ -34,11 +34,15 @@ export interface ViewOptions {
 /** Opérateurs proposés selon le type de colonne, dans l'ordre d'affichage. */
 export function operatorsFor(field: Field): FilterOperator[] {
   switch (field.type) {
+    case 'formula':
+      // Selon le format du résultat : une formule affichée en texte se filtre comme du texte.
+      return field.options?.resultFormat === 'text'
+        ? ['contains', 'equals', 'not_equals', 'is_empty', 'is_not_empty']
+        : ['equals', 'not_equals', 'gt', 'lt', 'is_empty', 'is_not_empty']
     case 'number':
     case 'currency':
     case 'percent':
     case 'date':
-    case 'formula':
       return ['equals', 'not_equals', 'gt', 'lt', 'is_empty', 'is_not_empty']
     case 'select':
     case 'owner':
@@ -55,7 +59,10 @@ export function operatorNeedsValue(op: FilterOperator): boolean {
   return op !== 'is_empty' && op !== 'is_not_empty'
 }
 
-/** Texte comparable : minuscules, sans accents ni ligatures (« Œuvre » = « oeuvre »). */
+/**
+ * Texte comparable : minuscules, sans accents ni ligatures (« Œuvre » = « oeuvre »), espaces
+ * unifiés (les nombres affichés en français séparent les milliers par une espace insécable).
+ */
 export function foldText(text: string): string {
   return text
     .normalize('NFD')
@@ -63,6 +70,7 @@ export function foldText(text: string): string {
     .toLocaleLowerCase('fr')
     .replace(/œ/g, 'oe')
     .replace(/æ/g, 'ae')
+    .replace(/\s+/g, ' ')
 }
 
 const isBlank = (v: CellValue) => v === null || v === '' || (typeof v === 'string' && !v.trim())
@@ -132,9 +140,7 @@ export function matchesFilter(
     case 'gt':
     case 'lt': {
       if (isBlank(value)) return false
-      const diff = comparable
-        ? a - b
-        : compareValues(text, String(filter.value))
+      const diff = comparable ? a - b : compareValues(text, String(filter.value))
       return op === 'gt' ? diff > 0 : diff < 0
     }
     default:
@@ -144,6 +150,8 @@ export function matchesFilter(
 
 /** Comparaison de deux valeurs pour un tri croissant ; les cellules vides et les erreurs à la fin. */
 export function compareForSort(field: Field, a: CellValue, b: CellValue): number {
+  // Case à cocher : jamais cochée (vide) ou décochée, c'est « non coché » (comme les filtres).
+  if (field.type === 'checkbox') return (a === true ? 1 : 0) - (b === true ? 1 : 0)
   const rank = (v: CellValue) => (isBlank(v) ? 2 : isError(v) ? 1 : 0)
   const ra = rank(a)
   const rb = rank(b)
@@ -193,6 +201,8 @@ export function viewRecordIds(
   const sorts = activeSorts(table, view)
   const search = foldText(options.search?.trim() ?? '')
   if (filters.length === 0 && sorts.length === 0 && search === '') return table.rowOrder
+  // Nombres : « 45000 » trouve « 45 000 € », quel que soit le séparateur de milliers tapé.
+  const compactSearch = search.replace(/ /g, '')
 
   const searchFields = (options.searchFieldIds ?? table.fieldOrder)
     .map((id) => table.fields[id])
@@ -220,7 +230,10 @@ export function viewRecordIds(
       search &&
       !searchFields.some((field) => {
         const v = value(recordId, field.id)
-        return v !== null && foldText(formatValue(field, v)).includes(search)
+        if (v === null) return false
+        const text = foldText(formatValue(field, v))
+        if (text.includes(search)) return true
+        return typeof v === 'number' && text.replace(/ /g, '').includes(compactSearch)
       })
     ) {
       continue
@@ -236,10 +249,11 @@ export function viewRecordIds(
         const a = value(x, s.fieldId)
         const b = value(y, s.fieldId)
         let d = compareForSort(field, a, b)
-        // Les cellules vides restent à la fin, même en tri décroissant.
-        if (s.direction === 'desc' && !isBlank(a) && !isBlank(b) && !isError(a) && !isError(b)) {
-          d = -d
-        }
+        // Les cellules vides restent à la fin, même en tri décroissant (une case non cochée
+        // n'est pas « vide » : elle passe après les cochées).
+        const ordered =
+          field.type === 'checkbox' || (!isBlank(a) && !isBlank(b) && !isError(a) && !isError(b))
+        if (s.direction === 'desc' && ordered) d = -d
         if (d !== 0) return d
       }
       return (position.get(x) ?? 0) - (position.get(y) ?? 0)
