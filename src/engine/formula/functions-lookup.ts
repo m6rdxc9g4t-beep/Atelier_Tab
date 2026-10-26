@@ -94,8 +94,10 @@ export function criterionTest(criterion: CellValue): Test | FormulaError {
 
   const date = dateTextToSerial(rest.trim())
   if (date !== null) {
+    // Critère de date : une cellule saisie « JJ/MM/AAAA » compte aussi.
     return (v) => {
-      const s = numberInRange(v)
+      const s =
+        typeof v === 'number' ? v : typeof v === 'string' ? dateTextToSerial(v.trim()) : null
       if (s === null) return op === '<>'
       return compareWith(op, Math.floor(s) - date)
     }

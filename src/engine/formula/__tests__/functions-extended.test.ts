@@ -306,6 +306,10 @@ describe('agrégats conditionnels', () => {
     // Le texte numérique reste ignoré dans une plage, comme dans Excel.
     expect(v('=SOMME(D1:D2)', { D1: '12', D2: 3 })).toBe(3)
     expect(v('=MAX.SI.ENS(D1:D2; D1:D2; "<>")', { D1: '12', D2: 3 })).toBe(3)
+    // Une date tapée en texte (colonne Texte, CSV) aussi ; un critère de date la reconnaît.
+    expect(v('=SOMME(D1:D2)', { D1: '01/12/2026', D2: 3 })).toBe(3)
+    expect(v('=NB(D1:D2)', { D1: '01/12/2026', D2: 3 })).toBe(1)
+    expect(v('=NB.SI(D1:D2; "<2026-12-02")', { D1: '01/12/2026', D2: '2026-12-05' })).toBe(1)
   })
 
   it('plages de critères de tailles différentes : #VALUE!', () => {

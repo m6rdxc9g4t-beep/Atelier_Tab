@@ -128,6 +128,9 @@ wb.preview('=C4/2', 'D1') // aperçu sans enregistrer
 
 - `translateFormula(f, dRow, dCol)` : recopie. Les références relatives bougent, les `$` restent. C'est aussi le mécanisme des **colonnes-formules** : le modèle `=C1*1.2` devient `=C2*1.2` en ligne 2.
 - `shiftReferences(f, { axis, index, count })` : insertion (`count > 0`) ou suppression (`count < 0`) de lignes/colonnes. Références supprimées → `#REF!`, plages réduites ou agrandies.
+- `moveReferences(f, { axis, from, count, to })` : déplacement d'un bloc de lignes ou de colonnes ; chaque référence suit la cellule qu'elle désignait.
+- Option `{ absoluteOnly: true }` de `shiftReferences` et `moveReferences` : seules les références absolues sur l'axe du changement bougent. Sert aux modèles de colonnes-formules : `=C1*$F$1` garde `C1` (la ligne courante) mais `$F$1` suit sa ligne.
+- `retargetColumn(f, from, to)` : les références à la colonne `from` (cellule ou plage tenant dans la colonne) visent `to`. Sert à dupliquer une colonne (exporté par `engine/formula/references`, pas par l'index du module).
 
 ## Limites connues
 

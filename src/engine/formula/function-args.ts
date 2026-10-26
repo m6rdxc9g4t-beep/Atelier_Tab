@@ -21,15 +21,19 @@ export interface FunctionSpec {
   impl: (args: Arg[]) => CellValue
 }
 
+/** Date telle qu'une colonne Date la stocke. */
+const STORED_DATE = /^\d{4}-\d{2}-\d{2}$/
+
 /**
  * Nombre porté par une cellule de plage : un nombre, ou une date « AAAA-MM-JJ » (valeur d'une
  * colonne Date) par son numéro de série, puisqu'une date est un nombre dans Excel. Le texte
- * numérique (« 12 »), les booléens et les vides sont ignorés, comme dans Excel. Null sinon.
+ * (« 12 », « 01/12/2026 »), les booléens et les vides sont ignorés, comme dans Excel. Null sinon.
  */
 export function numberInRange(v: CellValue): number | null {
   if (typeof v === 'number') return v
-  if (typeof v === 'string') return dateTextToSerial(v.trim())
-  return null
+  if (typeof v !== 'string') return null
+  const t = v.trim()
+  return STORED_DATE.test(t) ? dateTextToSerial(t) : null
 }
 
 /** Nombres d'une liste d'arguments, ou la première erreur rencontrée. */
