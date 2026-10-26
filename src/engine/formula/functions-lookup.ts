@@ -3,13 +3,17 @@
  * (RECHERCHEV, RECHERCHEX, INDEX, EQUIV, CHOISIR).
  *
  * Critères à la manière d'Excel : `5`, `">100"`, `"<>Terminée"`, `"En*"` (jokers `*` et `?`,
- * `~` pour échapper), `""` (cellule vide), `"<>"` (non vide), `"<2026-12-01"` (date).
+ * `~` pour échapper), `""` (cellule vide), `"<>"` (non vide), `"<2026-12-01"` (date). Une date
+ * « AAAA-MM-JJ » vaut son numéro de série, face à un critère numérique (`">="&AUJOURDHUI()-30`)
+ * comme dans les agrégats (MAX.SI.ENS renvoie la date la plus récente).
  */
 import { compareValues, dateTextToSerial, normalizeNumber, parseNumberText } from './coerce'
 import {
   asRange,
+  boolArg,
   intArg,
   numArg,
+  numberInRange,
   scalarOf,
   sameShape,
   vectorOf,
@@ -30,16 +34,15 @@ type Test = (v: CellValue) => boolean
 
 const OPERATOR = /^(<=|>=|<>|=|<|>)?([\s\S]*)$/
 
+/**
+ * Valeur d'une cellule pour l'égalité avec un critère numérique : nombre, texte numérique, ou
+ * date « AAAA-MM-JJ » par son numéro de série.
+ */
 function numericOf(v: CellValue): number | null {
   if (typeof v === 'number') return v
-  if (typeof v === 'string') return parseNumberText(v.trim())
-  return null
-}
-
-function serialOfValue(v: CellValue): number | null {
-  if (typeof v === 'number') return v
-  if (typeof v === 'string') return dateTextToSerial(v.trim())
-  return null
+  if (typeof v !== 'string') return null
+  const t = v.trim()
+  return parseNumberText(t) ?? dateTextToSerial(t)
 }
 
 const isEmpty = (v: CellValue) => v === null || v === ''
@@ -81,13 +84,18 @@ export function criterionTest(criterion: CellValue): Test | FormulaError {
     if (op === '' || op === '=' || op === '<>') {
       return (v) => (numericOf(v) === n) === (op !== '<>')
     }
-    return (v) => typeof v === 'number' && compareWith(op, v - n)
+    // <, >, <=, >= : nombres et dates seulement, pas le texte numérique. Un critère calculé
+    // à partir d'une date (`">="&AUJOURDHUI()-30` donne `">=46290"`) vise donc les dates.
+    return (v) => {
+      const x = numberInRange(v)
+      return x !== null && compareWith(op, x - n)
+    }
   }
 
   const date = dateTextToSerial(rest.trim())
   if (date !== null) {
     return (v) => {
-      const s = serialOfValue(v)
+      const s = numberInRange(v)
       if (s === null) return op === '<>'
       return compareWith(op, Math.floor(s) - date)
     }
@@ -146,7 +154,8 @@ function reduce(values: CellValue[], how: Reducer): CellValue {
   const nums: number[] = []
   for (const v of values) {
     if (isError(v)) return v
-    if (typeof v === 'number') nums.push(v)
+    const n = numberInRange(v)
+    if (n !== null) nums.push(n)
   }
   switch (how) {
     case 'sum':
@@ -248,14 +257,14 @@ function lookupIn(axis: 'v' | 'h'): Impl {
     const table = asRange(args[1] ?? null)
     const index = intArg(args[2])
     if (isError(index)) return index
-    const approx = args[3] === undefined ? true : scalarOf(args[3])
+    // Quatrième argument lu comme une valeur logique : FAUX, 0 ou une cellule vide → exacte.
+    const approx = boolArg(args[3], true)
     if (isError(approx)) return approx
     const width = axis === 'v' ? (table.rows[0]?.length ?? 0) : table.rows.length
     if (index < 1) return err('#VALUE!', 'Le numéro de colonne commence à 1')
     if (index > width) return err('#REF!', 'Numéro de colonne au-delà de la plage')
     const keys = axis === 'v' ? table.rows.map((r) => r[0] ?? null) : [...(table.rows[0] ?? [])]
-    const exact = approx === false || approx === 0 || approx === 'FAUX' || approx === 'FALSE'
-    const i = findIndex(keys, lookup, exact ? 0 : 1)
+    const i = findIndex(keys, lookup, approx ? 1 : 0)
     if (i === -1) return notFound()
     return (axis === 'v' ? table.rows[i]?.[index - 1] : table.rows[index - 1]?.[i]) ?? null
   }

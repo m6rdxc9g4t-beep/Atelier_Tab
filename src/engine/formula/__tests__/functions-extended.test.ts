@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { canonicalName, FUNCTION_CATALOG, functionDoc, suggestFunctions } from '../catalog'
 import { clock } from '../functions-date'
 import { listFunctionNames, resolveFunction } from '../functions'
+import { Workbook } from '../workbook'
 import { calc, show } from './helpers'
 
 const v = (formula: string, cells: Parameters<typeof calc>[1] = {}) => show(calc(formula, cells))
@@ -24,6 +25,19 @@ describe('mathématiques', () => {
     expect(v('=PLAFOND(23; 5)')).toBe(25)
     expect(v('=PLANCHER(23; 5)')).toBe(20)
     expect(v('=CEILING(0.21; 0.1)')).toBe(0.3)
+  })
+
+  it('PLAFOND / PLANCHER tiennent compte du signe du multiple, les versions .MATH non', () => {
+    expect(v('=PLAFOND(-2.5; -2)')).toBe(-4)
+    expect(v('=PLANCHER(-2.5; -2)')).toBe(-2)
+    expect(v('=PLAFOND(-2.5; 2)')).toBe(-2)
+    expect(v('=PLANCHER(-2.5; 2)')).toBe(-4)
+    expect(v('=PLAFOND(2.5; -2)')).toBe('#NUM!')
+    expect(v('=PLANCHER(2.5; -2)')).toBe('#NUM!')
+    expect(v('=PLAFOND.MATH(-2.5; -2)')).toBe(-2)
+    expect(v('=PLANCHER.MATH(-2.5; -2)')).toBe(-4)
+    expect(v('=CEILING.MATH(2.5; -2)')).toBe(4)
+    expect(v('=FLOOR.MATH(2.5; -2)')).toBe(2)
   })
 
   it('PRODUIT, MEDIANE, GRANDE.VALEUR, PETITE.VALEUR', () => {
@@ -60,6 +74,12 @@ describe('texte', () => {
     expect(v('=STXT("Atelier"; 2; 3)')).toBe('tel')
     expect(v('=STXT("Atelier"; 0; 3)')).toBe('#VALUE!')
     expect(v('=NBCAR("Été")')).toBe(3)
+  })
+
+  it('NBCAR compte comme les fonctions de position (un emoji = 2, comme Excel)', () => {
+    const cells = { C1: '😀 Bonjour' }
+    expect(v('=NBCAR("😀")')).toBe(2)
+    expect(v('=DROITE(C1; NBCAR(C1)-TROUVE(" "; C1))', cells)).toBe('Bonjour')
   })
 
   it('MAJUSCULE, MINUSCULE, NOMPROPRE, SUPPRESPACE', () => {
@@ -107,6 +127,22 @@ describe('texte', () => {
     expect(v('=TEXTE("2026-11-30"; "jj/mm/aaaa")')).toBe('30/11/2026')
     expect(v('=TEXTE("2026-11-30"; "jjjj j mmmm aaaa")')).toBe('lundi 30 novembre 2026')
     expect(v('=TEXTE("2026-02-03"; "mmm aa")')).toBe('févr. 26')
+  })
+
+  it('TEXTE : « 0,000 » donne trois décimales, « #,##0 » groupe les milliers', () => {
+    expect(v('=TEXTE(1.5; "0,000")')).toBe('1,500')
+    expect(v('=TEXTE(1.5; "0,000 kg")')).toBe('1,500 kg')
+    expect(v('=TEXTE(1234.5; "# ##0,000")')).toBe('1\u202f234,500')
+    expect(v('=TEXTE(1234.5; "#,##0")')).toBe('1\u202f235')
+    expect(v('=TEXTE(1234567; "#,###,##0")')).toBe('1\u202f234\u202f567')
+    expect(v('=TEXTE(1234.5; "#,##0.00")')).toBe('1\u202f234,50')
+  })
+
+  it('TEXTE : un format démesuré donne #VALUE! au lieu de bloquer le calcul', () => {
+    expect(v('=TEXTE(1; "000000000000000000000")')).toBe('000000000000000000001')
+    expect(v('=TEXTE(1; "0000000000000000000000")')).toBe('#VALUE!')
+    expect(v(`=TEXTE(1; "0,${'0'.repeat(101)}")`)).toBe('#VALUE!')
+    expect(show(new Workbook().preview('=TEXTE(1; "0000000000000000000000")'))).toBe('#VALUE!')
   })
 })
 
@@ -215,6 +251,26 @@ describe('agrégats conditionnels', () => {
     expect(v('=NB.SI(A1:A3; ">=15/12/2026")', cells)).toBe(2)
   })
 
+  it('critère numérique calculé à partir d’une date : comparé au numéro de série', () => {
+    const cells = {
+      A1: '2026-10-01',
+      A2: '2026-10-20',
+      A3: '2026-09-01',
+      A4: null,
+      C1: 10,
+      C2: 20,
+      C3: 30,
+    }
+    // `&` est moins prioritaire que `-` : le critère devient le texte ">=46290".
+    expect(v('=NB.SI(A1:A4; ">="&DATE(2026; 10; 25)-30)', cells)).toBe(2)
+    expect(v('=NB.SI.ENS(A1:A3; ">="&A3; A1:A3; "<="&(A3+30))', cells)).toBe(2)
+    expect(v('=SOMME.SI(A1:A3; "<"&(A1+1); C1:C3)', cells)).toBe(40)
+    expect(v('=NB.SI(A1:A4; DATE(2026; 10; 1)+0)', cells)).toBe(1)
+    expect(v('=NB.SI(A1:A4; "<>"&(DATE(2026; 10; 1)+0))', cells)).toBe(3)
+    // Le texte numérique reste hors des comparaisons <, >, comme dans Excel.
+    expect(v('=NB.SI(B1:B2; ">5")', { B1: '10', B2: 10 })).toBe(1)
+  })
+
   it('SOMME.SI.ENS, NB.SI.ENS, MOYENNE.SI(.ENS), MAX.SI.ENS, MIN.SI.ENS', () => {
     expect(v('=SOMME.SI.ENS(C1:C4; B1:B4; "En cours"; C1:C4; ">20000")', lots)).toBe(45000)
     expect(v('=NB.SI.ENS(B1:B4; "En cours"; C1:C4; "<20000")', lots)).toBe(1)
@@ -223,6 +279,33 @@ describe('agrégats conditionnels', () => {
     expect(v('=AVERAGEIFS(C1:C4; B1:B4; "En cours")', lots)).toBe(30000)
     expect(v('=MAX.SI.ENS(C1:C4; B1:B4; "En cours")', lots)).toBe(45000)
     expect(v('=MIN.SI.ENS(C1:C4; B1:B4; "En cours")', lots)).toBe(15000)
+  })
+
+  it('dates d’une colonne Date : MAX.SI.ENS, MIN.SI.ENS et agrégats renvoient une date', () => {
+    const cells = {
+      A1: '2026-10-01',
+      A2: '2026-10-20',
+      A3: '2026-09-01',
+      B1: 'Alice',
+      B2: 'Alice',
+      B3: 'Bob',
+      C1: 1,
+      C2: 0,
+      C3: 0,
+    }
+    const date = (f: string) => v(`=TEXTE(${f}; "jj/mm/aaaa")`, cells)
+    expect(date('MAX.SI.ENS(A1:A3; B1:B3; "Alice")')).toBe('20/10/2026')
+    expect(date('MIN.SI.ENS(A1:A3; B1:B3; "Alice")')).toBe('01/10/2026')
+    expect(date('MOYENNE.SI(B1:B3; "Bob"; A1:A3)')).toBe('01/09/2026')
+    expect(date('MAX(A1:A3)')).toBe('20/10/2026')
+    expect(date('GRANDE.VALEUR(A1:A3; 1)')).toBe('20/10/2026')
+    expect(date('PETITE.VALEUR(A1:A3; 1)')).toBe('01/09/2026')
+    expect(date('MEDIANE(A1:A3)')).toBe('01/10/2026')
+    expect(v('=SOMMEPROD(C1:C3; A1:A3)', cells)).toBe(46296)
+    expect(v('=NB(A1:A3)', cells)).toBe(3)
+    // Le texte numérique reste ignoré dans une plage, comme dans Excel.
+    expect(v('=SOMME(D1:D2)', { D1: '12', D2: 3 })).toBe(3)
+    expect(v('=MAX.SI.ENS(D1:D2; D1:D2; "<>")', { D1: '12', D2: 3 })).toBe(3)
   })
 
   it('plages de critères de tailles différentes : #VALUE!', () => {
@@ -259,6 +342,18 @@ describe('recherche', () => {
   it('RECHERCHEH', () => {
     const cells = { A1: 'T1', B1: 'T2', A2: 100, B2: 200 }
     expect(v('=RECHERCHEH("T2"; A1:B2; 2; FAUX)', cells)).toBe(200)
+  })
+
+  it('RECHERCHEV / RECHERCHEH : une cellule vide en quatrième argument vaut FAUX', () => {
+    const cells = { B1: 10, C1: 'a', B2: 20, C2: 'b', B3: 30, C3: 'c' }
+    expect(v('=RECHERCHEV(25; B1:C3; 2; D1)', cells)).toBe('#N/A')
+    expect(v('=RECHERCHEV(20; B1:C3; 2; D1)', cells)).toBe('b')
+    expect(v('=RECHERCHEV(25; B1:C3; 2; 1)', cells)).toBe('b')
+    expect(v('=RECHERCHEV(25; B1:C3; 2; "FAUX")', cells)).toBe('#N/A')
+    expect(v('=RECHERCHEV(25; B1:C3; 2; "abc")', cells)).toBe('#VALUE!')
+    const row = { A1: 10, B1: 20, C1: 30, A2: 'a', B2: 'b', C2: 'c' }
+    expect(v('=RECHERCHEH(25; A1:C2; 2; D1)', row)).toBe('#N/A')
+    expect(v('=RECHERCHEH(25; A1:C2; 2)', row)).toBe('b')
   })
 
   it('INDEX et EQUIV', () => {

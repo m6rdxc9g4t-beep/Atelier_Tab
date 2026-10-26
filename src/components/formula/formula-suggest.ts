@@ -67,7 +67,12 @@ export function applySuggestion(
   ctx: Pick<FormulaContext, 'prefix' | 'start'>,
   name: string,
 ): { text: string; caret: number } {
-  const end = ctx.start + ctx.prefix.length
+  let end = ctx.start + ctx.prefix.length
+  // Curseur au milieu d'un nom (« =SO|MME(A1) ») : la fin du nom est remplacée aussi, sauf si
+  // c'est une référence collée au nom tapé (« =SOM|A1 »).
+  const tail = /^[A-Za-z0-9_.]*/.exec(text.slice(end))?.[0] ?? ''
+  const isRef = /^[A-Za-z]{1,3}\d+$/.test(tail) && text[end + tail.length] !== '('
+  if (!isRef) end += tail.length
   const hasParen = text[end] === '('
   const insert = hasParen ? name : `${name}(`
   return {

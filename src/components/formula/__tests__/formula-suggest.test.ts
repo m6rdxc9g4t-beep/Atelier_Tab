@@ -32,6 +32,28 @@ describe('aide à la saisie des formules', () => {
     expect(applySuggestion('=som(A1)', inner, 'SOMME')).toEqual({ text: '=SOMME(A1)', caret: 7 })
   })
 
+  it('curseur au milieu d’un nom : le nom entier est remplacé', () => {
+    const ctx = formulaContext('=SOMME(A1:A5)', 3)
+    expect(ctx.prefix).toBe('SO')
+    expect(applySuggestion('=SOMME(A1:A5)', ctx, 'SOMME')).toEqual({
+      text: '=SOMME(A1:A5)',
+      caret: 7,
+    })
+    expect(applySuggestion('=SOMME.SI(', { prefix: 'SOM', start: 1 }, 'SOMME')).toEqual({
+      text: '=SOMME(',
+      caret: 7,
+    })
+    expect(applySuggestion('=SOMME', { prefix: 'SO', start: 1 }, 'SOMME')).toEqual({
+      text: '=SOMME(',
+      caret: 7,
+    })
+    // Une référence collée au nom tapé est conservée.
+    expect(applySuggestion('=SOMA1:A5)', { prefix: 'SOM', start: 1 }, 'SOMME')).toEqual({
+      text: '=SOMME(A1:A5)',
+      caret: 7,
+    })
+  })
+
   it('découpe la syntaxe en arguments', () => {
     const ctx = formulaContext('=RECHERCHEV(', 12)
     expect(syntaxParts(ctx.call!.doc)).toEqual({

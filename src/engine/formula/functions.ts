@@ -5,14 +5,14 @@
  *
  * Règles Excel reproduites pour les agrégats (SUM, AVERAGE, MIN, MAX) :
  * - dans une plage ou une référence, seuls les nombres comptent (texte, booléens et
- *   cellules vides sont ignorés) ;
+ *   cellules vides sont ignorés) ; une date « AAAA-MM-JJ » compte pour son numéro de série ;
  * - un argument littéral est converti (`SUM("3", TRUE)` vaut 4) ;
  * - une erreur rencontrée est propagée.
  *
  * IF et IFERROR sont évalués paresseusement par l'évaluateur, pas ici.
  */
 import { normalizeNumber, toBoolean, toNumber, toText } from './coerce'
-import { flatten, numbersOf, scalarOf, type FunctionSpec } from './function-args'
+import { flatten, numberInRange, numbersOf, scalarOf, type FunctionSpec } from './function-args'
 import { DATE_FUNCTIONS } from './functions-date'
 import { INFO_FUNCTIONS } from './functions-info'
 import { LOOKUP_FUNCTIONS } from './functions-lookup'
@@ -51,7 +51,7 @@ const count: FunctionSpec['impl'] = (args) => {
   let n = 0
   for (const a of args) {
     if (isRange(a)) {
-      for (const row of a.rows) for (const v of row) if (typeof v === 'number') n++
+      for (const row of a.rows) for (const v of row) if (numberInRange(v) !== null) n++
     } else if (!isError(a) && !isError(toNumber(a)) && a !== null) {
       n++
     }
@@ -149,11 +149,9 @@ export const ALIASES: Record<string, string> = {
   'ARRONDI.SUP': 'ROUNDUP',
   'ARRONDI.INF': 'ROUNDDOWN',
   PLAFOND: 'CEILING',
-  'PLAFOND.MATH': 'CEILING',
-  'CEILING.MATH': 'CEILING',
+  'PLAFOND.MATH': 'CEILING.MATH',
   PLANCHER: 'FLOOR',
-  'PLANCHER.MATH': 'FLOOR',
-  'FLOOR.MATH': 'FLOOR',
+  'PLANCHER.MATH': 'FLOOR.MATH',
   SIGNE: 'SIGN',
   PRODUIT: 'PRODUCT',
   MEDIANE: 'MEDIAN',

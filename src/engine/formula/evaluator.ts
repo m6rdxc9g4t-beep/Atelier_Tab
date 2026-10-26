@@ -152,5 +152,11 @@ function evaluateCall(node: Extract<Node, { type: 'call' }>, ctx: EvalContext): 
     const v = evaluateArg(a, ctx)
     args.push(v)
   }
-  return spec.impl(args)
+  // Filet de sécurité : une exception d'une fonction (ex. Intl) ne doit pas interrompre le
+  // recalcul ni l'aperçu de la barre de formules ; elle devient une erreur de la cellule.
+  try {
+    return spec.impl(args)
+  } catch {
+    return err('#VALUE!', `Calcul impossible pour ${node.name}`)
+  }
 }

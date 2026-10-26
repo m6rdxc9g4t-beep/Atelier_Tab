@@ -1,10 +1,19 @@
 /**
  * Fonctions mathématiques et statistiques (ENT, MOD, ARRONDI.SUP, PRODUIT, MEDIANE,
  * SOMMEPROD…). Mêmes règles que les agrégats de base : dans une plage, seuls les nombres
- * comptent ; un argument littéral est converti.
+ * (et les dates « AAAA-MM-JJ », par leur numéro de série) comptent ; un argument littéral est
+ * converti.
  */
 import { normalizeNumber } from './coerce'
-import { asRange, intArg, numArg, numbersOf, sameShape, type FunctionSpec } from './function-args'
+import {
+  asRange,
+  intArg,
+  numArg,
+  numberInRange,
+  numbersOf,
+  sameShape,
+  type FunctionSpec,
+} from './function-args'
 import { err, isError, type CellValue } from './values'
 
 type Impl = FunctionSpec['impl']
@@ -37,15 +46,21 @@ function unary(fn: (x: number) => number | CellValue): Impl {
   }
 }
 
-/** Multiple le plus proche dans le sens donné (PLAFOND vers +∞, PLANCHER vers −∞). */
-function toMultiple(dir: 'ceil' | 'floor'): Impl {
+/**
+ * Multiple le plus proche dans le sens donné. `signed` (PLAFOND, PLANCHER) : le signe du multiple
+ * compte, comme dans Excel ; nombre et multiple négatifs s'arrondissent en s'éloignant de zéro
+ * (PLAFOND) ou vers zéro (PLANCHER), et un nombre positif avec un multiple négatif donne #NUM!.
+ * Sinon (PLAFOND.MATH, PLANCHER.MATH) : signe du multiple ignoré, vers +∞ ou vers −∞.
+ */
+function toMultiple(dir: 'ceil' | 'floor', signed: boolean): Impl {
   return (args) => {
     const x = numArg(args[0])
     if (isError(x)) return x
     const sig = numArg(args[1], 1)
     if (isError(sig)) return sig
     if (sig === 0) return 0
-    const step = Math.abs(sig)
+    if (signed && x > 0 && sig < 0) return err('#NUM!', 'Nombre positif et multiple négatif')
+    const step = signed ? sig : Math.abs(sig)
     const q = Number((x / step).toPrecision(15))
     return normalizeNumber((dir === 'ceil' ? Math.ceil(q) : Math.floor(q)) * step)
   }
@@ -112,7 +127,10 @@ function kth(order: 'large' | 'small'): Impl {
   }
 }
 
-/** SOMMEPROD : somme des produits terme à terme ; le texte et les vides comptent pour 0. */
+/**
+ * SOMMEPROD : somme des produits terme à terme ; le texte et les vides comptent pour 0, une
+ * date « AAAA-MM-JJ » pour son numéro de série.
+ */
 const sumproduct: Impl = (args) => {
   const ranges = args.map(asRange)
   const first = ranges[0]
@@ -128,7 +146,7 @@ const sumproduct: Impl = (args) => {
       for (const r of ranges) {
         const v = r.rows[i]?.[j] ?? null
         if (isError(v)) return v
-        p *= typeof v === 'number' ? v : 0
+        p *= numberInRange(v) ?? 0
       }
       total += p
     }
@@ -167,8 +185,10 @@ export const MATH_FUNCTIONS: Record<string, FunctionSpec> = {
   },
   ROUNDUP: { minArgs: 1, maxArgs: 2, impl: roundWith('up') },
   ROUNDDOWN: { minArgs: 1, maxArgs: 2, impl: roundWith('down') },
-  CEILING: { minArgs: 1, maxArgs: 2, impl: toMultiple('ceil') },
-  FLOOR: { minArgs: 1, maxArgs: 2, impl: toMultiple('floor') },
+  CEILING: { minArgs: 1, maxArgs: 2, impl: toMultiple('ceil', true) },
+  FLOOR: { minArgs: 1, maxArgs: 2, impl: toMultiple('floor', true) },
+  'CEILING.MATH': { minArgs: 1, maxArgs: 2, impl: toMultiple('ceil', false) },
+  'FLOOR.MATH': { minArgs: 1, maxArgs: 2, impl: toMultiple('floor', false) },
   SIGN: { minArgs: 1, maxArgs: 1, impl: unary(Math.sign) },
   PRODUCT: { minArgs: 1, maxArgs: Infinity, impl: product },
   MEDIAN: { minArgs: 1, maxArgs: Infinity, impl: median },

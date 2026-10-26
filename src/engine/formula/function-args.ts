@@ -4,7 +4,7 @@
  * Une fonction reçoit des arguments déjà évalués : une valeur scalaire, ou une plage
  * (`RangeValue`) quand l'argument est une référence ou une plage de cellules.
  */
-import { toBoolean, toNumber, toText } from './coerce'
+import { dateTextToSerial, toBoolean, toNumber, toText } from './coerce'
 import {
   err,
   isError,
@@ -21,6 +21,17 @@ export interface FunctionSpec {
   impl: (args: Arg[]) => CellValue
 }
 
+/**
+ * Nombre porté par une cellule de plage : un nombre, ou une date « AAAA-MM-JJ » (valeur d'une
+ * colonne Date) par son numéro de série, puisqu'une date est un nombre dans Excel. Le texte
+ * numérique (« 12 »), les booléens et les vides sont ignorés, comme dans Excel. Null sinon.
+ */
+export function numberInRange(v: CellValue): number | null {
+  if (typeof v === 'number') return v
+  if (typeof v === 'string') return dateTextToSerial(v.trim())
+  return null
+}
+
 /** Nombres d'une liste d'arguments, ou la première erreur rencontrée. */
 export function numbersOf(args: Arg[]): number[] | FormulaError {
   const out: number[] = []
@@ -29,7 +40,8 @@ export function numbersOf(args: Arg[]): number[] | FormulaError {
       for (const row of a.rows) {
         for (const v of row) {
           if (isError(v)) return v
-          if (typeof v === 'number') out.push(v)
+          const n = numberInRange(v)
+          if (n !== null) out.push(n)
         }
       }
     } else {

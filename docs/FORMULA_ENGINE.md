@@ -40,7 +40,7 @@ qu'il couvre toute la bibliothèque.
 | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Statistiques           | `SUM` (`SOMME`), `AVERAGE` (`MOYENNE`, `AVG`), `MIN`, `MAX`, `COUNT` (`NB`), `COUNTA` (`NBVAL`), `COUNTBLANK` (`NB.VIDE`), `MEDIAN` (`MEDIANE`), `LARGE` / `SMALL` (`GRANDE.VALEUR` / `PETITE.VALEUR`)                                                                                                                                                                                                            |
 | Agrégats conditionnels | `SUMIF` / `SUMIFS` (`SOMME.SI` / `SOMME.SI.ENS`), `COUNTIF` / `COUNTIFS` (`NB.SI` / `NB.SI.ENS`), `AVERAGEIF` / `AVERAGEIFS` (`MOYENNE.SI` / `MOYENNE.SI.ENS`), `MAXIFS` / `MINIFS` (`MAX.SI.ENS` / `MIN.SI.ENS`)                                                                                                                                                                                                 |
-| Mathématiques          | `ROUND` (`ARRONDI`), `ROUNDUP` / `ROUNDDOWN` (`ARRONDI.SUP` / `ARRONDI.INF`), `INT` (`ENT`), `TRUNC` (`TRONQUE`), `CEILING` / `FLOOR` (`PLAFOND` / `PLANCHER`), `ABS`, `SIGN` (`SIGNE`), `MOD`, `POWER` (`PUISSANCE`), `SQRT` (`RACINE`), `PRODUCT` (`PRODUIT`), `SUMPRODUCT` (`SOMMEPROD`), `PI`, `EXP`, `LN`, `LOG`, `LOG10`                                                                                    |
+| Mathématiques          | `ROUND` (`ARRONDI`), `ROUNDUP` / `ROUNDDOWN` (`ARRONDI.SUP` / `ARRONDI.INF`), `INT` (`ENT`), `TRUNC` (`TRONQUE`), `CEILING` / `FLOOR` (`PLAFOND` / `PLANCHER`), `CEILING.MATH` / `FLOOR.MATH` (`PLAFOND.MATH` / `PLANCHER.MATH`), `ABS`, `SIGN` (`SIGNE`), `MOD`, `POWER` (`PUISSANCE`), `SQRT` (`RACINE`), `PRODUCT` (`PRODUIT`), `SUMPRODUCT` (`SOMMEPROD`), `PI`, `EXP`, `LN`, `LOG`, `LOG10`                  |
 | Logique                | `IF` (`SI`), `IFS` (`SI.CONDITIONS`), `SWITCH` (`SI.MULTIPLE`), `IFERROR` (`SIERREUR`), `IFNA` (`SI.NON.DISP`), `AND` (`ET`), `OR` (`OU`), `XOR` (`OUX`), `NOT` (`NON`), `TRUE()` / `FALSE()` (`VRAI()` / `FAUX()`)                                                                                                                                                                                               |
 | Texte                  | `CONCAT` (`CONCATENER`, `CONCATENATE`), `TEXTJOIN` (`JOINDRE.TEXTE`), `LEFT` / `RIGHT` / `MID` (`GAUCHE` / `DROITE` / `STXT`), `LEN` (`NBCAR`), `UPPER` / `LOWER` / `PROPER` (`MAJUSCULE` / `MINUSCULE` / `NOMPROPRE`), `TRIM` (`SUPPRESPACE`), `SUBSTITUTE` (`SUBSTITUE`), `REPLACE` (`REMPLACER`), `FIND` (`TROUVE`), `SEARCH` (`CHERCHE`), `REPT`, `EXACT`, `TEXT` (`TEXTE`), `VALUE` (`CNUM`), `CHAR` (`CAR`) |
 | Dates                  | `TODAY` (`AUJOURDHUI`), `DATE`, `YEAR` / `MONTH` / `DAY` (`ANNEE` / `MOIS` / `JOUR`), `WEEKDAY` (`JOURSEM`), `ISOWEEKNUM` (`NO.SEMAINE.ISO`), `DATEDIF`, `DAYS` (`JOURS`), `EDATE` (`MOIS.DECALER`), `EOMONTH` (`FIN.MOIS`), `NETWORKDAYS` (`NB.JOURS.OUVRES`), `WORKDAY` (`SERIE.JOUR.OUVRE`)                                                                                                                    |
@@ -53,18 +53,30 @@ Règles notables :
   d'une branche qui n'est pas retenue.
 - **Critères** (`SOMME.SI`, `NB.SI.ENS`…) : `5`, `">1000"`, `"<>Terminée"`, `"En*"` (jokers `*` et
   `?`, `~` pour échapper), `""` (vide), `"<>"` (non vide), `"<2026-12-31"` (date) ; texte insensible
-  à la casse.
-- **Recherche** : `RECHERCHEV(…; FAUX)` cherche la valeur exacte (jokers acceptés) ; sans quatrième
-  argument, la valeur approchée (la plus grande inférieure ou égale, première colonne triée).
+  à la casse. Une date compte pour son numéro de série : `">="&AUJOURDHUI()-30` (qui donne
+  `">=46290"`) retient les dates à partir d'il y a 30 jours. Avec `<`, `>`, `<=`, `>=`, le texte
+  numérique (`"12"`) n'est pas comparé, comme dans Excel.
+- **Recherche** : `RECHERCHEV(…; FAUX)` cherche la valeur exacte (jokers acceptés) ; `0` ou une
+  cellule vide valent aussi `FAUX`. Sans quatrième argument, la valeur approchée (la plus grande
+  inférieure ou égale, première colonne triée).
   `RECHERCHEX` : modes `0` exact, `-1` exact ou inférieur, `1` exact ou supérieur, `2` jokers ; sens
   `-1` pour chercher depuis la fin. Valeur absente : `#N/A`.
 - **Dates** : une colonne Date stocke `AAAA-MM-JJ`. Les fonctions de date acceptent ce texte, une
   date `JJ/MM/AAAA` ou un numéro de série Excel, et renvoient une date `AAAA-MM-JJ`. En arithmétique,
   une date vaut son numéro de série : `=Échéance - AUJOURDHUI()` donne un nombre de jours, `=F1 + 7`
   un numéro de série affiché comme une date dans une colonne Date ou une formule au format `date`.
+  Dans une plage, une date compte comme un nombre : `MAX(Échéance)`, `MAX.SI.ENS(Échéance; …)`,
+  `GRANDE.VALEUR`, `MEDIANE` ou `SOMMEPROD` la lisent par son numéro de série, et `NB` la compte.
   `AUJOURDHUI()` est calculé à chaque recalcul de la cellule, pas à minuit.
-- `TEXTE` reconnaît les formats courants : `0`, `0,00`, `# ##0,00 €`, `0 %`, `000`,
-  `jj/mm/aaaa`, `jjjj j mmmm aaaa`, `mmm aa`.
+- `TEXTE` reconnaît les formats courants : `0`, `0,00`, `0,000`, `# ##0,00 €`, `0 %`, `000`,
+  `jj/mm/aaaa`, `jjjj j mmmm aaaa`, `mmm aa`. La virgule est décimale, sauf dans un format à
+  l'anglaise (`#,##0`, `#,##0.00`) où elle groupe les milliers. Au-delà de 21 zéros avant la
+  virgule ou de 100 décimales : `#VALUE!`.
+- `PLAFOND` / `PLANCHER` suivent le signe du multiple comme Excel : `PLAFOND(-2.5; -2)` vaut `-4`,
+  `PLAFOND(2.5; -2)` donne `#NUM!`. `PLAFOND.MATH` / `PLANCHER.MATH` ignorent ce signe et
+  arrondissent vers +∞ / −∞.
+- `NBCAR` compte comme Excel et les fonctions de position (`GAUCHE`, `STXT`, `TROUVE`…) : un emoji
+  vaut 2 caractères.
 - Les arguments omis (`;;`) ne sont pas encore acceptés : écrivez la valeur par défaut.
 
 Ajouter une fonction : son implémentation dans le module de sa famille (`functions-*.ts`), son
@@ -74,6 +86,8 @@ alias français dans `ALIASES` (`functions.ts`), sa fiche dans `catalog.ts` et s
 
 - Cellule vide : `0` en arithmétique, `""` en concaténation, `FALSE` en logique.
 - Texte numérique (`"3"`) accepté en arithmétique ; texte non numérique → `#VALUE!`.
+- Dans une plage, les agrégats (`SOMME`, `MAX`, `MAX.SI.ENS`…) ne retiennent que les nombres et les
+  dates `AAAA-MM-JJ` ; texte (même numérique), booléens et vides sont ignorés.
 - Résultats arrondis à 15 chiffres significatifs (`0.1+0.2` → `0.3`).
 - Comparaisons : nombres < textes < booléens ; textes insensibles à la casse.
 

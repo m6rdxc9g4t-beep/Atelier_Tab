@@ -261,14 +261,24 @@ function formatNumberPattern(n: number, pattern: string): string | null {
   const suffix = literal(suffixRaw)
   const percent = suffix.includes('%') || prefix.includes('%')
   const core = body.trimEnd()
+  // Virgule décimale à la française (« 0,00 », « 0,000 kg »), sauf groupement à l'anglaise :
+  // virgule précédée d'un # et suivie de trois chiffres (« #,##0 »), ou plusieurs virgules.
   let decimalSep: string | null = null
   if (core.includes('.')) decimalSep = '.'
-  else if (core.includes(',') && !/[#0],[#0]{3}(?![#0])/.test(core)) decimalSep = ','
+  else if (
+    core.includes(',') &&
+    !/#,[#0]{3}(?![#0])/.test(core) &&
+    (core.match(/,/g) ?? []).length === 1
+  ) {
+    decimalSep = ','
+  }
   const [intPart = '', decPart = ''] = decimalSep ? core.split(decimalSep) : [core, '']
   const decimals = (decPart.match(/[0#]/g) ?? []).length
   const minDecimals = (decPart.match(/0/g) ?? []).length
   const grouping = /[#0][\s,\u00a0\u202f][#0]/.test(intPart)
   const minInt = (intPart.match(/0/g) ?? []).length
+  // Au-delà, Intl.NumberFormat lève une exception : format refusé (#VALUE!).
+  if (minInt > 21 || decimals > 100) return null
   const out = new Intl.NumberFormat('fr-FR', {
     minimumFractionDigits: minDecimals,
     maximumFractionDigits: decimals,
@@ -299,9 +309,10 @@ const text: Impl = (args) => {
   return formatNumberPattern(n, pattern) ?? err('#VALUE!', `Format non reconnu : « ${pattern} »`)
 }
 
+/** NBCAR compte les unités UTF-16, comme Excel et les fonctions de position (😀 = 2). */
 const len: Impl = (args) => {
   const t = textArg(args[0])
-  return isError(t) ? t : [...t].length
+  return isError(t) ? t : t.length
 }
 
 const char: Impl = (args) => {
