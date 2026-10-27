@@ -38,6 +38,10 @@ describe('définitions', () => {
       'add_column',
       'update_column',
       'delete_column',
+      'move_rows',
+      'move_column',
+      'configure_view',
+      'add_collaborator',
       'create_project',
       'create_table',
       'import_csv',
@@ -246,6 +250,144 @@ describe('modification', () => {
     const read = await call('read_table', { table: 'Planning & Lots' })
     expect(read.json.columns[1].choices).toEqual(['À faire', 'En cours', 'Terminée', 'Réceptionné'])
     expect(read.json.rows[1].cells.B).toBe('Terminée')
+  })
+
+  it('change le type d’une colonne en convertissant ses valeurs', async () => {
+    open()
+    const res = await call('update_column', {
+      table: 'Planning & Lots',
+      column: 'Échéance',
+      type: 'text',
+    })
+    expect(res.json.updated).toMatchObject({ label: 'Échéance', type: 'text' })
+    expect(res.json.converted).toBe(3)
+    const read = await call('read_table', { table: 'Planning & Lots' })
+    expect(read.json.rows[0].cells.F).toBe('30/11/2026')
+    const refused = await call('update_column', {
+      table: 'Planning & Lots',
+      column: 'Coût HT',
+      type: 'formula',
+    })
+    expect(refused.ok).toBe(false)
+    expect(refused.content).toMatch(/donnez la formule/)
+  })
+
+  it('déplace des lignes et une colonne, formules réécrites', async () => {
+    open()
+    const rows = await call('move_rows', { table: 'Planning & Lots', from_row: 3, before_row: 1 })
+    expect(rows.json).toEqual({ moved: 1, rows: [1] })
+    const col = await call('move_column', {
+      table: 'Planning & Lots',
+      column: 'Coût HT',
+      before: 'A',
+    })
+    expect(col.json.moved).toMatchObject({ letter: 'A', label: 'Coût HT' })
+    const read = await call('read_table', { table: 'Planning & Lots' })
+    // Le total suit : =SUM(A1:A3), et la colonne TTC lit maintenant A.
+    expect(read.json.rows[3].cells.A).toBe(88500)
+    expect(read.json.columns.find((c: { label: string }) => c.label === 'Coût TTC').formula).toBe(
+      '=A1*1.2',
+    )
+    const same = await call('move_rows', { table: 'Planning & Lots', from_row: 1, before_row: 2 })
+    expect(same.ok).toBe(false)
+  })
+
+  it('règle les filtres, le tri et les colonnes masquées d’une vue', async () => {
+    open()
+    const res = await call('configure_view', {
+      table: 'Planning & Lots',
+      filters: [{ column: 'Statut', op: 'equals', value: 'En cours' }],
+      sorts: [{ column: 'Coût HT', direction: 'desc' }],
+      hidden_columns: ['Échéance', 'A'],
+      row_height: 'tall',
+    })
+    expect(res.json).toMatchObject({
+      view: 'grid',
+      filters: [{ column: 'Statut', op: 'equals', value: 'opt_doing' }],
+      sorts: [{ column: 'Coût HT', direction: 'desc' }],
+      hidden_columns: ['Échéance'],
+      row_height: 'tall',
+    })
+    const kanban = await call('configure_view', {
+      table: 'Planning & Lots',
+      view: 'kanban',
+      group_by: 'Statut',
+    })
+    expect(kanban.json).toMatchObject({ view: 'kanban', group_by: 'Statut', filters: [] })
+    const bad = await call('configure_view', {
+      table: 'Planning & Lots',
+      filters: [{ column: 'Statut', op: 'gt', value: 'x' }],
+    })
+    expect(bad.ok).toBe(false)
+    expect(bad.content).toMatch(/impossible sur « Statut »/)
+    // Aucune donnée modifiée.
+    const read = await call('read_table', { table: 'Planning & Lots' })
+    expect(read.json.rows).toHaveLength(4)
+  })
+
+  it('configure_view refusé ne change pas la vue ouverte', async () => {
+    open()
+    const activeView = () => session!.snapshot().tables.tbl_planning_lots?.activeViewId
+    const before = activeView()
+    const views = session!.snapshot().tables.tbl_planning_lots?.views.length
+    const badGroup = await call('configure_view', {
+      table: 'Planning & Lots',
+      view: 'kanban',
+      group_by: 'A',
+    })
+    expect(badGroup.ok).toBe(false)
+    expect(badGroup.content).toMatch(/n’est pas une colonne de statut/)
+    const badColumn = await call('configure_view', {
+      table: 'Planning & Lots',
+      view: 'sheet',
+      filters: [{ column: 'Colonne inconnue', op: 'is_empty' }],
+    })
+    expect(badColumn.ok).toBe(false)
+    expect(activeView()).toBe(before)
+    expect(session!.snapshot().tables.tbl_planning_lots?.views).toHaveLength(views!)
+  })
+
+  it('configure_view lit la valeur d’un filtre de formule dans le type de son résultat', async () => {
+    open()
+    await call('add_column', {
+      table: 'Planning & Lots',
+      label: 'Marge',
+      type: 'formula',
+      formula: '=0.25',
+      format: 'percent',
+    })
+    await call('add_column', {
+      table: 'Planning & Lots',
+      label: 'Fin',
+      type: 'formula',
+      formula: '=F1',
+      format: 'date',
+    })
+    const res = await call('configure_view', {
+      table: 'Planning & Lots',
+      filters: [
+        { column: 'Marge', op: 'gt', value: '20 %' },
+        { column: 'Fin', op: 'lt', value: '01/12/2026' },
+      ],
+    })
+    // Comme le menu des filtres : 20 % est stocké 0,2 (et non 20), la date en AAAA-MM-JJ.
+    expect(res.json.filters).toEqual([
+      { column: 'Marge', op: 'gt', value: 0.2 },
+      { column: 'Fin', op: 'lt', value: '2026-12-01' },
+    ])
+  })
+
+  it('ajoute un collaborateur, sans doublon', async () => {
+    open()
+    const a = await call('add_collaborator', { name: 'Léa Martin' })
+    expect(a.json.collaborator).toMatchObject({ name: 'Léa Martin', initials: 'LM' })
+    const b = await call('add_collaborator', { name: 'léa martin' })
+    expect(b.json.collaborator.id).toBe(a.json.collaborator.id)
+    const set = await call('set_cells', {
+      table: 'Planning & Lots',
+      cells: [{ row: 1, column: 'Responsable', value: 'Léa Martin' }],
+    })
+    expect(set.ok).toBe(true)
   })
 
   it('crée un projet et une table avec ses colonnes', async () => {
@@ -651,6 +793,95 @@ describe('garde-fous de l’assistant (SUITE.md §5.4)', () => {
     expect(yes.asked[0]?.message).toBe(
       'L’assistant veut supprimer la colonne F « Échéance » de « Planning & Lots » et toutes ses valeurs.',
     )
+  })
+
+  it('passage d’une colonne en formule : confirmation demandée, valeurs remplacées comptées', async () => {
+    const args = { table: 'Planning & Lots', column: 'Coût HT', type: 'formula', formula: '=100' }
+    const no = confirmer(false)
+    open({ caller: 'assistant', confirm: no.confirm })
+    const refused = await call('update_column', args)
+    expect(refused.ok).toBe(false)
+    expect(refused.content).toMatch(/Refusé par l’utilisateur : rien n’a été fait/)
+    expect(no.asked.map((r) => [r.tool, r.kind, r.message])).toEqual([
+      [
+        'update_column',
+        'delete',
+        'L’assistant veut transformer la colonne C « Coût HT » de « Planning & Lots » en formule =100 : 3 valeurs saisies seront remplacées.',
+      ],
+    ])
+    const untouched = session!.snapshot().tables.tbl_planning_lots
+    expect(untouched?.fields.cost_ht?.type).toBe('currency')
+    expect(untouched?.records.rec_01?.cells.cost_ht).toBe(45000)
+
+    const yes = confirmer(true)
+    open({ caller: 'assistant', confirm: yes.confirm })
+    const res = await call('update_column', args)
+    expect(res.json).toMatchObject({ updated: { type: 'formula', formula: '=100' }, replaced: 3 })
+    const read = await call('read_table', { table: 'Planning & Lots' })
+    expect(read.json.rows[0].cells.C).toBe(100)
+    // La ligne de total garde sa formule.
+    expect(read.json.rows[3].formulas.C).toBe('=SUM(C1:C3)')
+
+    // Aucune valeur saisie : rien à confirmer.
+    await call('add_column', { table: 'Planning & Lots', label: 'Remarques', type: 'text' })
+    const empty = await call('update_column', {
+      table: 'Planning & Lots',
+      column: 'Remarques',
+      type: 'formula',
+      formula: '=1',
+    })
+    expect(empty.json.replaced).toBe(0)
+    expect(yes.asked).toHaveLength(1)
+  })
+
+  it('statut retiré encore utilisé : confirmation, cellules vidées et filtres retirés', async () => {
+    const choices = [
+      'À faire',
+      'En revue',
+      'En attente',
+      'Bloquée',
+      'Terminée',
+      'Résolue',
+      'Rejetée',
+    ]
+    const args = { table: 'Planning & Lots', column: 'Statut', choices }
+    const no = confirmer(false)
+    open({ caller: 'assistant', confirm: no.confirm })
+    expect((await call('update_column', args)).ok).toBe(false)
+    expect(no.asked[0]?.message).toBe(
+      'L’assistant veut retirer « En cours » de la colonne B « Statut » de « Planning & Lots » : 1 cellule sera vidée.',
+    )
+    expect(session!.snapshot().tables.tbl_planning_lots?.records.rec_01?.cells.status).toBe(
+      'opt_doing',
+    )
+
+    const yes = confirmer(true)
+    open({ caller: 'assistant', confirm: yes.confirm })
+    await call('configure_view', {
+      table: 'Planning & Lots',
+      filters: [{ column: 'Statut', op: 'equals', value: 'En cours' }],
+    })
+    const res = await call('update_column', args)
+    expect(res.json.cleared).toBe(1)
+    const t = session!.snapshot().tables.tbl_planning_lots!
+    expect(t.records.rec_01?.cells.status ?? null).toBeNull()
+    expect(t.records.rec_02?.cells.status).toBe('opt_done')
+    expect(t.views.find((v) => v.id === t.activeViewId)?.filters).toEqual([])
+  })
+
+  it('conversion en statut avec une liste qui oublie des valeurs : refusée, rien ne change', async () => {
+    open({ caller: 'assistant', confirm: confirmer(true).confirm })
+    const res = await call('update_column', {
+      table: 'Planning & Lots',
+      column: 'Lot / Tâche',
+      type: 'select',
+      choices: ['Gros œuvre'],
+    })
+    expect(res.ok).toBe(false)
+    expect(res.content).toMatch(/convertissez d’abord la colonne sans choices/)
+    const t = session!.snapshot().tables.tbl_planning_lots!
+    expect(t.fields.task_name?.type).toBe('text')
+    expect(t.records.rec_02?.cells.task_name).toBe('Charpente bois')
   })
 
   it('configure_export : bouclage sans confirmation ; ailleurs, refusé hors ligne, confirmé en ligne', async () => {

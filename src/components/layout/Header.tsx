@@ -1,56 +1,46 @@
-import { lazy, Suspense, useCallback, useState } from 'react'
-import {
-  ChevronRight,
-  Columns3,
-  Grid3x3,
-  PanelLeftOpen,
-  Send,
-  Sparkles,
-  Table2,
-  Upload,
-} from 'lucide-react'
+import { useState } from 'react'
+import { ChevronRight, PanelLeftOpen, Search, Sparkles } from 'lucide-react'
 import { useAssistant } from '@/store/assistant.store'
 import { useDataStore, useUIStore } from '@/store'
-import type { Table, ViewMode } from '@/types/domain'
+import type { Table } from '@/types/domain'
 import { cn } from '@/lib/cn'
+import { shortcut } from '@/lib/keys'
 import { ProviderBadges } from '@/components/assistant/ProviderBadges'
 import { AtelierBrand } from './AtelierBrand'
 import { OnlineToggle } from './OnlineToggle'
 import { SuiteSwitcher } from './SuiteSwitcher'
 import { ThemeToggle } from './ThemeToggle'
 
-// Chargé à la première ouverture, comme l'assistant : le démarrage reste léger.
-const ExportDialog = lazy(() =>
-  import('@/components/dataflow/ExportDialog').then((m) => ({ default: m.ExportDialog })),
-)
-
-const MODES: { mode: ViewMode; label: string; icon: typeof Table2; hint: string }[] = [
-  { mode: 'hybrid', label: 'Grille', icon: Table2, hint: 'Badges, avatars et formules' },
-  { mode: 'sheet', label: 'Tableur', icon: Grid3x3, hint: 'Valeurs brutes, comme dans Excel' },
-  { mode: 'kanban', label: 'Kanban', icon: Columns3, hint: 'Cartes groupées par statut' },
-]
-
-export function Header({ table, mode }: { table: Table; mode: ViewMode }) {
-  const [exportOpen, setExportOpen] = useState(false)
-  const closeExport = useCallback(() => setExportOpen(false), [])
+/**
+ * En-tête de l'application : suite et marque, fil d'Ariane (double-clic sur le nom de la table
+ * pour la renommer), recherche ⌘K, moteurs d'IA, mode en ligne, assistant et thème.
+ * Les outils de la table (modes, filtres, import / export) sont dans la barre de vue.
+ */
+export function Header({ table }: { table: Table }) {
   const project = useDataStore((s) => s.projects[table.projectId])
   const workspace = useDataStore((s) => (project ? s.workspaces[project.workspaceId] : undefined))
-  const setViewMode = useDataStore((s) => s.setViewMode)
   const sidebarCollapsed = useUIStore((s) => s.sidebarCollapsed)
   const toggleSidebar = useUIStore((s) => s.toggleSidebar)
-  const openImport = useUIStore((s) => s.openImport)
+  const setPaletteOpen = useUIStore((s) => s.setPaletteOpen)
   const assistantOpen = useAssistant((s) => s.open)
   const toggleAssistant = useAssistant((s) => s.toggle)
+  const [renaming, setRenaming] = useState(false)
+
+  const rename = (name: string) => {
+    const clean = name.trim()
+    if (clean && clean !== table.name) useDataStore.getState().renameTable(table.id, clean)
+    setRenaming(false)
+  }
 
   return (
-    <header className="@container relative z-30 flex h-11 shrink-0 items-center gap-3 border-b border-line-strong bg-sidebar/70 px-3 backdrop-blur-sm">
+    <header className="@container relative z-30 flex h-12 shrink-0 items-center gap-3 border-b border-line-strong bg-sidebar/70 px-3 backdrop-blur-sm">
       {sidebarCollapsed && (
         <button
           type="button"
           onClick={toggleSidebar}
           aria-label="Afficher le panneau des projets"
           title="Afficher le panneau des projets"
-          className="rounded-md p-1 text-muted hover:bg-surface-hover hover:text-ink"
+          className="btn-icon"
         >
           <PanelLeftOpen size={15} />
         </button>
@@ -63,62 +53,47 @@ export function Header({ table, mode }: { table: Table; mode: ViewMode }) {
       <span className="h-4 w-px shrink-0 bg-line" aria-hidden />
 
       <nav aria-label="Fil d'Ariane" className="flex min-w-0 flex-1 items-center gap-1 text-muted">
-        {workspace && <span className="truncate">{workspace.name}</span>}
-        {workspace && <ChevronRight size={13} className="shrink-0 text-faint" />}
-        {project && <span className="truncate">{project.name}</span>}
-        {project && <ChevronRight size={13} className="shrink-0 text-faint" />}
-        <span className="atelier-neon-text max-w-[60%] shrink-0 truncate font-semibold text-ink">
-          {table.name}
-        </span>
+        {workspace && <span className="truncate @max-[60rem]:hidden">{workspace.name}</span>}
+        {workspace && (
+          <ChevronRight size={13} className="shrink-0 text-faint @max-[60rem]:hidden" />
+        )}
+        {project && <span className="truncate @max-[40rem]:hidden">{project.name}</span>}
+        {project && <ChevronRight size={13} className="shrink-0 text-faint @max-[40rem]:hidden" />}
+        {renaming ? (
+          <input
+            autoFocus
+            defaultValue={table.name}
+            aria-label="Nom de la table"
+            onFocus={(e) => e.currentTarget.select()}
+            onBlur={(e) => rename(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.nativeEvent.isComposing || e.keyCode === 229) return
+              if (e.key === 'Enter') e.currentTarget.blur()
+              if (e.key === 'Escape') setRenaming(false)
+            }}
+            className="h-7 w-56 rounded-md border border-accent bg-field px-2 font-semibold text-ink outline-none"
+          />
+        ) : (
+          <h1
+            onDoubleClick={() => setRenaming(true)}
+            title="Double-cliquez pour renommer la table"
+            className="atelier-neon-text max-w-[60%] shrink-0 cursor-text truncate text-[14px] font-semibold text-ink"
+          >
+            {table.name}
+          </h1>
+        )}
       </nav>
 
-      <div
-        role="tablist"
-        aria-label="Mode d'affichage"
-        className="flex shrink-0 rounded-lg border border-line-strong bg-field p-0.5"
-      >
-        {MODES.map(({ mode: m, label, icon: Icon, hint }) => (
-          <button
-            key={m}
-            type="button"
-            role="tab"
-            aria-selected={mode === m}
-            title={hint}
-            onClick={() => setViewMode(table.id, m)}
-            className={cn(
-              'flex h-7 items-center gap-1.5 rounded-md px-2.5',
-              mode === m
-                ? 'bg-accent-soft font-medium text-ink shadow-[0_0_14px_-4px_var(--atelier-signature)] ring-1 ring-line-strong [&>svg]:text-accent-fg'
-                : 'text-muted hover:text-ink',
-            )}
-          >
-            <Icon size={14} />
-            {/* Fenêtre étroite (assistant ouvert…) : icônes seules. */}
-            <span className="@max-[58rem]:sr-only">{label}</span>
-          </button>
-        ))}
-      </div>
-
       <button
         type="button"
-        onClick={() => openImport({ projectId: table.projectId, tableId: table.id })}
-        aria-label="Importer un fichier CSV"
-        title="Importer un fichier CSV dans cette table ou dans une nouvelle table"
-        className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-line-strong bg-field px-2.5 text-muted hover:bg-surface-hover hover:text-ink"
+        onClick={() => setPaletteOpen(true)}
+        aria-label="Rechercher une table ou une action"
+        title={`Rechercher une table ou une action (${shortcut('K')})`}
+        className="btn h-8 w-56 justify-start text-faint @max-[64rem]:w-auto"
       >
-        <Upload size={14} />
-        <span className="@max-[90rem]:sr-only">Importer</span>
-      </button>
-      <button
-        type="button"
-        onClick={() => setExportOpen(true)}
-        aria-label="Exporter vers Atelier Projets"
-        title="Exporter cette table vers Atelier Projets (JSON, CSV ou envoi direct)"
-        className="flex h-8 shrink-0 items-center gap-1.5 atelier-btn-primary rounded-lg px-3 font-medium hover:brightness-110"
-      >
-        <Send size={14} />
-        <span className="@max-[80rem]:hidden">Exporter vers Atelier Projets</span>
-        <span className="hidden @max-[80rem]:inline">Exporter</span>
+        <Search size={14} />
+        <span className="flex-1 text-left @max-[64rem]:sr-only">Rechercher…</span>
+        <kbd className="kbd @max-[64rem]:hidden">{shortcut('K')}</kbd>
       </button>
       <ProviderBadges className="@max-[72rem]:hidden" />
       <OnlineToggle labelClassName="@max-[44rem]:sr-only" />
@@ -126,7 +101,7 @@ export function Header({ table, mode }: { table: Table; mode: ViewMode }) {
         type="button"
         onClick={toggleAssistant}
         aria-pressed={assistantOpen}
-        title="Assistant IA (⌘J)"
+        title={`Assistant IA (${shortcut('J')})`}
         className={cn(
           'flex h-8 shrink-0 items-center gap-1.5 rounded-lg border px-2.5',
           assistantOpen
@@ -138,11 +113,6 @@ export function Header({ table, mode }: { table: Table; mode: ViewMode }) {
         <span className="@max-[48rem]:sr-only">Assistant</span>
       </button>
       <ThemeToggle />
-      {exportOpen && (
-        <Suspense fallback={null}>
-          <ExportDialog table={table} open onClose={closeExport} />
-        </Suspense>
-      )}
     </header>
   )
 }

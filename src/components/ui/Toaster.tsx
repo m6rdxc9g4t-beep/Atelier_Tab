@@ -2,7 +2,7 @@ import { AlertTriangle, Info, OctagonX, X } from 'lucide-react'
 import { useNotices } from '@/store'
 import { cn } from '@/lib/cn'
 
-/** Messages courts en bas à gauche de la zone de travail. */
+/** Messages courts en bas de la zone de travail, avec un bouton (« Annuler ») si besoin. */
 export function Toaster() {
   const notices = useNotices((s) => s.notices)
   const dismiss = useNotices((s) => s.dismiss)
@@ -34,6 +34,18 @@ export function Toaster() {
                 <p className="mt-0.5 text-[12px] whitespace-pre-line text-muted">{n.detail}</p>
               )}
             </div>
+            {n.action && (
+              <button
+                type="button"
+                onClick={() => {
+                  n.action?.run()
+                  dismiss(n.id)
+                }}
+                className="shrink-0 rounded-md px-2 py-0.5 font-medium text-accent-fg hover:bg-surface-hover"
+              >
+                {n.action.label}
+              </button>
+            )}
             <button
               type="button"
               onClick={() => dismiss(n.id)}

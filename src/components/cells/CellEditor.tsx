@@ -1,8 +1,11 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
-import { cancelEdit, commitEdit, type Move } from '@/store/grid-actions'
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { Plus } from 'lucide-react'
+import { cancelEdit, commitEdit, commitWithNewOption, type Move } from '@/store/grid-actions'
 import { useDataStore, useUIStore } from '@/store'
 import type { Field } from '@/types/domain'
 import { OwnerChip, StatusBadge } from '@/components/ui/Badge'
+import { Floating } from '@/components/ui/Floating'
+import { useFormulaAssist } from '@/components/formula/useFormulaAssist'
 import { cn } from '@/lib/cn'
 
 interface CellEditorProps {
@@ -14,12 +17,16 @@ interface CellEditorProps {
 
 interface Option {
   value: string
-  render: React.ReactNode
+  render: ReactNode
+  /** Choix à créer (« + Ajouter « Urgent » »). */
+  create?: boolean
 }
 
 /**
  * Éditeur en place. Champ texte pour tous les types ; pour un statut ou un responsable,
- * une liste de choix filtrée par la saisie s'ouvre sous la cellule.
+ * une liste de choix filtrée par la saisie s'ouvre sous la cellule (avec « Ajouter » pour un
+ * libellé nouveau, comme Airtable) ; pour une formule, l'aide sur les fonctions. Listes et aide
+ * sont rendues dans `<body>` : la cellule rogne son contenu et les lignes suivantes la couvrent.
  */
 export function CellEditor({ field, align, onDone }: CellEditorProps) {
   const draft = useUIStore((s) => s.editing?.draft ?? '')
@@ -27,7 +34,18 @@ export function CellEditor({ field, align, onDone }: CellEditorProps) {
   const updateDraft = useUIStore((s) => s.updateDraft)
   const collaborators = useDataStore((s) => s.collaborators)
   const inputRef = useRef<HTMLInputElement>(null)
+  // Cadre de l'éditeur (la cellule) : ancre des listes flottantes, connue une fois monté.
+  const [box, setBox] = useState<HTMLDivElement | null>(null)
   const [highlight, setHighlight] = useState(0)
+  // Choix mis en évidence avec ↑ ↓ : Entrée le prend même si la saisie est vide.
+  const [navigated, setNavigated] = useState(false)
+  const formula = draft.startsWith('=')
+  const assist = useFormulaAssist({
+    value: draft,
+    onChange: updateDraft,
+    getInput: () => inputRef.current,
+    anchor: box,
+  })
 
   useEffect(() => {
     if (!focusHere) return
@@ -38,47 +56,74 @@ export function CellEditor({ field, align, onDone }: CellEditorProps) {
   }, [focusHere])
 
   const options = useMemo<Option[]>(() => {
-    if (draft.startsWith('=')) return []
+    if (formula) return []
     const q = draft.trim().toLocaleLowerCase('fr')
     const match = (label: string) => q === '' || label.toLocaleLowerCase('fr').includes(q)
+    const exact = (label: string) => label.toLocaleLowerCase('fr') === q
     if (field.type === 'select') {
-      return (field.options?.choices ?? [])
+      const choices = field.options?.choices ?? []
+      const list: Option[] = choices
         .filter((c) => match(c.label))
         .map((c) => ({ value: c.label, render: <StatusBadge label={c.label} color={c.color} /> }))
+      if (q && !choices.some((c) => exact(c.label))) {
+        list.push({ value: draft.trim(), create: true, render: <NewOption label={draft.trim()} /> })
+      }
+      return list
     }
     if (field.type === 'owner') {
-      return Object.values(collaborators)
+      const people = Object.values(collaborators)
+      const list: Option[] = people
         .filter((c) => match(c.name))
         .map((c) => ({ value: c.name, render: <OwnerChip person={c} /> }))
+      if (q && !people.some((c) => exact(c.name) || c.initials.toLocaleLowerCase('fr') === q)) {
+        list.push({
+          value: draft.trim(),
+          create: true,
+          render: <NewOption label={draft.trim()} person />,
+        })
+      }
+      return list
     }
     return []
-  }, [draft, field, collaborators])
+  }, [draft, field, collaborators, formula])
 
   const listOpen = options.length > 0
   const active = Math.min(highlight, Math.max(options.length - 1, 0))
+  // Saisie effacée : tous les choix sont listés, aucun n'est visé tant qu'on ne navigue pas.
+  const targeted = navigated || draft.trim() !== ''
 
   const finish = (move: Move) => {
     if (commitEdit(move)) onDone()
   }
 
-  const pick = (value: string) => {
-    updateDraft(value)
+  const pick = (option: Option) => {
+    if (option.create) {
+      if (commitWithNewOption(option.value)) onDone()
+      return
+    }
+    updateDraft(option.value)
     // La sélection d'un choix valide immédiatement la cellule.
     queueMicrotask(() => finish('none'))
   }
 
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    // Composition en cours (méthode de saisie japonaise, chinoise…) : Entrée la valide, elle.
+    if (e.nativeEvent.isComposing || e.keyCode === 229) return
+    if (formula && assist.onKeyDown(e)) return
     if (listOpen && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
       e.preventDefault()
       const delta = e.key === 'ArrowDown' ? 1 : -1
-      setHighlight((active + delta + options.length) % options.length)
+      if (!targeted) setHighlight(delta > 0 ? 0 : options.length - 1)
+      else setHighlight((active + delta + options.length) % options.length)
+      setNavigated(true)
       return
     }
     if (e.key === 'Enter') {
       e.preventDefault()
-      const chosen = listOpen ? options[active] : undefined
-      if (chosen && chosen.value !== draft) {
-        pick(chosen.value)
+      // Saisie effacée sans choix visé : Entrée vide la cellule.
+      const chosen = listOpen && targeted ? options[active] : undefined
+      if (chosen && (chosen.create || chosen.value !== draft)) {
+        pick(chosen)
         return
       }
       finish(e.shiftKey ? 'up' : 'down')
@@ -93,49 +138,70 @@ export function CellEditor({ field, align, onDone }: CellEditorProps) {
   }
 
   return (
-    <div className="absolute inset-0 z-20">
+    <div ref={setBox} className="absolute inset-0 z-20">
       <input
         ref={inputRef}
         value={draft}
         onChange={(e) => {
           updateDraft(e.target.value)
           setHighlight(0)
+          setNavigated(false)
+          assist.sync()
         }}
         onKeyDown={onKeyDown}
+        onKeyUp={assist.sync}
+        onClick={assist.sync}
         placeholder={field.type === 'date' ? 'JJ/MM/AAAA' : undefined}
         spellCheck={false}
         aria-label={`Modifier ${field.label}`}
         className={cn(
           'size-full bg-surface-raised px-2 text-ink shadow-[inset_0_0_0_2px_var(--accent)] outline-none placeholder:text-faint',
-          draft.startsWith('=') && 'font-mono text-[12px]',
-          align === 'right' && !draft.startsWith('=') && 'text-right',
+          formula && 'font-mono text-[12px]',
+          align === 'right' && !formula && 'text-right',
         )}
       />
-      {listOpen && (
+      {formula && focusHere && assist.panel}
+      <Floating open={listOpen} anchor={box} matchWidth className="max-h-72 overflow-y-auto p-0">
         <ul
           role="listbox"
-          className="absolute top-full left-0 mt-1 min-w-full rounded-lg border border-edge bg-surface-raised p-1 shadow-glow-strong"
+          aria-label={`Choix pour ${field.label}`}
+          // Un clic dans la liste laisse le focus dans le champ.
+          onMouseDown={(e) => e.preventDefault()}
+          className="p-1"
         >
           {options.map((o, i) => (
             <li
-              key={o.value}
+              key={`${o.create ? '+' : ''}${o.value}`}
               role="option"
-              aria-selected={i === active}
+              aria-selected={targeted && i === active}
               onMouseDown={(e) => {
                 e.preventDefault()
-                pick(o.value)
+                pick(o)
               }}
-              onMouseEnter={() => setHighlight(i)}
+              onMouseEnter={() => {
+                setHighlight(i)
+                setNavigated(true)
+              }}
               className={cn(
-                'flex cursor-pointer items-center rounded-md px-2 py-1',
-                i === active && 'bg-surface-hover',
+                'flex cursor-pointer items-center rounded-md px-2 py-1 whitespace-nowrap',
+                targeted && i === active && 'bg-surface-hover',
+                o.create && 'mt-1 border-t border-line pt-1.5',
               )}
             >
               {o.render}
             </li>
           ))}
         </ul>
-      )}
+      </Floating>
     </div>
+  )
+}
+
+function NewOption({ label, person }: { label: string; person?: boolean }) {
+  return (
+    <span className="flex items-center gap-1.5 text-accent-fg">
+      <Plus size={13} />
+      {person ? 'Ajouter le collaborateur' : 'Ajouter le choix'} « {label} »
+    </span>
   )
 }

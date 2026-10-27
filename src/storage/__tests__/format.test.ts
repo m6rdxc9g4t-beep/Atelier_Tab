@@ -65,6 +65,17 @@ describe('format sur disque', () => {
     expect(parsed.fields.cost_ht?.atelierMapping).toBe('time_spent')
   })
 
+  it('relit une colonne-formule au format date', () => {
+    const data = createDemoData()
+    data.tables.tbl_planning_lots!.fields.cost_ttc!.options = { resultFormat: 'date' }
+    const files = serializeData(data)
+    const parsed = parseTableFile(
+      'tables/tbl_planning_lots.json',
+      files.get('tables/tbl_planning_lots.json')!,
+    )
+    expect(parsed.fields.cost_ttc?.options?.resultFormat).toBe('date')
+  })
+
   it('reconnaît les chemins de tables', () => {
     expect(tableIdFromPath('tables/tbl_x.json')).toBe('tbl_x')
     expect(tableIdFromPath('tables/.tbl_x.json.123.tmp')).toBeNull()
@@ -97,6 +108,20 @@ describe('tolérance aux éditions externes', () => {
     expect(table.rowOrder).not.toContain('rec_fantome')
     expect(table.fieldOrder).not.toContain('fld_fantome')
     expect(table.activeViewId).toBe('view_planning_grid')
+  })
+
+  it('agrégats du pied de grille : une valeur inconnue est ignorée seule', () => {
+    const t = base()
+    t.views[0].summaries = { cost_ht: 'average', cost_ttc: 'median', status: 'filled' }
+    t.views[0].rowHeight = 'géant'
+    const view = parseTableFile('tables/tbl_planning_lots.json', JSON.stringify(t)).views[0]
+    expect(view?.summaries).toEqual({ cost_ht: 'average', status: 'filled' })
+    expect(view?.rowHeight).toBeUndefined()
+    // Pas un objet : ignoré sans empêcher de lire la table.
+    t.views[0].summaries = 'sum'
+    expect(
+      parseTableFile('tables/tbl_planning_lots.json', JSON.stringify(t)).views[0]?.summaries,
+    ).toBeUndefined()
   })
 
   it('crée une vue si la table n’en a pas', () => {

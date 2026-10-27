@@ -50,7 +50,7 @@ export function Dialog({
   if (!open) return null
   return createPortal(
     <div
-      className="fixed inset-0 z-50 grid place-items-center bg-black/30 p-4 dark:bg-black/60"
+      className="fixed inset-0 z-50 grid place-items-center bg-scrim p-4"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose()
       }}

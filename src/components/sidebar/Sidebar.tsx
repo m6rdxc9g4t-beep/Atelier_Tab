@@ -18,8 +18,8 @@ import { cn } from '@/lib/cn'
 import { DeleteDialog, type DeleteTarget } from './DeleteDialog'
 
 /**
- * Navigation : Espaces de travail › Projets › Tables.
- * La recherche rapide (Ctrl/Cmd + K), le renommage et la duplication arrivent en phase 4.
+ * Navigation : Espaces de travail › Projets › Tables. Double-clic sur un projet ou une table
+ * pour le renommer ; la recherche rapide est dans la palette de commandes (⌘K).
  */
 /** Bouton d'action d'une ligne : visible au survol ou au clavier, toujours sur écran tactile. */
 const ROW_ACTION =
@@ -96,7 +96,9 @@ function WorkspaceSection({
   return (
     <section className="mb-4">
       <div className="group flex h-7 items-center px-2">
-        <h2 className="flex-1 truncate text-[12px] font-medium text-muted">{name}</h2>
+        <h2 className="flex-1 truncate text-[11px] font-semibold tracking-wide text-faint uppercase">
+          {name}
+        </h2>
         <button
           type="button"
           onClick={() => setNaming(true)}
@@ -136,6 +138,10 @@ function ProjectItem({ project }: { project: Project }) {
   const openImport = useUIStore((s) => s.openImport)
   const [naming, setNaming] = useState(false)
   const [deleting, setDeleting] = useState<DeleteTarget | null>(null)
+  const [renamingProject, setRenamingProject] = useState(false)
+  const [renamingTable, setRenamingTable] = useState<string | null>(null)
+  const renameProject = useDataStore((s) => s.renameProject)
+  const renameTable = useDataStore((s) => s.renameTable)
   const containsActive = activeTableId !== null && project.tableIds.includes(activeTableId)
   const Folder = expanded ? FolderOpen : FolderClosed
 
@@ -148,22 +154,39 @@ function ProjectItem({ project }: { project: Project }) {
   return (
     <li>
       <div className="group flex items-center rounded-md hover:bg-surface-hover">
-        <button
-          type="button"
-          onClick={() => toggleProject(project.id)}
-          aria-expanded={expanded}
-          className={cn(
-            'flex h-7 min-w-0 flex-1 items-center gap-1.5 px-1.5 text-left',
-            containsActive && !expanded ? 'font-medium text-ink' : 'text-ink',
-          )}
-        >
-          <ChevronRight
-            size={13}
-            className={cn('shrink-0 text-faint transition-transform', expanded && 'rotate-90')}
-          />
-          <Folder size={14} className="shrink-0 text-muted" />
-          <span className="truncate">{project.name}</span>
-        </button>
+        {renamingProject ? (
+          <div className="flex h-7 min-w-0 flex-1 items-center gap-1.5 px-1.5">
+            <ChevronRight size={13} className="shrink-0 text-faint" />
+            <Folder size={14} className="shrink-0 text-muted" />
+            <RenameInput
+              value={project.name}
+              label="Nom du projet"
+              onDone={(name) => {
+                if (name && name !== project.name) renameProject(project.id, name)
+                setRenamingProject(false)
+              }}
+            />
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => toggleProject(project.id)}
+            onDoubleClick={() => setRenamingProject(true)}
+            aria-expanded={expanded}
+            title="Double-cliquez pour renommer"
+            className={cn(
+              'flex h-7 min-w-0 flex-1 items-center gap-1.5 px-1.5 text-left',
+              containsActive && !expanded ? 'font-medium text-ink' : 'text-ink',
+            )}
+          >
+            <ChevronRight
+              size={13}
+              className={cn('shrink-0 text-faint transition-transform', expanded && 'rotate-90')}
+            />
+            <Folder size={14} className="shrink-0 text-muted" />
+            <span className="truncate">{project.name}</span>
+          </button>
+        )}
         <button
           type="button"
           onClick={() => setDeleting({ kind: 'project', id: project.id })}
@@ -204,21 +227,40 @@ function ProjectItem({ project }: { project: Project }) {
             const active = tableId === activeTableId
             return (
               <li key={tableId} className="group/table relative">
-                <button
-                  type="button"
-                  onClick={() => openTable(tableId)}
-                  aria-current={active ? 'page' : undefined}
-                  className={cn(
-                    'flex h-7 w-full items-center gap-1.5 rounded-md pr-7 pl-1.5 text-left',
-                    active
-                      ? 'atelier-nav-active font-medium'
-                      : 'text-muted hover:bg-surface-hover hover:text-ink',
-                  )}
-                >
-                  <Table2 size={13} className={cn('shrink-0', active && 'text-accent-fg')} />
-                  <span className="min-w-0 flex-1 truncate">{table.name}</span>
-                  <ExportStatusDot tableId={tableId} />
-                </button>
+                {renamingTable === tableId ? (
+                  <div className="flex h-7 w-full items-center gap-1.5 pr-1 pl-1.5">
+                    <Table2 size={13} className="shrink-0 text-muted" />
+                    <RenameInput
+                      value={table.name}
+                      label="Nom de la table"
+                      onDone={(name) => {
+                        if (name && name !== table.name) renameTable(tableId, name)
+                        setRenamingTable(null)
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => openTable(tableId)}
+                    onDoubleClick={() => setRenamingTable(tableId)}
+                    aria-current={active ? 'page' : undefined}
+                    title="Double-cliquez pour renommer"
+                    className={cn(
+                      'flex h-7 w-full items-center gap-1.5 rounded-md pr-7 pl-1.5 text-left',
+                      active
+                        ? 'atelier-nav-active font-medium'
+                        : 'text-muted hover:bg-surface-hover hover:text-ink',
+                    )}
+                  >
+                    <Table2 size={13} className={cn('shrink-0', active && 'text-accent-fg')} />
+                    <span className="min-w-0 flex-1 truncate">{table.name}</span>
+                    <span className="text-[11px] text-faint tabular-nums group-hover/table:opacity-0">
+                      {table.rowOrder.filter((id) => table.records[id]?.kind === 'data').length}
+                    </span>
+                    <ExportStatusDot tableId={tableId} />
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setDeleting({ kind: 'table', id: tableId })}
@@ -290,6 +332,33 @@ function PipelineStatus() {
   )
 }
 
+/** Renommage en place (Entrée valide, Échap annule). */
+function RenameInput({
+  value,
+  label,
+  onDone,
+}: {
+  value: string
+  label: string
+  onDone: (name: string | null) => void
+}) {
+  return (
+    <input
+      autoFocus
+      defaultValue={value}
+      aria-label={label}
+      onFocus={(e) => e.currentTarget.select()}
+      onBlur={(e) => onDone(e.target.value.trim() || null)}
+      onKeyDown={(e) => {
+        if (e.nativeEvent.isComposing || e.keyCode === 229) return
+        if (e.key === 'Enter') e.currentTarget.blur()
+        if (e.key === 'Escape') onDone(null)
+      }}
+      className="h-6 min-w-0 flex-1 rounded border border-accent bg-field px-1 text-ink outline-none"
+    />
+  )
+}
+
 function NameInput({
   placeholder,
   onSubmit,
@@ -305,6 +374,8 @@ function NameInput({
       placeholder={placeholder}
       onBlur={(e) => onSubmit(e.target.value)}
       onKeyDown={(e) => {
+        // Saisie en cours dans un éditeur de méthode (IME) : Entrée valide le mot.
+        if (e.nativeEvent.isComposing || e.keyCode === 229) return
         if (e.key === 'Enter') onSubmit(e.currentTarget.value)
         if (e.key === 'Escape') onCancel()
       }}

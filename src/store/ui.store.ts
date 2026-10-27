@@ -1,5 +1,6 @@
 /**
- * État d'interface : table ouverte, cellule sélectionnée, édition en cours, sidebar.
+ * État d'interface : table ouverte, sélection (cellule active et plage), édition en cours,
+ * recherche rapide, fiche ouverte, sidebar.
  * Seuls la table ouverte, la sidebar et les projets dépliés sont persistés (localStorage).
  */
 import { create } from 'zustand'
@@ -29,7 +30,10 @@ export interface ImportRequest {
 
 export interface UIState {
   activeTableId: string | null
+  /** Cellule active (celle de la barre de formules). */
   selection: CellPosition | null
+  /** Autre coin de la plage sélectionnée (Maj + flèches, glisser) ; null : la cellule seule. */
+  rangeEnd: CellPosition | null
   editing: EditingState | null
   /** Message affiché quand une saisie est refusée (« 12abc » dans une colonne Devise…). */
   inputError: string | null
@@ -37,9 +41,21 @@ export interface UIState {
   expandedProjectIds: string[]
   /** Non persisté. */
   importRequest: ImportRequest | null
+  /** Recherche rapide de la vue (non enregistrée). */
+  search: string
+  /** Lignes gardées visibles malgré les filtres (ajoutées ou modifiées depuis). */
+  pinnedRecordIds: string[]
+  /** Fiche détaillée ouverte. */
+  expandedRecordId: string | null
+  /** Palette de commandes (⌘K). */
+  paletteOpen: boolean
 
   openTable(tableId: string | null): void
   select(cell: CellPosition | null): void
+  /** Sélectionne une plage : `anchor` devient la cellule active. */
+  selectRange(anchor: CellPosition, end: CellPosition): void
+  /** Étend la plage jusqu'à `end` (la cellule active ne change pas). */
+  extendTo(end: CellPosition): void
   startEditing(cell: CellPosition, draft: string, origin?: EditingState['origin']): void
   updateDraft(draft: string): void
   stopEditing(): void
@@ -48,6 +64,11 @@ export interface UIState {
   toggleProject(projectId: string, expanded?: boolean): void
   openImport(request: ImportRequest): void
   closeImport(): void
+  setSearch(search: string): void
+  pin(recordIds: string[]): void
+  clearPins(): void
+  openRecord(recordId: string | null): void
+  setPaletteOpen(open: boolean): void
 }
 
 export const useUIStore = create<UIState>()(
@@ -55,17 +76,53 @@ export const useUIStore = create<UIState>()(
     (set) => ({
       activeTableId: DEMO_DEFAULT_TABLE_ID,
       selection: null,
+      rangeEnd: null,
       editing: null,
       inputError: null,
       sidebarCollapsed: false,
       expandedProjectIds: ['proj_renovation_2026'],
       importRequest: null,
+      search: '',
+      pinnedRecordIds: [],
+      expandedRecordId: null,
+      paletteOpen: false,
 
       openTable: (tableId) =>
-        set({ activeTableId: tableId, selection: null, editing: null, inputError: null }),
-      select: (cell) => set({ selection: cell, inputError: null }),
+        set({
+          activeTableId: tableId,
+          selection: null,
+          rangeEnd: null,
+          editing: null,
+          inputError: null,
+          search: '',
+          pinnedRecordIds: [],
+          expandedRecordId: null,
+        }),
+      select: (cell) => set({ selection: cell, rangeEnd: null, inputError: null }),
+      selectRange: (anchor, end) =>
+        set({
+          selection: anchor,
+          rangeEnd: anchor.recordId === end.recordId && anchor.fieldId === end.fieldId ? null : end,
+          inputError: null,
+        }),
+      extendTo: (end) =>
+        set((s) =>
+          s.selection
+            ? {
+                rangeEnd:
+                  s.selection.recordId === end.recordId && s.selection.fieldId === end.fieldId
+                    ? null
+                    : end,
+              }
+            : { selection: end, rangeEnd: null },
+        ),
       startEditing: (cell, draft, origin = 'cell') =>
-        set({ selection: cell, editing: { cell, draft, origin }, inputError: null }),
+        set({
+          selection: cell,
+          rangeEnd: null,
+          editing: { cell, draft, origin },
+          inputError: null,
+        }),
       updateDraft: (draft) =>
         set((s) => (s.editing ? { editing: { ...s.editing, draft }, inputError: null } : s)),
       stopEditing: () => set({ editing: null }),
@@ -84,6 +141,15 @@ export const useUIStore = create<UIState>()(
         }),
       openImport: (request) => set({ importRequest: request, editing: null }),
       closeImport: () => set({ importRequest: null }),
+      setSearch: (search) => set({ search }),
+      pin: (recordIds) =>
+        set((s) => {
+          const fresh = recordIds.filter((id) => !s.pinnedRecordIds.includes(id))
+          return fresh.length ? { pinnedRecordIds: [...s.pinnedRecordIds, ...fresh] } : s
+        }),
+      clearPins: () => set((s) => (s.pinnedRecordIds.length ? { pinnedRecordIds: [] } : s)),
+      openRecord: (recordId) => set({ expandedRecordId: recordId, editing: null }),
+      setPaletteOpen: (open) => set({ paletteOpen: open }),
     }),
     {
       name: 'atelier-tab:ui',

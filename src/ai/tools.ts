@@ -10,7 +10,8 @@
  * - appelés par l'**assistant** (`caller: 'assistant'`), `configure_export` et `export_table`
  *   n'acceptent que des adresses de cette machine ; toute autre adresse demande une confirmation
  *   de l'utilisateur dans le panneau (`host.confirm`), de même que les outils destructeurs
- *   (`delete_rows`, `delete_column`). Sans `confirm`, ces actions sont refusées ;
+ *   (`delete_rows`, `delete_column`, `update_column` qui remplace des valeurs saisies par une
+ *   formule ou retire des statuts encore utilisés). Sans `confirm`, ces actions sont refusées ;
  * - quel que soit l'appelant : hors ligne, aucun envoi vers une adresse extérieure ; le jeton
  *   d'accès ne part que vers la route d'import d'Atelier Projets locale (`sendToWebhook`) ;
  * - le serveur MCP (`caller: 'mcp'`) est appelé par Claude Code, qui demande lui-même
@@ -58,10 +59,19 @@ import {
   WORKFLOW_STATUSES,
 } from '@/engine/field-types'
 import { isError, isFormula, parseFormula, serializeValue, type CellInput } from '@/engine/formula'
-import type { TableSheet } from '@/engine/table'
+import { operatorsFor, valuesReplacedByFormula, type TableSheet } from '@/engine/table'
+import { newId } from '@/lib/ids'
 import type { DataStore } from '@/store/data.store'
 import { DEFAULT_STATUS_CHOICES } from '@/store/factories'
-import type { AppData, Field, FieldType, SelectChoice, Table } from '@/types/domain'
+import type {
+  AppData,
+  Field,
+  FieldType,
+  FilterOperator,
+  SelectChoice,
+  Table,
+  View,
+} from '@/types/domain'
 import {
   letterOf,
   resolveColumn,
@@ -203,6 +213,27 @@ const MAPPING_VALUES = [
   'time_spent',
 ] as const
 
+type ResultFormat = NonNullable<NonNullable<Field['options']>['resultFormat']>
+
+const FILTER_OPERATORS = [
+  'contains',
+  'equals',
+  'not_equals',
+  'gt',
+  'lt',
+  'is_empty',
+  'is_not_empty',
+] as const satisfies readonly FilterOperator[]
+
+/** Affichage du résultat d'une colonne-formule. */
+const RESULT_FORMATS = [
+  'number',
+  'currency',
+  'percent',
+  'text',
+  'date',
+] as const satisfies readonly ResultFormat[]
+
 const DEFAULT_CHOICE_LABELS = DEFAULT_STATUS_CHOICES.map((c) => c.label)
 
 const statusPreset = z
@@ -291,6 +322,29 @@ function toStored(field: Field, value: z.infer<typeof cellValue>, d: AppData): C
 
 function choicesFrom(labels: string[], existing: SelectChoice[] = []): SelectChoice[] {
   return choicesFromLabels(labels, existing)
+}
+
+/** Lignes dont la cellule vise un des statuts `ids` (retirés de la colonne). */
+function rowsWithChoices(table: Table, fieldId: string, ids: Set<string>): string[] {
+  return table.rowOrder.filter((recordId) => {
+    const stored = table.records[recordId]?.cells[fieldId]
+    return typeof stored === 'string' && ids.has(stored)
+  })
+}
+
+/** Statuts de `before` absents de `after`. */
+function removedChoices(before: SelectChoice[], after: SelectChoice[]): SelectChoice[] {
+  const kept = new Set(after.map((c) => c.id))
+  return before.filter((c) => !kept.has(c.id))
+}
+
+/**
+ * Champ qui lit la valeur d'un filtre, comme le menu des filtres : une colonne-formule se
+ * filtre dans le type de son résultat (« 20 % » vaut 0,2 pour un résultat en pourcentage).
+ */
+function filterValueField(field: Field): Field {
+  if (field.type !== 'formula') return field
+  return { ...field, type: field.options?.resultFormat ?? 'number' }
 }
 
 function checkFormula(formula: string): string {
@@ -552,7 +606,7 @@ export const TOOLS = [
         .optional()
         .describe('Obligatoire pour type=formula : formule de la ligne 1'),
       format: z
-        .enum(['number', 'currency', 'percent', 'text'])
+        .enum(RESULT_FORMATS)
         .optional()
         .describe('Affichage du résultat d’une formule (défaut number)'),
       choices: z
@@ -615,41 +669,133 @@ export const TOOLS = [
   tool({
     name: 'update_column',
     description:
-      'Modifie une colonne : libellé, formule de colonne, liste des statuts (les lignes gardent leur statut si son libellé est conservé) ou préréglage « Statuts Atelier » (les statuts reconnus, ex. « Bloqué », sont convertis ; les autres sont gardés à la fin), format du résultat ou rôle d’export.',
+      'Modifie une colonne : libellé, type (les valeurs sont converties comme si on les retapait ; celles qui ne se convertissent pas sont gardées telles quelles ; vers formula, la formule de colonne remplace les valeurs saisies des lignes de données, comptées dans replaced, après confirmation de l’utilisateur), formule de colonne, liste des statuts (les lignes gardent leur statut si son libellé est conservé ; celles dont le statut est retiré sont vidées, comptées dans cleared, après confirmation de l’utilisateur) ou préréglage « Statuts Atelier » (les statuts reconnus, ex. « Bloqué », sont convertis ; les autres sont gardés à la fin), format du résultat ou rôle d’export.',
     input: z.object({
       table: tableRef,
       column: columnRef,
       label: z.string().min(1).optional(),
+      type: z
+        .enum(FIELD_TYPE_VALUES)
+        .optional()
+        .describe('Nouveau type ; vers formula, donnez aussi la formule de la ligne 1'),
       formula: z.string().optional(),
       choices: z.array(z.string()).optional(),
       preset: statusPreset,
-      format: z.enum(['number', 'currency', 'percent', 'text']).optional(),
+      format: z.enum(RESULT_FORMATS).optional(),
       mapping: z.enum(MAPPING_VALUES).optional(),
     }),
-    run(args, host) {
+    async run(args, host) {
       const table = resolveTable(data(host), args.table)
-      const field = resolveColumn(table, args.column)
-      if (args.formula !== undefined && field.type !== 'formula') {
-        throw new ToolError(`« ${field.label} » n’est pas une colonne de type formula`)
+      const before = resolveColumn(table, args.column)
+      const target = args.type ?? before.type
+      if (args.formula !== undefined && target !== 'formula') {
+        throw new ToolError(`« ${before.label} » n’est pas une colonne de type formula`)
       }
-      if ((args.choices || args.preset) && field.type !== 'select') {
-        throw new ToolError(`« ${field.label} » n’est pas une colonne de statut`)
+      if (args.type === 'formula' && before.type !== 'formula' && !args.formula) {
+        throw new ToolError(
+          'Pour passer en type formula, donnez la formule de la ligne 1, ex. "=C1*1.2"',
+        )
       }
-      if (args.format && field.type !== 'formula') {
+      if ((args.choices || args.preset) && target !== 'select') {
+        throw new ToolError(`« ${before.label} » n’est pas une colonne de statut`)
+      }
+      if (args.format && target !== 'formula') {
         throw new ToolError('Le format ne s’applique qu’aux colonnes de type formula')
       }
+      const formula = args.formula !== undefined ? checkFormula(args.formula) : undefined
+      const converting = args.type !== undefined && args.type !== before.type
+      // Statuts retirés alors que des lignes les portent : ces cellules seront vidées.
+      if (args.choices && !converting) {
+        const current = before.options?.choices ?? []
+        const removed = removedChoices(current, choicesFrom(args.choices, current))
+        const rows = rowsWithChoices(table, before.id, new Set(removed.map((c) => c.id)))
+        if (rows.length > 0) {
+          await requireConfirmation(host, {
+            tool: 'update_column',
+            kind: 'delete',
+            message: `L’assistant veut retirer ${removed.map((c) => `« ${c.label} »`).join(', ')} de la colonne ${letterOf(table, before.id)} « ${before.label} » de « ${table.name} » : ${plural(rows.length, 'cellule sera vidée', 'cellules seront vidées')}.`,
+          })
+          if (!freshTable(host, table.id).fields[before.id]) {
+            throw new ToolError('La colonne a été supprimée pendant l’opération')
+          }
+        }
+      }
+      let conversion: { converted: number; kept: number } | undefined
+      let replaced: number | undefined
+      /** Table juste avant la conversion, rendue si la suite est refusée. */
+      let original: Table | undefined
+      if (converting && args.type) {
+        // Vers formula : les valeurs saisies sont détruites (l'assistant n'a pas de ⌘Z).
+        if (args.type === 'formula') {
+          const count = valuesReplacedByFormula(table, before.id)
+          if (count > 0) {
+            await requireConfirmation(host, {
+              tool: 'update_column',
+              kind: 'delete',
+              message: `L’assistant veut transformer la colonne ${letterOf(table, before.id)} « ${before.label} » de « ${table.name} » en formule ${formula ?? ''} : ${plural(count, 'valeur saisie sera remplacée', 'valeurs saisies seront remplacées')}.`,
+            })
+          }
+          // Recompté après la confirmation : l'utilisateur a pu modifier la table entre-temps.
+          const fresh = freshTable(host, table.id)
+          if (!fresh.fields[before.id]) {
+            throw new ToolError('La colonne a été supprimée pendant l’opération')
+          }
+          replaced = valuesReplacedByFormula(fresh, before.id)
+        }
+        original = freshTable(host, table.id)
+        const sheet = host.getSheet(table.id)
+        conversion = host.store.getState().changeFieldType(table.id, before.id, args.type, {
+          computed: (r, f) => sheet?.value(r, f) ?? null,
+          ...(formula ? { formula } : {}),
+        })
+      }
+      const field = freshTable(host, table.id).fields[before.id] as Field
       const options = { ...(field.options ?? {}) }
       if (args.preset) options.choices = mergeAtelierStatuses(field.options?.choices)
       else if (args.choices) options.choices = choicesFrom(args.choices, field.options?.choices)
       if (args.format) options.resultFormat = args.format
+      const removed = new Set(
+        removedChoices(field.options?.choices ?? [], options.choices ?? []).map((c) => c.id),
+      )
+      const orphans = args.choices
+        ? rowsWithChoices(freshTable(host, table.id), field.id, removed)
+        : []
+      if (orphans.length > 0 && original) {
+        // Statuts tout juste créés par la conversion : rien n'a été confirmé, on revient en arrière.
+        host.store.getState().replaceTable(original)
+        throw new ToolError(
+          `${plural(orphans.length, 'ligne porte', 'lignes portent')} un statut absent de choices : convertissez d’abord la colonne sans choices, puis modifiez la liste des statuts.`,
+        )
+      }
       host.store.getState().updateField(table.id, field.id, {
         ...(args.label ? { label: args.label } : {}),
-        ...(args.formula !== undefined ? { columnFormula: checkFormula(args.formula) } : {}),
+        ...(formula !== undefined ? { columnFormula: formula } : {}),
         ...(args.mapping ? { atelierMapping: args.mapping } : {}),
         ...(args.choices || args.preset || args.format ? { options } : {}),
       })
+      if (orphans.length > 0) {
+        // Comme l'éditeur de champ : cellules vidées (sinon un id orphelin), filtres retirés.
+        const store = host.store.getState()
+        store.setCells(
+          table.id,
+          orphans.map((recordId) => ({ recordId, fieldId: field.id, input: null })),
+        )
+        for (const view of freshTable(host, table.id).views) {
+          const filters = view.filters.filter(
+            (f) => f.fieldId !== field.id || typeof f.value !== 'string' || !removed.has(f.value),
+          )
+          if (filters.length !== view.filters.length) {
+            store.updateView(table.id, view.id, { filters })
+          }
+        }
+      }
       const now = freshTable(host, table.id)
-      return { updated: columnInfo(now, now.fields[field.id] as Field) }
+      return {
+        updated: columnInfo(now, now.fields[field.id] as Field),
+        ...(conversion ? { converted: conversion.converted, kept_as_is: conversion.kept } : {}),
+        ...(replaced !== undefined ? { replaced } : {}),
+        ...(orphans.length > 0 ? { cleared: orphans.length } : {}),
+      }
     },
   }),
 
@@ -668,6 +814,181 @@ export const TOOLS = [
       })
       host.store.getState().deleteField(table.id, field.id)
       return { deleted: field.label }
+    },
+  }),
+
+  tool({
+    name: 'move_rows',
+    description:
+      'Déplace des lignes consécutives, comme un glisser-déposer : les formules suivent les cellules déplacées (un total SUM(C1:C3) reste juste quand on réordonne ses lignes).',
+    input: z.object({
+      table: tableRef,
+      from_row: z.number().int().positive().describe('Première ligne à déplacer (numéro affiché)'),
+      count: z.number().int().positive().optional().describe('Nombre de lignes (1 par défaut)'),
+      before_row: z
+        .number()
+        .int()
+        .positive()
+        .describe('Placer avant cette ligne (numéro actuel) ; nombre de lignes + 1 pour la fin'),
+    }),
+    run({ table: ref, from_row, count = 1, before_row }, host) {
+      const table = resolveTable(data(host), ref)
+      const total = table.rowOrder.length
+      const ids = table.rowOrder.slice(from_row - 1, from_row - 1 + count)
+      if (ids.length !== count) throw new ToolError(`La table n’a que ${total} lignes`)
+      if (before_row > total + 1) {
+        throw new ToolError(`before_row doit être entre 1 et ${total + 1}`)
+      }
+      if (!host.store.getState().moveRecords(table.id, ids, before_row - 1)) {
+        throw new ToolError('Rien à déplacer : les lignes sont déjà à cette place')
+      }
+      const now = freshTable(host, table.id)
+      return { moved: ids.length, rows: ids.map((id) => rowNumberOf(now, id)) }
+    },
+  }),
+
+  tool({
+    name: 'move_column',
+    description:
+      'Déplace une colonne : sa lettre change et les formules qui la lisent sont réécrites, comme dans Excel.',
+    input: z.object({
+      table: tableRef,
+      column: columnRef,
+      before: columnRef.optional().describe('Placer avant cette colonne. Absent : à la fin.'),
+    }),
+    run({ table: ref, column, before }, host) {
+      const table = resolveTable(data(host), ref)
+      const field = resolveColumn(table, column)
+      const to = before
+        ? table.fieldOrder.indexOf(resolveColumn(table, before).id)
+        : table.fieldOrder.length
+      if (!host.store.getState().moveField(table.id, field.id, to)) {
+        throw new ToolError(`« ${field.label} » est déjà à cette place`)
+      }
+      const now = freshTable(host, table.id)
+      return { moved: columnInfo(now, now.fields[field.id] as Field) }
+    },
+  }),
+
+  tool({
+    name: 'configure_view',
+    description:
+      'Règle une vue de la table, comme dans Airtable : filtres (cumulés), tri, colonnes masquées, hauteur des lignes, regroupement du Kanban. Ne modifie aucune donnée : ni les valeurs, ni l’ordre des lignes de la table, ni les formules.',
+    input: z.object({
+      table: tableRef,
+      view: z
+        .enum(['grid', 'sheet', 'kanban'])
+        .optional()
+        .describe('Vue à régler : grille, tableur ou Kanban (défaut : la vue ouverte)'),
+      filters: z
+        .array(
+          z.object({
+            column: columnRef,
+            op: z.enum(FILTER_OPERATORS),
+            value: cellValue
+              .optional()
+              .describe('Comme dans la grille ; absent pour is_empty / is_not_empty'),
+          }),
+        )
+        .optional()
+        .describe('Remplace les filtres de la vue ; [] les retire tous'),
+      sorts: z
+        .array(z.object({ column: columnRef, direction: z.enum(['asc', 'desc']).optional() }))
+        .optional()
+        .describe('Remplace le tri ; [] le retire'),
+      hidden_columns: z
+        .array(columnRef)
+        .optional()
+        .describe('Colonnes masquées (la première reste toujours visible) ; [] pour tout afficher'),
+      row_height: z.enum(['compact', 'standard', 'tall']).optional(),
+      group_by: columnRef
+        .optional()
+        .describe('Kanban : colonne de type select qui forme les colonnes'),
+    }),
+    run(args, host) {
+      const table = resolveTable(data(host), args.table)
+      const mode = args.view === 'grid' ? 'hybrid' : args.view
+      // Tout est vérifié avant de toucher à la vue : un appel refusé ne change rien à l'écran.
+      const patch: Partial<Omit<View, 'id' | 'mode'>> = {}
+      if (args.filters) {
+        patch.filters = args.filters.map((f) => {
+          const field = resolveColumn(table, f.column)
+          if (!operatorsFor(field).includes(f.op)) {
+            throw new ToolError(
+              `Condition « ${f.op} » impossible sur « ${field.label} » ; possibles : ${operatorsFor(field).join(', ')}`,
+            )
+          }
+          const needsValue = f.op !== 'is_empty' && f.op !== 'is_not_empty'
+          if (needsValue && (f.value === undefined || f.value === null || f.value === '')) {
+            throw new ToolError(`Le filtre sur « ${field.label} » a besoin d’une valeur`)
+          }
+          const stored = needsValue
+            ? toStored(filterValueField(field), f.value ?? null, data(host))
+            : null
+          return {
+            id: newId('flt'),
+            fieldId: field.id,
+            operator: f.op,
+            ...(stored !== null && !isFormula(stored) ? { value: stored } : {}),
+          }
+        })
+      }
+      if (args.sorts) {
+        patch.sorts = args.sorts.map((s) => ({
+          fieldId: resolveColumn(table, s.column).id,
+          direction: s.direction ?? 'asc',
+        }))
+      }
+      if (args.hidden_columns) {
+        const hidden = new Set(args.hidden_columns.map((c) => resolveColumn(table, c).id))
+        hidden.delete(table.fieldOrder[0] ?? '')
+        patch.hiddenFieldIds = table.fieldOrder.filter((id) => hidden.has(id))
+      }
+      if (args.row_height) patch.rowHeight = args.row_height
+      if (args.group_by) {
+        const field = resolveColumn(table, args.group_by)
+        if (field.type !== 'select') {
+          throw new ToolError(`« ${field.label} » n’est pas une colonne de statut (type select)`)
+        }
+        patch.groupByFieldId = field.id
+      }
+      const store = host.store.getState()
+      if (mode && table.views.find((v) => v.id === table.activeViewId)?.mode !== mode) {
+        store.setViewMode(table.id, mode)
+      }
+      const current = freshTable(host, table.id)
+      const view = current.views.find((v) => v.id === current.activeViewId)
+      if (!view) throw new ToolError('Vue introuvable')
+      store.updateView(table.id, view.id, patch)
+      const now = freshTable(host, table.id)
+      const v = now.views.find((x) => x.id === view.id) as View
+      const label = (id: string) => now.fields[id]?.label ?? id
+      return {
+        view: v.mode === 'hybrid' ? 'grid' : v.mode,
+        filters: v.filters.map((f) => ({
+          column: label(f.fieldId),
+          op: f.operator,
+          value: f.value ?? null,
+        })),
+        sorts: v.sorts.map((s) => ({ column: label(s.fieldId), direction: s.direction })),
+        // La première colonne n'est jamais masquée (même après un move_column), comme à l'écran.
+        hidden_columns: v.hiddenFieldIds.filter((id) => id !== now.fieldOrder[0]).map(label),
+        ...(v.rowHeight ? { row_height: v.rowHeight } : {}),
+        ...(v.groupByFieldId ? { group_by: label(v.groupByFieldId) } : {}),
+      }
+    },
+  }),
+
+  tool({
+    name: 'add_collaborator',
+    description:
+      'Ajoute un membre de l’équipe, utilisable dans les colonnes Responsable. Idempotent : un nom déjà présent renvoie le collaborateur existant.',
+    input: z.object({ name: z.string().trim().min(1).max(80) }),
+    run({ name }, host) {
+      const id = host.store.getState().addCollaborator(name)
+      const person = data(host).collaborators[id]
+      if (!person) throw new ToolError('Collaborateur introuvable après l’ajout')
+      return { collaborator: { id: person.id, name: person.name, initials: person.initials } }
     },
   }),
 
@@ -698,7 +1019,7 @@ export const TOOLS = [
             label: z.string().min(1),
             type: z.enum(FIELD_TYPE_VALUES),
             formula: z.string().optional(),
-            format: z.enum(['number', 'currency', 'percent', 'text']).optional(),
+            format: z.enum(RESULT_FORMATS).optional(),
             choices: z.array(z.string()).optional(),
             preset: statusPreset,
             mapping: z.enum(MAPPING_VALUES).optional(),

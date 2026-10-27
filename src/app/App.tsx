@@ -1,12 +1,19 @@
 import { lazy, Suspense, useCallback, useEffect, useState, type DragEvent } from 'react'
-import { Columns3, FileUp } from 'lucide-react'
+import { FileUp } from 'lucide-react'
 import { Toaster } from '@/components/ui/Toaster'
 import { useAssistant } from '@/store/assistant.store'
+import { CommandPalette } from '@/components/command/CommandPalette'
 import { FormulaBar } from '@/components/formula-bar/FormulaBar'
+import { OPEN_VIEW_PANEL } from '@/components/grid/GridHeader'
 import { HybridGrid } from '@/components/grid/HybridGrid'
 import { Header } from '@/components/layout/Header'
+import { StatusBar } from '@/components/layout/StatusBar'
+import { RecordPanel } from '@/components/record/RecordPanel'
 import { Sidebar } from '@/components/sidebar/Sidebar'
+import { ViewBar, VIEW_SEARCH_ID } from '@/components/view/ViewBar'
+import { KanbanView } from '@/components/views/KanbanView'
 import { useDataStore, useUIStore } from '@/store'
+import { redo, undo } from '@/store/history'
 import { isCsvFile } from '@/store/import-actions'
 
 // Chargé à la première ouverture : l'assistant n'alourdit pas le démarrage.
@@ -58,12 +65,32 @@ export function App() {
     }
   }
 
-  // ⌘J / Ctrl+J : afficher ou masquer l'assistant.
+  // Raccourcis globaux : ⌘J assistant, ⌘K palette, ⌘Z / ⇧⌘Z / Ctrl+Y annuler-rétablir,
+  // ⌘F recherche dans la vue (quand le focus est dans la grille).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'j') {
+      if (!(e.metaKey || e.ctrlKey) || e.altKey) return
+      const key = e.key.toLowerCase()
+      const target = e.target instanceof Element ? e.target : null
+      // Un champ de saisie garde son propre annuler / rétablir.
+      const typing = target?.closest('input, textarea, select, [contenteditable="true"]')
+      if (key === 'j') {
         e.preventDefault()
         useAssistant.getState().toggle()
+      } else if (key === 'k') {
+        e.preventDefault()
+        const ui = useUIStore.getState()
+        ui.setPaletteOpen(!ui.paletteOpen)
+      } else if (!typing && (key === 'z' || key === 'y')) {
+        e.preventDefault()
+        if (key === 'y' || e.shiftKey) redo()
+        else undo()
+      } else if (key === 'f' && target?.closest('[role="grid"]')) {
+        // La barre de vue déplie sa recherche (repliée en loupe quand elle est étroite).
+        if (document.getElementById(VIEW_SEARCH_ID)) {
+          e.preventDefault()
+          window.dispatchEvent(new CustomEvent(OPEN_VIEW_PANEL, { detail: 'search' }))
+        }
       }
     }
     window.addEventListener('keydown', onKey)
@@ -89,15 +116,18 @@ export function App() {
         )}
         {table ? (
           <>
-            <Header table={table} mode={mode} />
+            <Header table={table} />
+            <ViewBar table={table} mode={mode} />
             {mode === 'kanban' ? (
-              <KanbanPlaceholder />
+              <KanbanView table={table} />
             ) : (
               <>
                 <FormulaBar table={table} onCommit={focusGrid} />
                 <HybridGrid key={table.id} table={table} plain={mode === 'sheet'} />
               </>
             )}
+            <StatusBar table={table} mode={mode} />
+            <RecordPanel table={table} />
           </>
         ) : (
           <div className="grid flex-1 place-items-center text-muted">
@@ -115,22 +145,8 @@ export function App() {
           <ImportDialog />
         </Suspense>
       )}
+      <CommandPalette />
       <Toaster />
-    </div>
-  )
-}
-
-function KanbanPlaceholder() {
-  return (
-    <div className="grid flex-1 place-items-center">
-      <div className="flex max-w-sm flex-col items-center gap-2 text-center text-muted">
-        <Columns3 size={22} className="text-faint" />
-        <p className="font-medium text-ink">La vue Kanban arrive dans une prochaine version</p>
-        <p>
-          Les lignes y seront regroupées en colonnes selon leur statut, avec les montants calculés
-          sur chaque carte.
-        </p>
-      </div>
     </div>
   )
 }

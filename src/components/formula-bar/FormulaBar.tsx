@@ -4,13 +4,15 @@ import { formatValue } from '@/engine/field-types'
 import { isError, isFormula, tokenizeForDisplay } from '@/engine/formula'
 import { beginEdit, cancelEdit, commitEdit, editTextOf } from '@/store/grid-actions'
 import { getSheet, useComputed, useDataStore, useUIStore } from '@/store'
+import { useViewRows, visibleFieldIds } from '@/store/view-rows'
+import { useFormulaAssist } from '@/components/formula/useFormulaAssist'
 import type { Table } from '@/types/domain'
 import { refHue } from '@/lib/field-icons'
 import { cn } from '@/lib/cn'
 
 /**
- * Barre de formules : adresse de la cellule active (D1) et nom du champ, saisie brute,
- * aperçu du résultat en direct pendant la frappe d'une formule.
+ * Barre de formules : adresse de la cellule active (D1) ou de la plage (B2:D5) et nom du
+ * champ, saisie brute avec aide sur les fonctions, aperçu du résultat en direct.
  */
 export function FormulaBar({ table, onCommit }: { table: Table; onCommit: () => void }) {
   const selection = useUIStore((s) => s.selection)
@@ -24,10 +26,23 @@ export function FormulaBar({ table, onCommit }: { table: Table; onCommit: () => 
       : undefined,
   )
   const overlayRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const rangeEnd = useUIStore((s) => s.rangeEnd)
+  const rows = useViewRows(table)
 
   const field = selection ? table.fields[selection.fieldId] : undefined
   const sheet = getSheet(table.id)
   const address = selection && sheet ? sheet.address(selection.recordId, selection.fieldId) : null
+  const rangeLabel = useMemo(() => {
+    if (!selection || !rangeEnd || !sheet) return null
+    const a = sheet.address(selection.recordId, selection.fieldId)
+    const b = sheet.address(rangeEnd.recordId, rangeEnd.fieldId)
+    if (!a || !b) return null
+    const cols = visibleFieldIds(table)
+    const h = Math.abs(rows.indexOf(rangeEnd.recordId) - rows.indexOf(selection.recordId)) + 1
+    const w = Math.abs(cols.indexOf(rangeEnd.fieldId) - cols.indexOf(selection.fieldId)) + 1
+    return { text: `${a}:${b}`, size: `${h} L × ${w} C` }
+  }, [selection, rangeEnd, sheet, rows, table])
 
   const shown = useMemo(() => {
     void stored
@@ -41,7 +56,17 @@ export function FormulaBar({ table, onCommit }: { table: Table; onCommit: () => 
     return sheet.preview(editing.draft, selection.recordId, selection.fieldId)
   }, [editing, selection, sheet, field])
 
+  const assist = useFormulaAssist({
+    value: shown,
+    onChange: (text) =>
+      editing ? updateDraft(text) : selection && beginEdit(selection, text, 'bar'),
+    getInput: () => inputRef.current,
+  })
+
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    // Composition en cours (méthode de saisie japonaise, chinoise…) : Entrée la valide, elle.
+    if (e.nativeEvent.isComposing || e.keyCode === 229) return
+    if (editing && assist.onKeyDown(e)) return
     if (e.key === 'Enter') {
       e.preventDefault()
       if (commitEdit('none')) onCommit()
@@ -58,11 +83,26 @@ export function FormulaBar({ table, onCommit }: { table: Table; onCommit: () => 
   return (
     <div className="flex h-10 shrink-0 items-center gap-2 px-3 pt-2.5">
       <div
-        className="flex h-7 w-36 shrink-0 items-center gap-1.5 rounded-md border border-line-strong bg-field px-2"
-        title={field ? `${address ?? ''} · ${field.label}` : undefined}
+        className="flex h-7 w-40 shrink-0 items-center gap-1.5 rounded-md border border-line-strong bg-field px-2"
+        title={
+          rangeLabel
+            ? `${rangeLabel.text} · ${rangeLabel.size}`
+            : field
+              ? `${address ?? ''} · ${field.label}`
+              : undefined
+        }
       >
-        <span className="font-mono text-[12px] font-semibold text-ink">{address ?? '—'}</span>
-        {field && <span className="truncate text-[12px] text-muted">{field.label}</span>}
+        {rangeLabel ? (
+          <>
+            <span className="font-mono text-[12px] font-semibold text-ink">{rangeLabel.text}</span>
+            <span className="truncate text-[12px] text-muted">{rangeLabel.size}</span>
+          </>
+        ) : (
+          <>
+            <span className="font-mono text-[12px] font-semibold text-ink">{address ?? '—'}</span>
+            {field && <span className="truncate text-[12px] text-muted">{field.label}</span>}
+          </>
+        )}
       </div>
 
       <SquareFunction size={16} className="shrink-0 text-faint" aria-hidden />
@@ -79,19 +119,24 @@ export function FormulaBar({ table, onCommit }: { table: Table; onCommit: () => 
           </div>
         )}
         <input
+          ref={inputRef}
           value={shown}
           onScroll={(e) => {
             if (overlayRef.current) overlayRef.current.scrollLeft = e.currentTarget.scrollLeft
           }}
           disabled={!selection}
           onFocus={() => {
-            if (selection && !editing) beginEdit(selection, undefined, 'bar')
+            // Texte explicite : sur une case à cocher, beginEdit sans texte la cocherait.
+            if (selection && !editing) beginEdit(selection, editTextOf(table.id, selection), 'bar')
           }}
           onChange={(e) => {
             if (!editing && selection) beginEdit(selection, e.target.value, 'bar')
             else updateDraft(e.target.value)
+            assist.sync()
           }}
           onKeyDown={onKeyDown}
+          onKeyUp={assist.sync}
+          onClick={assist.sync}
           spellCheck={false}
           placeholder={
             selection ? 'Valeur ou formule (ex. =SUM(C1:C3))' : 'Sélectionnez une cellule'
@@ -104,6 +149,7 @@ export function FormulaBar({ table, onCommit }: { table: Table; onCommit: () => 
             inputError && 'border-danger',
           )}
         />
+        {editing?.origin === 'bar' && isFormula(shown) && assist.panel}
       </div>
 
       <PreviewOrError

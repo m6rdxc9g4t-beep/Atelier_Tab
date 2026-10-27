@@ -1,6 +1,7 @@
 /**
  * Adressage A1 : conversions, plages, et réécriture des références lors d'une
- * recopie (`translateFormula`) ou d'une insertion/suppression (`shiftReferences`).
+ * recopie (`translateFormula`), d'une insertion/suppression (`shiftReferences`), d'un
+ * déplacement (`moveReferences`) ou d'une duplication de colonne (`retargetColumn`).
  *
  * Convention : `col` et `row` sont des index 0-based. `A1` ↔ { col: 0, row: 0 }.
  */
@@ -186,6 +187,21 @@ export interface StructuralChange {
   expandAdjacent?: boolean
 }
 
+export interface RewriteOptions {
+  /**
+   * Ne réécrit que les références absolues sur l'axe du changement (`$4` pour les lignes). Sert
+   * aux modèles de colonnes-formules : leurs références relatives valent pour « la ligne
+   * courante » et ne bougent pas, mais `$C$4` (le total) doit suivre sa ligne.
+   */
+  absoluteOnly?: boolean
+}
+
+/** Bornes d'une référence que `absoluteOnly` laisse en place (relatives sur l'axe). */
+function fixedOnAxis(axis: 'row' | 'col', options: RewriteOptions): (ref: CellRef) => boolean {
+  if (options.absoluteOnly !== true) return () => false
+  return axis === 'row' ? (ref) => ref.absRow !== true : (ref) => ref.absCol !== true
+}
+
 /**
  * Met à jour les références après insertion ou suppression de lignes/colonnes.
  * Contrairement à la recopie, les références absolues bougent aussi (comportement Excel).
@@ -193,9 +209,14 @@ export interface StructuralChange {
  * - Plage partiellement supprimée → plage réduite
  * - Insertion au milieu d'une plage → plage agrandie
  */
-export function shiftReferences(formula: string, change: StructuralChange): string {
+export function shiftReferences(
+  formula: string,
+  change: StructuralChange,
+  options: RewriteOptions = {},
+): string {
   if (change.count === 0) return formula
   const key = change.axis === 'row' ? 'row' : 'col'
+  const fixed = fixedOnAxis(change.axis, options)
   const { index, count } = change
   const deletedEnd = index - count // exclusif, utilisé seulement si count < 0
 
@@ -208,6 +229,7 @@ export function shiftReferences(formula: string, change: StructuralChange): stri
 
   return rewriteReferences(formula, (target) => {
     if (target.kind === 'cell') {
+      if (fixed(target.ref)) return null
       const p = shiftOne(target.ref[key])
       if (p === null) return '#REF!'
       if (p === target.ref[key]) return null
@@ -218,6 +240,9 @@ export function shiftReferences(formula: string, change: StructuralChange): stri
     const loIsStart = target.start[key] <= target.end[key]
     const lo = loIsStart ? target.start : target.end
     const hi = loIsStart ? target.end : target.start
+    const loFixed = fixed(lo)
+    const hiFixed = fixed(hi)
+    if (loFixed && hiFixed) return null
     let newLo: number
     let newHi: number
 
@@ -228,14 +253,173 @@ export function shiftReferences(formula: string, change: StructuralChange): stri
     } else {
       const loDeleted = lo[key] >= index && lo[key] < deletedEnd
       const hiDeleted = hi[key] >= index && hi[key] < deletedEnd
-      if (loDeleted && hiDeleted) return '#REF!'
+      if (loDeleted && hiDeleted && !loFixed && !hiFixed) return '#REF!'
       newLo = loDeleted ? index : (shiftOne(lo[key]) ?? index)
       newHi = hiDeleted ? index - 1 : (shiftOne(hi[key]) ?? index - 1)
     }
+    // Plage mixte (`$C$1:C1`, cumul) : seule la borne absolue bouge.
+    if (loFixed) newLo = lo[key]
+    if (hiFixed) newHi = hi[key]
 
     if (newLo === lo[key] && newHi === hi[key]) return null
     const a = refToString({ ...lo, [key]: newLo })
     const b = refToString({ ...hi, [key]: newHi })
     return loIsStart ? `${a}:${b}` : `${b}:${a}`
+  })
+}
+
+export interface MoveChange {
+  axis: 'row' | 'col'
+  /** Premier élément (0-based) du bloc déplacé. */
+  from: number
+  /** Nombre d'éléments du bloc. */
+  count: number
+  /** Index, dans l'ordre d'origine, avant lequel le bloc est inséré (0 … longueur). */
+  to: number
+}
+
+type Interval = [number, number]
+
+/**
+ * Nouvelle position de chaque élément après le déplacement, par morceaux :
+ * le bloc, les éléments qu'il enjambe (décalés de `count`) et le reste (inchangé).
+ */
+function moveSegments({
+  from,
+  count,
+  to,
+}: MoveChange): { lo: number; hi: number; shift: number; block: boolean }[] {
+  const end = from + count // exclusif
+  if (to > end) {
+    return [
+      { lo: from, hi: end - 1, shift: to - end, block: true },
+      { lo: end, hi: to - 1, shift: -count, block: false },
+    ]
+  }
+  if (to < from) {
+    return [
+      { lo: from, hi: end - 1, shift: to - from, block: true },
+      { lo: to, hi: from - 1, shift: count, block: false },
+    ]
+  }
+  return []
+}
+
+/** Image d'un intervalle par le déplacement : morceaux [début, fin], et lesquels viennent du bloc. */
+function mapInterval(
+  lo: number,
+  hi: number,
+  change: MoveChange,
+): { all: Interval[]; rest: Interval[] } {
+  const all: Interval[] = []
+  const rest: Interval[] = []
+  let covered: Interval[] = []
+  for (const seg of moveSegments(change)) {
+    const a = Math.max(lo, seg.lo)
+    const b = Math.min(hi, seg.hi)
+    if (a > b) continue
+    covered.push([a, b])
+    const piece: Interval = [a + seg.shift, b + seg.shift]
+    all.push(piece)
+    if (!seg.block) rest.push(piece)
+  }
+  // Parties de l'intervalle hors des morceaux déplacés : inchangées.
+  covered = covered.sort((x, y) => x[0] - y[0])
+  let cursor = lo
+  for (const [a, b] of covered) {
+    if (a > cursor) {
+      all.push([cursor, a - 1])
+      rest.push([cursor, a - 1])
+    }
+    cursor = b + 1
+  }
+  if (cursor <= hi) {
+    all.push([cursor, hi])
+    rest.push([cursor, hi])
+  }
+  return { all, rest }
+}
+
+/** Un seul intervalle si les morceaux se touchent, sinon null. */
+function merged(pieces: Interval[]): Interval | null {
+  if (pieces.length === 0) return null
+  const sorted = [...pieces].sort((x, y) => x[0] - y[0])
+  const [lo, first] = sorted[0] as Interval
+  let hi = first
+  for (const [a, b] of sorted.slice(1)) {
+    if (a > hi + 1) return null
+    hi = Math.max(hi, b)
+  }
+  return [lo, hi]
+}
+
+/**
+ * Met à jour les références après le déplacement d'un bloc de lignes ou de colonnes
+ * (glisser-déposer) : chaque référence suit la cellule qu'elle désignait, comme dans Excel.
+ * Une plage dont les éléments restent contigus suit ses éléments (réordonner les lignes d'un
+ * total ne change pas `SUM(C1:C3)`) ; un élément qui sort d'une plage la réduit ; un élément
+ * déposé au milieu d'une plage l'agrandit.
+ */
+export function moveReferences(
+  formula: string,
+  change: MoveChange,
+  options: RewriteOptions = {},
+): string {
+  if (moveSegments(change).length === 0 || change.count <= 0) return formula
+  const key = change.axis === 'row' ? 'row' : 'col'
+  const fixed = fixedOnAxis(change.axis, options)
+  const mapOne = (pos: number): number => {
+    for (const seg of moveSegments(change))
+      if (pos >= seg.lo && pos <= seg.hi) return pos + seg.shift
+    return pos
+  }
+  const follow = (ref: CellRef): string => refToString({ ...ref, [key]: mapOne(ref[key]) })
+  return rewriteReferences(formula, (target) => {
+    if (target.kind === 'cell') {
+      if (fixed(target.ref)) return null
+      const p = mapOne(target.ref[key])
+      return p === target.ref[key] ? null : refToString({ ...target.ref, [key]: p })
+    }
+    const startFixed = fixed(target.start)
+    const endFixed = fixed(target.end)
+    if (startFixed && endFixed) return null
+    // Plage mixte (`$C$1:C1`, cumul) : la borne absolue suit sa cellule, l'autre reste.
+    if (startFixed || endFixed) {
+      const next = startFixed
+        ? `${refToString(target.start)}:${follow(target.end)}`
+        : `${follow(target.start)}:${refToString(target.end)}`
+      return next === `${refToString(target.start)}:${refToString(target.end)}` ? null : next
+    }
+    const loIsStart = target.start[key] <= target.end[key]
+    const lo = loIsStart ? target.start : target.end
+    const hi = loIsStart ? target.end : target.start
+    const { all, rest } = mapInterval(lo[key], hi[key], change)
+    const box = (pieces: Interval[]): Interval => [
+      Math.min(...pieces.map((p) => p[0])),
+      Math.max(...pieces.map((p) => p[1])),
+    ]
+    const next = merged(all) ?? merged(rest) ?? box(all)
+    const [newLo, newHi] = next
+    if (newLo === lo[key] && newHi === hi[key]) return null
+    const a = refToString({ ...lo, [key]: newLo })
+    const b = refToString({ ...hi, [key]: newHi })
+    return loIsStart ? `${a}:${b}` : `${b}:${a}`
+  })
+}
+
+/**
+ * Fait viser la colonne `to` aux références de la colonne `from` (cellule seule, ou plage tenant
+ * dans cette colonne) ; les autres références ne changent pas. Sert à dupliquer une colonne : la
+ * copie se réfère à elle-même là où l'original se référait à lui-même (`SUM(C1:C3)` d'un total
+ * devient `SUM(D1:D3)`), et lit les mêmes autres colonnes que lui.
+ */
+export function retargetColumn(formula: string, from: number, to: number): string {
+  if (from === to || !inBounds(to, 0)) return formula
+  return rewriteReferences(formula, (target) => {
+    if (target.kind === 'cell') {
+      return target.ref.col === from ? refToString({ ...target.ref, col: to }) : null
+    }
+    if (target.start.col !== from || target.end.col !== from) return null
+    return `${refToString({ ...target.start, col: to })}:${refToString({ ...target.end, col: to })}`
   })
 }

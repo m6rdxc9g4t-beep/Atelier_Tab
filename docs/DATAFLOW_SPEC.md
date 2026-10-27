@@ -40,6 +40,8 @@ Chaque valeur est exportée sous double forme :
 - `raw` : saisie d'origine (chaîne), formule incluse (`"=C1*1.2"`)
 - `computed` : valeur évaluée, typée (`54000`, `"En cours"`, `true`), ou chaîne d'erreur (`"#DIV/0!"`)
 
+Une case à cocher (`checkbox`) d'une ligne de données vaut toujours `true` ou `false` en `computed`, même jamais cochée (comme une case décochée, et comme dans Excel) ; son `raw` reste vide tant qu'elle n'a pas été touchée.
+
 ## Règles retenues
 
 1. **Pas de double comptage.** Les lignes de synthèse (`kind: 'summary'`, ex. « TOTAL TTC ») ne figurent ni dans `records` ni dans `computed_totals`. Elles peuvent être exportées à part dans `project.summary_rows` (optionnel). _L'exemple de la spécification initiale (`computed_totals.C = 194700`) incluait la ligne de total ; la valeur correcte pour les trois lots est 88 500._

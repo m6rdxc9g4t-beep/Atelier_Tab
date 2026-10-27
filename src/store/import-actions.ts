@@ -12,7 +12,8 @@ import {
   type ImportResult,
 } from '@/dataflow/import'
 import type { LookupContext } from '@/engine/field-types'
-import { useDataStore, useNotices } from './index'
+import { notifyUndoable, undoableStep, type HistoryEntry } from './history'
+import { useDataStore } from './index'
 import { useUIStore } from './ui.store'
 
 /** Taille maximale d'un fichier importé. */
@@ -69,7 +70,8 @@ export function describeImport(r: Pick<ImportResult, 'inserted' | 'updated'>): s
 
 /**
  * Importe pour de bon : recalcule les changements sur l'état actuel du store, les applique en
- * une seule mise à jour, ouvre la table et affiche un bilan.
+ * une seule mise à jour, ouvre la table et affiche un bilan. Dans une table existante, l'import
+ * est une étape annulable (⌘Z ou « Annuler » du bilan) : il peut écraser des valeurs.
  */
 export function commitImport(
   analysis: CsvAnalysis,
@@ -80,9 +82,12 @@ export function commitImport(
   const tableId = destination.kind === 'table' ? destination.tableId : null
   const result = previewImport(analysis, plan, tableId)
   let id: string
+  let step: HistoryEntry | null = null
   if (destination.kind === 'table') {
     if (!store.tables[destination.tableId]) throw new CsvImportError('La table a été supprimée')
-    store.importIntoTable(destination.tableId, result.changes)
+    step = undoableStep('Importer le CSV', destination.tableId, () =>
+      store.importIntoTable(destination.tableId, result.changes),
+    ).step
     id = destination.tableId
   } else {
     id = store.createTableFromImport(
@@ -93,7 +98,8 @@ export function commitImport(
     useUIStore.getState().toggleProject(destination.projectId, true)
   }
   useUIStore.getState().openTable(id)
-  useNotices.getState().push(
+  notifyUndoable(
+    step,
     {
       tone: result.issueCount ? 'warning' : 'info',
       title: `Import CSV : ${describeImport(result)}`,
@@ -103,7 +109,7 @@ export function commitImport(
           }
         : {}),
     },
-    result.issueCount ? 8000 : 4000,
+    step || result.issueCount ? 8000 : 4000,
   )
   return { tableId: id, result }
 }

@@ -11,7 +11,7 @@
  * une ligne absente de `rowOrder` est ajoutée à la fin, une référence orpheline est ignorée.
  */
 import { z } from 'zod'
-import type { AppData, AppPreferences, Table } from '@/types/domain'
+import type { AppData, AppPreferences, SummaryKind, Table } from '@/types/domain'
 
 export const DATA_FORMAT = 'atelier_tab'
 export const DATA_FORMAT_VERSION = 1
@@ -47,6 +47,7 @@ export function tableIdFromPath(relativePath: string): string | null {
 const id = z.string().min(1)
 const badgeColor = z.enum(['gray', 'blue', 'green', 'amber', 'red', 'violet', 'pink', 'teal'])
 const cellInput = z.union([z.string(), z.number(), z.boolean(), z.null()])
+const summaryKind = z.enum(['sum', 'average', 'min', 'max', 'count', 'filled', 'empty', 'none'])
 
 export const fieldTypeSchema = z.enum([
   'text',
@@ -85,7 +86,7 @@ const fieldSchema = z.object({
       choices: z.array(z.object({ id, label: z.string(), color: badgeColor })).optional(),
       currency: z.enum(['EUR', 'USD', 'GBP', 'CHF']).optional(),
       decimals: z.number().int().min(0).max(10).optional(),
-      resultFormat: z.enum(['number', 'currency', 'percent', 'text']).optional(),
+      resultFormat: z.enum(['number', 'currency', 'percent', 'text', 'date']).optional(),
     })
     .optional(),
   columnFormula: z.string().optional(),
@@ -124,6 +125,21 @@ const viewSchema = z.object({
   sorts: z.array(z.object({ fieldId: id, direction: z.enum(['asc', 'desc']) })).default([]),
   groupByFieldId: z.string().optional(),
   hiddenFieldIds: z.array(z.string()).default([]),
+  // Réglages d'affichage : une valeur inconnue (fichier édité à la main) est ignorée.
+  rowHeight: z.enum(['compact', 'standard', 'tall']).optional().catch(undefined),
+  // Agrégats : chaque valeur est lue seule, une valeur inconnue n'efface pas les autres.
+  summaries: z
+    .record(z.string(), z.unknown())
+    .transform((raw) => {
+      const kept: Record<string, SummaryKind> = {}
+      for (const [fieldId, kind] of Object.entries(raw)) {
+        const parsed = summaryKind.safeParse(kind)
+        if (parsed.success) kept[fieldId] = parsed.data
+      }
+      return kept
+    })
+    .optional()
+    .catch(undefined),
 })
 
 export const tableFileSchema = z.object({
