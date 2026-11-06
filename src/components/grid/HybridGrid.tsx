@@ -522,7 +522,7 @@ export function HybridGrid({ table, plain }: HybridGridProps) {
   const filteredOut = !rows.some(isData) && table.rowOrder.some(isData)
 
   return (
-    <div className="relative m-3 mt-2 flex min-h-0 flex-1 flex-col">
+    <div className="relative flex min-h-0 flex-1 flex-col">
       <div
         ref={scrollRef}
         role="grid"
@@ -538,7 +538,7 @@ export function HybridGrid({ table, plain }: HybridGridProps) {
           const x = e.currentTarget.scrollLeft > 0
           if (x !== scrolledX) setScrolledX(x)
         }}
-        className="relative min-h-0 flex-1 overflow-auto rounded-xl border border-edge bg-surface shadow-glow outline-none"
+        className="relative min-h-0 flex-1 overflow-auto bg-surface outline-none"
       >
         <div
           style={{ width: totalWidth, minWidth: '100%', minHeight: '100%', height: total }}
@@ -609,9 +609,9 @@ export function HybridGrid({ table, plain }: HybridGridProps) {
         </div>
         {filteredOut && (
           <div className="pointer-events-none absolute inset-x-0 top-24 grid place-items-center">
-            <div className="pointer-events-auto flex max-w-sm flex-col items-center gap-2 rounded-xl border border-line bg-surface px-6 py-5 text-center shadow-glow">
+            <div className="pointer-events-auto flex max-w-sm flex-col items-center gap-2 rounded-xl border border-line bg-surface px-6 py-5 text-center">
               <SearchX size={20} className="text-faint" />
-              <p className="font-medium text-ink">Aucune ligne ne correspond</p>
+              <p className="text-[15px] font-semibold text-ink">Aucune ligne ne correspond</p>
               <p className="text-muted">
                 {search.trim()
                   ? `Rien ne contient « ${search.trim()} » dans les colonnes affichées.`
@@ -718,7 +718,7 @@ const GridRow = memo(function GridRow({
         onDoubleClick={() => handlers.expandRecord(recordId)}
         className={cn(
           'sticky left-0 z-[6] flex shrink-0 cursor-default items-center gap-0.5 border-r border-b border-line pr-1 pl-0.5 text-[11px] tabular-nums select-none',
-          summary ? 'bg-surface-sunken' : 'bg-surface group-hover:bg-row-hover',
+          summary ? 'bg-surface-sunken' : 'bg-surface-sunken group-hover:bg-surface-hover',
           highlighted ? 'text-accent-fg' : 'text-faint',
           multi && 'bg-accent-soft',
         )}
@@ -738,7 +738,11 @@ const GridRow = memo(function GridRow({
           <span className="w-3" />
         )}
         <span
-          className={cn('min-w-0 flex-1 truncate font-semibold', rowRefIndex >= 0 && 'ref-text')}
+          className={cn(
+            'min-w-0 flex-1 truncate text-center font-medium',
+            highlighted && 'font-semibold',
+            rowRefIndex >= 0 && 'ref-text',
+          )}
           style={rowRefIndex >= 0 ? { ['--h' as string]: refHue(rowRefIndex) } : undefined}
         >
           {rowNumber}
@@ -751,7 +755,7 @@ const GridRow = memo(function GridRow({
             aria-label={`Développer la ligne ${rowNumber}`}
             title="Développer la ligne (Espace)"
             onClick={() => handlers.expandRecord(recordId)}
-            className="shrink-0 rounded p-0.5 text-muted opacity-0 group-hover:opacity-100 hover:bg-surface-hover hover:text-accent-fg focus-visible:opacity-100 pointer-coarse:opacity-100"
+            className="shrink-0 rounded-sm p-0.5 text-muted opacity-0 group-hover:opacity-100 hover:bg-selection hover:text-ink focus-visible:opacity-100 pointer-coarse:opacity-100"
           >
             <Maximize2 size={11} />
           </button>

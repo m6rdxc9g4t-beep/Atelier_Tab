@@ -85,12 +85,12 @@ export function ViewBar({ table, mode }: { table: Table; mode: ViewMode }) {
   return (
     <div
       ref={barRef}
-      className="@container relative z-20 flex h-11 shrink-0 items-center gap-1 border-b border-line bg-surface/60 px-2 backdrop-blur-sm"
+      className="@container relative z-20 flex h-11 shrink-0 items-center gap-1 border-b border-line bg-page px-3"
     >
       <div
         role="tablist"
         aria-label="Mode d'affichage"
-        className="flex shrink-0 rounded-lg border border-line-strong bg-field p-0.5"
+        className="flex shrink-0 gap-0.5 rounded-lg bg-surface-hover p-0.5"
       >
         {MODES.map(({ mode: m, label, icon: Icon, hint }) => (
           <button
@@ -101,10 +101,8 @@ export function ViewBar({ table, mode }: { table: Table; mode: ViewMode }) {
             title={hint}
             onClick={() => setViewMode(table.id, m)}
             className={cn(
-              'flex h-7 items-center gap-1.5 rounded-md px-2.5',
-              mode === m
-                ? 'bg-accent-soft font-medium text-ink shadow-[0_0_14px_-4px_var(--atelier-signature)] ring-1 ring-line-strong [&>svg]:text-accent-fg'
-                : 'text-muted hover:text-ink',
+              'flex h-6 items-center gap-1.5 rounded-md px-2 text-[12px] font-medium',
+              mode === m ? 'bg-surface text-ink shadow-pressed' : 'text-muted hover:text-ink',
             )}
           >
             <Icon size={14} />
@@ -181,7 +179,7 @@ export function ViewBar({ table, mode }: { table: Table; mode: ViewMode }) {
           onClick={() => setExportOpen(true)}
           aria-label="Exporter vers Atelier Projets"
           title="Exporter cette table vers Atelier Projets (JSON, CSV ou envoi direct)"
-          className="atelier-btn-primary flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-3 font-medium hover:brightness-110"
+          className="atelier-btn-primary flex h-[30px] shrink-0 items-center gap-1.5 rounded-lg px-3 font-medium"
         >
           <Send size={14} />
           <span className="@max-[64rem]:hidden">Exporter vers Atelier Projets</span>
@@ -330,7 +328,7 @@ function SearchBox() {
       )}
       <div
         className={cn(
-          'relative ml-1 w-44 shrink-0 @[64rem]:w-56',
+          'relative ml-1 w-44 min-w-28 shrink @[64rem]:w-56',
           !open && 'hidden @[36rem]:block',
         )}
       >

@@ -15,7 +15,7 @@ export interface SuiteApp {
   id: SuiteAppId
   /** Nom accessible (« Atelier Viz »). */
   name: string
-  /** Nom court affiché dans la marque « atelier_Viz » (docs/SUITE.md §1.6). */
+  /** Nom court affiché dans la marque « Atelier Viz » (docs/SUITE.md §1.6). */
   short: string
   description: string
   /** Adresse ouverte par le sélecteur. */

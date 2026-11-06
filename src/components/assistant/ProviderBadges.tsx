@@ -1,7 +1,7 @@
 /**
- * Pastilles d'état « Ollama » et « Claude » de l'en-tête (docs/SUITE.md §5.2) : vert =
- * disponible, gris = indisponible ou hors ligne ; le détail est dans l'info-bulle. Un clic
- * revérifie les deux moteurs.
+ * Pastilles d'état « Ollama » et « Claude » de l'en-tête (docs/SUITE.md §5.2) : pastille pleine =
+ * disponible, cercle vide = indisponible ou hors ligne (neutres : un moteur absent n'est pas une
+ * panne) ; le détail est dans l'info-bulle. Un clic revérifie les deux moteurs.
  */
 import { useEffect } from 'react'
 import { refreshAiStatus, startAiStatusWatch, useAiStatus } from '@/store/ai-status.store'
@@ -26,18 +26,21 @@ export function ProviderBadges({ className }: { className?: string }) {
       title={`${badges.map((b) => b.detail).join('\n')}\n\nCliquer pour revérifier.`}
       aria-busy={checking}
       className={cn(
-        'flex shrink-0 items-center gap-1 rounded-full text-muted hover:text-ink',
+        'flex shrink-0 items-center gap-1 rounded-lg text-muted hover:text-ink',
         className,
       )}
     >
       {badges.map((b) => (
         <span
           key={b.name}
-          className="flex h-7 items-center gap-1.5 rounded-full border border-line px-2.5 text-[12px]"
+          className="flex h-7 items-center gap-1.5 rounded-lg border border-line px-2.5 text-[12px] font-medium hover:bg-surface-hover"
         >
           <span
             aria-hidden
-            className={cn('size-1.5 rounded-full', b.available ? 'bg-success' : 'bg-faint')}
+            className={cn(
+              'size-[7px] rounded-full',
+              b.available ? 'bg-ink-2' : 'border border-faint bg-transparent',
+            )}
           />
           {b.name}
         </span>

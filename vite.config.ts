@@ -3,16 +3,31 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath, URL } from 'node:url'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
-import { defineConfig } from 'vite'
+import { defineConfig, type Plugin } from 'vite'
 import { healthPlugin } from './desktop/health-server.ts'
 
 const { version } = JSON.parse(
   readFileSync(new URL('./package.json', import.meta.url), 'utf8'),
 ) as { version: string }
 
+/**
+ * Thème commun à la suite (docs/SUITE.md §1.5) : la copie verbatim de atelier-theme.js est
+ * insérée en script bloquant dans le <head> d'index.html (dev et build), pour poser le thème
+ * avant le premier rendu. L'app de bureau l'autorise par son empreinte (desktop/csp.ts).
+ */
+function atelierThemeScript(): Plugin {
+  const file = new URL('./src/styles/atelier-brand/atelier-theme.js', import.meta.url)
+  return {
+    name: 'atelier-theme-script',
+    transformIndexHtml: () => [
+      { tag: 'script', children: readFileSync(file, 'utf8'), injectTo: 'head' },
+    ],
+  }
+}
+
 export default defineConfig({
   // healthPlugin : `GET /api/health` en dev et en aperçu (docs/SUITE.md §3).
-  plugins: [react(), tailwindcss(), healthPlugin()],
+  plugins: [atelierThemeScript(), react(), tailwindcss(), healthPlugin()],
   // Version de l'app (src/lib/version.ts), comme scripts/build-desktop.mjs pour le code Node.
   define: { __APP_VERSION__: JSON.stringify(version) },
   resolve: {

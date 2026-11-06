@@ -30,6 +30,7 @@ const hasFiles = (e: DragEvent) => Array.from(e.dataTransfer.types).includes('Fi
 
 export function App() {
   const sidebarCollapsed = useUIStore((s) => s.sidebarCollapsed)
+  const toggleSidebar = useUIStore((s) => s.toggleSidebar)
   const activeTableId = useUIStore((s) => s.activeTableId)
   // Repli sur la première table si la table mémorisée n'existe plus.
   const table = useDataStore((s) =>
@@ -99,7 +100,19 @@ export function App() {
 
   return (
     <div className="flex h-dvh overflow-hidden">
-      {!sidebarCollapsed && <Sidebar />}
+      {!sidebarCollapsed && (
+        <>
+          <Sidebar />
+          {/* Téléphone : la barre latérale passe par-dessus la grille ; un toucher à côté la replie. */}
+          <button
+            type="button"
+            tabIndex={-1}
+            aria-hidden
+            onClick={toggleSidebar}
+            className="fixed inset-0 z-40 bg-scrim min-[761px]:hidden"
+          />
+        </>
+      )}
       <main
         className="relative flex min-w-0 flex-1 flex-col"
         onDragOver={onDragOver}
@@ -107,7 +120,7 @@ export function App() {
         onDrop={onDrop}
       >
         {dropping && (
-          <div className="pointer-events-none absolute inset-2 z-40 grid place-items-center rounded-xl border-2 border-dashed border-accent bg-accent-soft/80 backdrop-blur-[1px]">
+          <div className="pointer-events-none absolute inset-2 z-40 grid place-items-center rounded-xl border-2 border-dashed border-accent bg-accent-soft/90">
             <div className="flex flex-col items-center gap-2 text-center">
               <FileUp size={26} className="text-accent-fg" />
               <p className="font-medium text-ink">Déposez le fichier CSV pour l’importer</p>
@@ -130,7 +143,7 @@ export function App() {
             <RecordPanel table={table} />
           </>
         ) : (
-          <div className="grid flex-1 place-items-center text-muted">
+          <div className="grid flex-1 place-items-center bg-page text-muted">
             Créez un projet dans le panneau de gauche pour commencer.
           </div>
         )}

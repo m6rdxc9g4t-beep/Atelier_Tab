@@ -38,7 +38,7 @@ import { cn } from '@/lib/cn'
 
 export const GUTTER_WIDTH = 56
 export const ADD_COLUMN_WIDTH = 44
-export const HEADER_HEIGHT = 36
+export const HEADER_HEIGHT = 32
 
 /** Événement demandant à la barre de vue d'ouvrir un panneau (filtres…). */
 export const OPEN_VIEW_PANEL = 'atelier:open-view-panel'
@@ -108,7 +108,7 @@ export const GridHeader = memo(function GridHeader({
   return (
     <div
       role="row"
-      className="sticky top-0 z-20 flex border-b border-line-strong bg-surface-sunken"
+      className="sticky top-0 z-20 flex border-b border-line bg-surface-sunken"
       style={{ height: HEADER_HEIGHT }}
       onDragOver={(e) => {
         if (dragging) e.preventDefault()
@@ -126,7 +126,7 @@ export const GridHeader = memo(function GridHeader({
           selectAll()
           focusGrid()
         }}
-        className="sticky left-0 z-30 shrink-0 border-r border-line-strong bg-surface-sunken text-[10px] text-faint hover:text-accent-fg"
+        className="sticky left-0 z-30 shrink-0 border-r border-line bg-surface-sunken text-[10px] text-faint hover:bg-surface-hover hover:text-ink"
         style={{ width: GUTTER_WIDTH }}
       >
         ◢
@@ -285,10 +285,10 @@ function ColumnHeader({
         setMenu({ x: e.clientX, y: e.clientY })
       }}
       className={cn(
-        'group relative flex shrink-0 cursor-default items-center gap-1.5 border-r border-line px-2 text-muted select-none',
+        'group relative flex shrink-0 cursor-default items-center gap-1.5 border-r border-line px-2 text-faint select-none',
         frozen && 'sticky z-[25]',
         frozen && frozenShadow && 'frozen-shadow',
-        active ? 'bg-accent-soft text-ink' : 'bg-surface-sunken hover:bg-surface-hover',
+        active ? 'bg-accent-soft text-ink-2' : 'bg-surface-sunken hover:bg-surface-hover',
       )}
       style={{ width, ...(frozen ? { left: GUTTER_WIDTH } : {}) }}
       title={plain ? field.label : undefined}
@@ -297,8 +297,8 @@ function ColumnHeader({
       {dropAfter && <span className="absolute top-0 -right-px bottom-0 z-10 w-0.5 bg-accent" />}
       <span
         className={cn(
-          'shrink-0 text-center text-[11px] font-semibold tabular-nums',
-          active ? 'text-accent-fg' : 'text-faint',
+          'shrink-0 text-center text-[11px] font-medium tabular-nums',
+          active ? 'font-semibold text-accent-fg' : 'text-faint',
           plain ? 'w-full' : 'w-4',
         )}
       >
@@ -322,10 +322,15 @@ function ColumnHeader({
                 if (e.key === 'Enter') e.currentTarget.blur()
                 if (e.key === 'Escape') setRenaming(false)
               }}
-              className="min-w-0 flex-1 rounded border border-accent bg-field px-1 text-ink outline-none"
+              className="min-w-0 flex-1 rounded-md border border-focus bg-field px-1 text-ink shadow-focus outline-none"
             />
           ) : (
-            <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium text-ink">
+            <span
+              className={cn(
+                'min-w-0 flex-1 truncate text-[12px] font-medium',
+                active ? 'text-ink' : 'text-muted',
+              )}
+            >
               {field.label}
             </span>
           )}
@@ -338,7 +343,7 @@ function ColumnHeader({
             aria-label={`Options de la colonne ${field.label}`}
             onClick={(e) => setMenu(e.currentTarget)}
             className={cn(
-              'shrink-0 rounded p-0.5 hover:bg-surface-hover hover:text-ink focus-visible:opacity-100',
+              'shrink-0 rounded-sm p-0.5 hover:bg-selection hover:text-ink focus-visible:opacity-100',
               menu ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100',
             )}
           >
@@ -357,7 +362,7 @@ function ColumnHeader({
           e.stopPropagation()
           onAutoFit(field.id)
         }}
-        className="absolute top-0 -right-[3px] bottom-0 z-10 w-[6px] cursor-col-resize hover:bg-accent/50"
+        className="absolute top-0 -right-[3px] bottom-0 z-10 w-[6px] cursor-col-resize hover:bg-accent/60"
       />
 
       <Floating
@@ -431,7 +436,7 @@ function ColumnMenuItems({
           <button
             type="button"
             autoFocus
-            className="h-7 rounded-md bg-danger px-2.5 font-medium text-solid-ink hover:brightness-110"
+            className="h-7 rounded-lg bg-danger px-2.5 font-medium text-solid-ink hover:brightness-110"
             onClick={run(() => deleteField(table.id, field.id))}
           >
             Supprimer
@@ -510,7 +515,7 @@ function AddColumnButton({ tableId }: { tableId: string }) {
         aria-label="Ajouter une colonne"
         title="Ajouter une colonne"
         onClick={(e) => setAnchor((a) => (a ? null : e.currentTarget))}
-        className="grid size-full place-items-center text-muted hover:bg-surface-hover hover:text-accent-fg"
+        className="grid size-full place-items-center text-faint hover:bg-surface-hover hover:text-ink"
       >
         <Plus size={15} />
       </button>

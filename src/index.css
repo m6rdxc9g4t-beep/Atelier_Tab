@@ -10,16 +10,20 @@
 @import './styles/atelier-ds/dark.css';
 
 /*
- * Thème Atelier Tab — charte « néon monochrome » (docs/SUITE.md §1.7)
+ * Thème Atelier Tab — charte v2 « Linear » (docs/SUITE.md §1.7, règles : Atelier_Deploy/DESIGN.md)
  * - Clair par défaut ; sombre quand <html> porte `class="dark"` et `data-theme="dark"`
- *   (posés ensemble par useTheme). Le variant `dark:` de Tailwind accepte les deux marqueurs.
- * - Toute l'application est dans la couleur signature de Tab (vert « Excel ») : <html> porte
- *   data-atelier-app="tab" et styles/atelier-brand/atelier-brand.css en dérive, pour chaque
- *   thème, les jetons --atelier-* (fond, surfaces, texte, traits, halos). Les jetons de Tab
- *   gardent leurs noms (les composants ne changent pas) et se branchent sur ces jetons.
- *   Aucun code couleur littéral ici : uniquement var() et color-mix(in oklab, …).
- * - Les variables de fondation (atelier-ds/light.css, dark.css) restent la base neutre de la suite ;
- *   seules les couleurs officielles (statuts, types) en sont reprises directement : elles portent un sens.
+ *   (posés ensemble par styles/atelier-brand/atelier-theme.js, voir useTheme). Le variant `dark:`
+ *   de Tailwind accepte les deux marqueurs.
+ * - Structure neutre commune à la suite (gris froids) : fonds, surfaces, textes et traits viennent
+ *   des jetons --atelier-* de styles/atelier-brand/atelier-brand.css. <html data-atelier-app="tab">
+ *   y pose la signature de Tab (vert), qui ne sert qu'à l'accent : bouton principal,
+ *   sélection (cellule, plage, ligne), focus, liens, icône de l'app.
+ * - Plat au repos : aucun halo ni grille de fond ; une ombre seulement pour ce qui flotte
+ *   (menus, dialogues, fiche : shadow-glow-strong).
+ * - Les jetons de Tab gardent leurs noms (les composants ne changent pas) et se branchent sur
+ *   ces jetons. Aucun code couleur littéral ici : uniquement var() et color-mix(in oklab, …).
+ * - Les couleurs officielles (statuts, types) sont reprises directement des copies verbatim
+ *   (atelier-ds/) : elles portent un sens et ne changent pas.
  * - Les composants n'utilisent jamais de couleurs Tailwind brutes (bg-zinc-…) mais les
  *   utilitaires générés ci-dessous (bg-surface, text-muted, border-line…).
  */
@@ -30,7 +34,8 @@
   --page: var(--atelier-bg);
   --sidebar: var(--atelier-sidebar);
   --surface: var(--atelier-surface);
-  --surface-sunken: color-mix(in oklab, var(--atelier-bg) 60%, var(--atelier-surface));
+  /* En-têtes et pied de la grille, cellules calculées : un cran sous la surface. */
+  --surface-sunken: color-mix(in oklab, var(--atelier-sidebar) 55%, var(--atelier-surface));
   --surface-raised: var(--atelier-surface);
   --surface-hover: var(--atelier-surface-2);
   --field: var(--atelier-field);
@@ -42,17 +47,19 @@
 
   /* Texte */
   --ink: var(--atelier-text);
+  --ink-2: color-mix(in oklab, var(--atelier-text) 82%, var(--atelier-muted));
   --muted: var(--atelier-muted);
-  --faint: color-mix(in oklab, var(--atelier-muted) 70%, var(--atelier-surface));
+  --faint: var(--atelier-faint);
 
   /* Accent = couleur signature d'Atelier Tab */
   --accent: var(--atelier-signature);
-  /* Élément actif : signature en transparence posée sur la surface (opaque pour les zones collantes). */
+  /* Sélection : signature en transparence posée sur la surface (opaque pour les zones collantes). */
   --accent-soft: color-mix(in oklab, var(--atelier-signature) 14%, var(--atelier-surface));
-  /* Texte posé sur l'accent (case cochée) : défini par la marque. */
+  /* Texte posé sur l'accent (bouton principal, case cochée) : défini par la marque. */
   --accent-ink: var(--atelier-signature-contrast);
   /* Texte ou icône fine en signature : assombrie en clair, éclaircie en sombre. */
   --accent-fg: var(--atelier-ink);
+  /* Sélection neutre : entrée de navigation courante, bouton pressé. */
   --selection: var(--atelier-surface-3);
   /* Texte posé sur une teinte pleine (avatars, bouton danger) : la surface blanche en clair. */
   --solid-ink: var(--atelier-surface);
@@ -61,41 +68,47 @@
   /* Assombrit une teinte pleine sous un texte clair (avatars). */
   --tone-shade: var(--atelier-text);
 
-  /* Grille : plage sélectionnée, survol d'une ligne, ombre de la colonne figée. */
-  --range: color-mix(in oklab, var(--atelier-signature) 11%, transparent);
-  --row-hover: color-mix(in oklab, var(--atelier-signature) 4%, var(--atelier-surface));
-  --frozen-shadow: color-mix(in oklab, var(--atelier-text) 22%, transparent);
-  /* Voile sous une fenêtre modale (palette de commandes, dialogues, fiche) : encre de la marque. */
-  --scrim: color-mix(in oklab, var(--atelier-ink-black) 30%, transparent);
+  /* Grille : plage sélectionnée (signature), survol d'une ligne (neutre), ombre de la colonne figée. */
+  --range: color-mix(in oklab, var(--atelier-signature) 10%, transparent);
+  --row-hover: color-mix(in oklab, var(--atelier-surface-2) 55%, var(--atelier-surface));
+  --frozen-shadow: color-mix(in oklab, var(--atelier-text) 14%, transparent);
+  /* Voile sous une fenêtre modale (palette de commandes, dialogues, fiche). */
+  --scrim: color-mix(in oklab, var(--atelier-text) 28%, transparent);
+  /* Option pressée d'un contrôle segmenté : micro-ombre de matière + filet (DESIGN.md). */
+  --pressed-shadow:
+    0 1px 2px color-mix(in oklab, var(--atelier-text) 8%, transparent), 0 0 0 1px var(--line);
 
   /* États (couleurs officielles : inchangées) */
   --success: var(--status-closed);
   --danger: var(--status-rejected);
   --warning: var(--status-hold);
+  /* États d'un service (santé d'une app, envoi) : seulement quand ce n'est pas nominal. */
+  --down: var(--atelier-down);
+  --warn: var(--atelier-warn);
 
-  /* Forme et typographie (docs/SUITE.md §1.3) — piles système, aucune police téléchargée */
-  --ds-radius-sm: 6px;
-  --ds-radius-md: 10px;
-  --ds-radius-lg: 16px;
-  --ds-font-sans:
-    ui-sans-serif, system-ui, -apple-system, 'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue',
-    Arial, sans-serif;
-  --ds-font-mono:
-    ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+  /* Forme et typographie (docs/SUITE.md §1.3) — Inter embarquée (styles/atelier-brand/). */
+  --ds-radius-sm: var(--atelier-radius-sm);
+  --ds-radius-md: var(--atelier-radius-md);
+  --ds-radius-lg: var(--atelier-radius-lg);
+  --ds-font-sans: var(--atelier-font);
+  --ds-font-mono: var(--atelier-font-mono);
 }
 
 :root[data-theme='dark'],
 [data-theme='dark'],
 .dark {
   /* Même dosage que --atelier-signature-soft en sombre. */
-  --accent-soft: color-mix(in oklab, var(--atelier-signature) 18%, var(--atelier-surface));
+  --accent-soft: color-mix(in oklab, var(--atelier-signature) 22%, var(--atelier-surface));
   /* La surface est foncée : le texte sur une teinte pleine reste clair. */
   --solid-ink: var(--atelier-text);
   --tone-shade: var(--atelier-surface);
+  --surface-sunken: color-mix(in oklab, var(--atelier-bg) 50%, var(--atelier-surface));
   --range: color-mix(in oklab, var(--atelier-signature) 16%, transparent);
-  --row-hover: color-mix(in oklab, var(--atelier-signature) 7%, var(--atelier-surface));
-  --frozen-shadow: color-mix(in oklab, var(--atelier-ink-black) 70%, transparent);
-  --scrim: color-mix(in oklab, var(--atelier-ink-black) 60%, transparent);
+  --row-hover: color-mix(in oklab, var(--atelier-surface-2) 70%, var(--atelier-surface));
+  --frozen-shadow: color-mix(in oklab, var(--atelier-bg) 80%, transparent);
+  --scrim: color-mix(in oklab, var(--atelier-bg) 62%, transparent);
+  --pressed-shadow:
+    0 1px 2px color-mix(in oklab, var(--atelier-bg) 60%, transparent), 0 0 0 1px var(--line-strong);
 }
 
 @theme inline {
@@ -110,6 +123,7 @@
   --color-line: var(--line);
   --color-line-strong: var(--line-strong);
   --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
   --color-muted: var(--muted);
   --color-faint: var(--faint);
   --color-accent: var(--accent);
@@ -125,8 +139,11 @@
   --color-range: var(--range);
   --color-row-hover: var(--row-hover);
   --color-scrim: var(--scrim);
+  --color-down: var(--down);
+  --color-warn: var(--warn);
 
-  /* rounded-md / -lg / -xl → 6 / 10 / 16 px */
+  /* rounded-sm / -md / -lg / -xl → 4 / 5 / 7 / 10 px (touches · petites icônes · boutons, champs · panneaux) */
+  --radius-sm: 4px;
   --radius-md: var(--ds-radius-sm);
   --radius-lg: var(--ds-radius-md);
   --radius-xl: var(--ds-radius-lg);
@@ -134,11 +151,12 @@
   --font-sans: var(--ds-font-sans);
   --font-mono: var(--ds-font-mono);
 
-  /* Halos néon (styles/atelier-brand), actifs dans les deux thèmes. */
+  /* Ombres (styles/atelier-brand) : plat au repos ; shadow-glow-strong pour ce qui flotte
+     (menus, dialogues, fiche), shadow-focus pour le halo des champs. */
   --shadow-glow: var(--atelier-glow);
   --shadow-glow-strong: var(--atelier-glow-strong);
-  --shadow-signature: var(--atelier-signature-glow);
   --shadow-focus: var(--atelier-focus);
+  --shadow-pressed: var(--pressed-shadow);
 }
 
 /*
@@ -212,25 +230,27 @@
     background-color: var(--tone);
   }
 
-  /* Boutons et champs communs (barre de vue, fiche, éditeur de champ). */
+  /* Boutons et champs communs (barre de vue, fiche, éditeur de champ) — DESIGN.md « Buttons ».
+     Bouton par défaut : 30 px, surface, trait appuyé, libellé 500 ; principal : atelier-btn-primary. */
   .btn {
-    @apply inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-line-strong bg-field px-2.5 text-muted hover:bg-surface-hover hover:text-ink disabled:pointer-events-none disabled:opacity-50;
+    @apply inline-flex h-[30px] shrink-0 items-center gap-1.5 rounded-lg border border-line-strong bg-surface px-2.5 font-medium text-ink-2 hover:bg-surface-hover hover:text-ink active:bg-selection disabled:pointer-events-none disabled:opacity-50;
   }
   .btn-ghost {
-    @apply inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-muted hover:bg-surface-hover hover:text-ink disabled:pointer-events-none disabled:opacity-40;
+    @apply inline-flex h-7 shrink-0 items-center gap-1.5 rounded-lg px-2 font-medium text-muted hover:bg-surface-hover hover:text-ink disabled:pointer-events-none disabled:opacity-40;
   }
   .btn-icon {
-    @apply inline-grid size-7 shrink-0 place-items-center rounded-md text-muted hover:bg-surface-hover hover:text-ink disabled:pointer-events-none disabled:opacity-40;
+    @apply inline-grid size-7 shrink-0 place-items-center rounded-lg text-muted hover:bg-surface-hover hover:text-ink disabled:pointer-events-none disabled:opacity-40;
   }
-  /* Outil actif (filtre appliqué, champ masqué…) : teinte de la signature. */
+  /* Outil actif (filtre appliqué, champ masqué…) : bouton pressé, sélection neutre. */
   .btn-active {
-    @apply bg-accent-soft text-ink ring-1 ring-line-strong;
+    @apply bg-selection text-ink;
   }
   .field-input {
-    @apply h-8 w-full rounded-md border border-line-strong bg-field px-2 text-ink outline-none placeholder:text-faint focus:border-focus focus:shadow-focus;
+    @apply h-8 w-full rounded-lg border border-line-strong bg-field px-2.5 text-ink outline-none placeholder:text-faint focus:border-focus focus:shadow-focus aria-invalid:border-down;
   }
+  /* Touche de clavier : 18 px, bord inférieur de 2 px comme une vraie touche. */
   .kbd {
-    @apply rounded border border-line-strong bg-surface-sunken px-1 font-mono text-[10.5px] leading-4 text-muted;
+    @apply inline-flex h-[18px] items-center rounded-sm border border-b-2 border-line-strong bg-surface px-[5px] font-sans text-[11px] leading-none font-medium text-muted;
   }
 
   /* Colonne figée de la grille : ombre portée quand la grille défile horizontalement. */
@@ -261,15 +281,33 @@
 }
 
 @layer base {
-  /* Fond de page : teinte de la signature, fine grille et lueur en haut (les deux thèmes). */
+  /* Fond uni (plat au repos), Inter 13 px, variantes cv11 / ss03 et chiffres tabulaires
+     (un tableur n'affiche que des mesures). */
   body {
     @apply text-ink font-sans text-[13px] antialiased;
-    /* Raccourci obligatoire : --atelier-backdrop contient des tailles de motif. */
-    background: var(--atelier-backdrop), var(--page);
-    background-attachment: fixed;
-    font-feature-settings: 'tnum' 1;
+    background: var(--page);
+    font-feature-settings:
+      'cv11' 1,
+      'ss03' 1,
+      'tnum' 1;
+  }
+  /* Téléphone : base 14 px (DESIGN.md, Layout). */
+  @media (max-width: 760px) {
+    body {
+      font-size: 14px;
+    }
   }
   *:focus-visible {
-    @apply outline-2 outline-offset-1 outline-focus;
+    @apply outline-2 outline-offset-2 outline-focus;
+  }
+  ::selection {
+    background-color: color-mix(in oklab, var(--accent) 30%, transparent);
+  }
+  * {
+    scrollbar-color: var(--line-strong) transparent;
+  }
+  input,
+  textarea {
+    caret-color: var(--accent);
   }
 }

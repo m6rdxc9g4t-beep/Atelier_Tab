@@ -1,55 +1,82 @@
 import { useState } from 'react'
 import {
+  Check,
   ChevronRight,
   FolderClosed,
   FolderOpen,
   PanelLeftClose,
   PlugZap,
   Plus,
-  Table2,
+  Search,
+  Table,
   Trash2,
   Unplug,
   Upload,
+  X,
 } from 'lucide-react'
 import { STATUS_LABELS, useExportStatus } from '@/components/dataflow/useExportStatus'
+import { AtelierBrand } from '@/components/layout/AtelierBrand'
+import { SuiteSwitcher } from '@/components/layout/SuiteSwitcher'
 import { useDataStore, useUIStore } from '@/store'
 import type { Project } from '@/types/domain'
 import { cn } from '@/lib/cn'
+import { shortcut } from '@/lib/keys'
 import { DeleteDialog, type DeleteTarget } from './DeleteDialog'
 
 /**
- * Navigation : Espaces de travail › Projets › Tables. Double-clic sur un projet ou une table
- * pour le renommer ; la recherche rapide est dans la palette de commandes (⌘K).
+ * Barre latérale, sur le modèle du portail (DESIGN.md « Layout ») : suite et marque en haut,
+ * recherche ⌘K, puis la navigation Espaces de travail › Projets › Tables. Double-clic sur un
+ * projet ou une table pour le renommer.
  */
 /** Bouton d'action d'une ligne : visible au survol ou au clavier, toujours sur écran tactile. */
 const ROW_ACTION =
-  'rounded p-0.5 text-muted opacity-0 group-hover:opacity-100 hover:text-ink focus-visible:opacity-100 pointer-coarse:opacity-100'
+  'grid size-6 shrink-0 place-items-center rounded-md text-faint opacity-0 group-hover:opacity-100 hover:bg-selection hover:text-ink focus-visible:opacity-100 pointer-coarse:opacity-100'
+const ROW_ACTION_IN_GROUP =
+  'grid size-6 shrink-0 place-items-center rounded-md text-faint hover:bg-selection hover:text-ink'
+/** Groupe d'actions d'un projet : par-dessus la fin du nom, au survol ou au clavier. */
+const ROW_ACTIONS =
+  'pointer-events-none absolute inset-y-0 right-0 flex items-center gap-px rounded-r-lg bg-surface-hover pr-1 pl-1 opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100 pointer-coarse:pointer-events-auto pointer-coarse:static pointer-coarse:bg-transparent pointer-coarse:opacity-100'
 
 export function Sidebar() {
   const workspaceOrder = useDataStore((s) => s.workspaceOrder)
   const workspaces = useDataStore((s) => s.workspaces)
   const toggleSidebar = useUIStore((s) => s.toggleSidebar)
+  const setPaletteOpen = useUIStore((s) => s.setPaletteOpen)
 
   return (
     <aside
       aria-label="Projets"
-      className="flex w-60 shrink-0 flex-col border-r border-line-strong bg-sidebar"
+      className="flex w-[232px] shrink-0 flex-col border-r border-line bg-sidebar max-[760px]:fixed max-[760px]:inset-y-0 max-[760px]:left-0 max-[760px]:z-50 max-[760px]:w-[min(300px,85vw)] max-[760px]:shadow-glow-strong"
     >
-      <div className="flex h-11 shrink-0 items-center gap-2 border-b border-line px-3">
-        <FolderOpen size={14} className="text-muted" aria-hidden />
-        <span className="flex-1 font-semibold tracking-tight">Projets</span>
+      <div className="flex h-11 shrink-0 items-center gap-1 px-2">
+        <SuiteSwitcher />
+        <AtelierBrand />
         <button
           type="button"
           onClick={toggleSidebar}
           aria-label="Replier le panneau"
           title="Replier le panneau"
-          className="rounded-md p-1 text-muted hover:bg-surface-hover hover:text-ink"
+          className="btn-icon ml-auto"
         >
           <PanelLeftClose size={15} />
         </button>
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-2 py-3">
+      <div className="px-2 pb-1">
+        <button
+          type="button"
+          onClick={() => setPaletteOpen(true)}
+          aria-label="Rechercher une table ou une action"
+          title={`Rechercher une table ou une action (${shortcut('K')})`}
+          className="flex h-[30px] w-full items-center gap-2 rounded-lg border border-line-strong bg-surface px-2.5 text-faint hover:bg-surface-hover hover:text-muted"
+        >
+          <Search size={14} aria-hidden />
+          <span className="flex-1 text-left">Rechercher…</span>
+          <kbd className="kbd">{shortcut('K')}</kbd>
+        </button>
+      </div>
+
+      <nav aria-label="Espaces de travail" className="flex-1 overflow-y-auto px-2 pt-2 pb-3">
         {workspaceOrder.map((wsId) => {
           const ws = workspaces[wsId]
           if (!ws) return null
@@ -94,22 +121,20 @@ function WorkspaceSection({
   }
 
   return (
-    <section className="mb-4">
-      <div className="group flex h-7 items-center px-2">
-        <h2 className="flex-1 truncate text-[11px] font-semibold tracking-wide text-faint uppercase">
-          {name}
-        </h2>
+    <section className="mb-3">
+      <div className="group flex h-7 items-center pr-1 pl-2">
+        <h2 className="flex-1 truncate text-[11.5px] font-medium text-faint">{name}</h2>
         <button
           type="button"
           onClick={() => setNaming(true)}
           aria-label={`Nouveau projet dans ${name}`}
           title="Nouveau projet"
-          className="rounded p-0.5 text-muted opacity-0 group-hover:opacity-100 hover:bg-surface-hover hover:text-ink focus-visible:opacity-100 pointer-coarse:opacity-100"
+          className={ROW_ACTION}
         >
           <Plus size={14} />
         </button>
       </div>
-      <ul>
+      <ul className="flex flex-col gap-px">
         {projectIds.map((id) => {
           const project = projects[id]
           return project ? <ProjectItem key={id} project={project} /> : null
@@ -153,9 +178,9 @@ function ProjectItem({ project }: { project: Project }) {
 
   return (
     <li>
-      <div className="group flex items-center rounded-md hover:bg-surface-hover">
+      <div className="group relative flex items-center rounded-lg hover:bg-surface-hover">
         {renamingProject ? (
-          <div className="flex h-7 min-w-0 flex-1 items-center gap-1.5 px-1.5">
+          <div className="flex h-[30px] min-w-0 flex-1 items-center gap-1.5 px-1.5">
             <ChevronRight size={13} className="shrink-0 text-faint" />
             <Folder size={14} className="shrink-0 text-muted" />
             <RenameInput
@@ -175,52 +200,58 @@ function ProjectItem({ project }: { project: Project }) {
             aria-expanded={expanded}
             title="Double-cliquez pour renommer"
             className={cn(
-              'flex h-7 min-w-0 flex-1 items-center gap-1.5 px-1.5 text-left',
-              containsActive && !expanded ? 'font-medium text-ink' : 'text-ink',
+              'flex h-[30px] min-w-0 flex-1 items-center gap-1.5 px-1.5 text-left font-medium',
+              containsActive && !expanded ? 'text-ink' : 'text-ink-2',
             )}
           >
             <ChevronRight
               size={13}
-              className={cn('shrink-0 text-faint transition-transform', expanded && 'rotate-90')}
+              className={cn(
+                'shrink-0 text-faint transition-transform duration-150',
+                expanded && 'rotate-90',
+              )}
             />
-            <Folder size={14} className="shrink-0 text-muted" />
+            <Folder size={15} className="shrink-0 text-faint" />
             <span className="truncate">{project.name}</span>
           </button>
         )}
-        <button
-          type="button"
-          onClick={() => setDeleting({ kind: 'project', id: project.id })}
-          aria-label={`Supprimer le projet ${project.name}`}
-          title="Supprimer le projet"
-          className={cn(ROW_ACTION, 'hover:text-danger')}
-        >
-          <Trash2 size={13} />
-        </button>
-        <button
-          type="button"
-          onClick={() => openImport({ projectId: project.id, tableId: null })}
-          aria-label={`Importer un CSV dans ${project.name}`}
-          title="Nouvelle table depuis un fichier CSV"
-          className={ROW_ACTION}
-        >
-          <Upload size={13} />
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            toggleProject(project.id, true)
-            setNaming(true)
-          }}
-          aria-label={`Nouvelle table dans ${project.name}`}
-          title="Nouvelle table"
-          className={cn(ROW_ACTION, 'mr-1')}
-        >
-          <Plus size={13} />
-        </button>
+        {/* Actions au survol, posées sur le nom (il garde toute sa largeur au repos). */}
+        <div className={ROW_ACTIONS}>
+          <button
+            type="button"
+            onClick={() => setDeleting({ kind: 'project', id: project.id })}
+            aria-label={`Supprimer le projet ${project.name}`}
+            title="Supprimer le projet"
+            className={cn(ROW_ACTION_IN_GROUP, 'hover:text-down')}
+          >
+            <Trash2 size={13} />
+          </button>
+          <button
+            type="button"
+            onClick={() => openImport({ projectId: project.id, tableId: null })}
+            aria-label={`Importer un CSV dans ${project.name}`}
+            title="Nouvelle table depuis un fichier CSV"
+            className={ROW_ACTION_IN_GROUP}
+          >
+            <Upload size={13} />
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              toggleProject(project.id, true)
+              setNaming(true)
+            }}
+            aria-label={`Nouvelle table dans ${project.name}`}
+            title="Nouvelle table"
+            className={ROW_ACTION_IN_GROUP}
+          >
+            <Plus size={13} />
+          </button>
+        </div>
       </div>
 
       {expanded && (
-        <ul className="ml-[18px] border-l border-line pl-1.5">
+        <ul className="mt-px flex flex-col gap-px pl-[19px]">
           {project.tableIds.map((tableId) => {
             const table = tables[tableId]
             if (!table) return null
@@ -228,8 +259,8 @@ function ProjectItem({ project }: { project: Project }) {
             return (
               <li key={tableId} className="group/table relative">
                 {renamingTable === tableId ? (
-                  <div className="flex h-7 w-full items-center gap-1.5 pr-1 pl-1.5">
-                    <Table2 size={13} className="shrink-0 text-muted" />
+                  <div className="flex h-[30px] w-full items-center gap-2 pr-1 pl-2">
+                    <Table size={14} className="shrink-0 text-faint" />
                     <RenameInput
                       value={table.name}
                       label="Nom de la table"
@@ -247,15 +278,18 @@ function ProjectItem({ project }: { project: Project }) {
                     aria-current={active ? 'page' : undefined}
                     title="Double-cliquez pour renommer"
                     className={cn(
-                      'flex h-7 w-full items-center gap-1.5 rounded-md pr-7 pl-1.5 text-left',
+                      'flex h-[30px] w-full items-center gap-2 rounded-lg pr-7 pl-2 text-left font-medium',
                       active
-                        ? 'atelier-nav-active font-medium'
-                        : 'text-muted hover:bg-surface-hover hover:text-ink',
+                        ? 'atelier-nav-active'
+                        : 'text-ink-2 hover:bg-surface-hover hover:text-ink',
                     )}
                   >
-                    <Table2 size={13} className={cn('shrink-0', active && 'text-accent-fg')} />
+                    <Table
+                      size={14}
+                      className={cn('shrink-0', active ? 'text-ink' : 'text-faint')}
+                    />
                     <span className="min-w-0 flex-1 truncate">{table.name}</span>
-                    <span className="text-[11px] text-faint tabular-nums group-hover/table:opacity-0">
+                    <span className="text-[11.5px] font-medium text-faint tabular-nums group-hover/table:opacity-0">
                       {table.rowOrder.filter((id) => table.records[id]?.kind === 'data').length}
                     </span>
                     <ExportStatusDot tableId={tableId} />
@@ -266,7 +300,7 @@ function ProjectItem({ project }: { project: Project }) {
                   onClick={() => setDeleting({ kind: 'table', id: tableId })}
                   aria-label={`Supprimer la table ${table.name}`}
                   title="Supprimer la table"
-                  className="absolute top-1/2 right-1 -translate-y-1/2 rounded p-0.5 text-muted opacity-0 group-hover/table:opacity-100 hover:text-danger focus-visible:opacity-100 pointer-coarse:opacity-100"
+                  className="absolute top-1/2 right-1 grid size-6 -translate-y-1/2 place-items-center rounded-md text-faint opacity-0 group-hover/table:opacity-100 hover:bg-selection hover:text-down focus-visible:opacity-100 pointer-coarse:opacity-100"
                 >
                   <Trash2 size={13} />
                 </button>
@@ -291,11 +325,13 @@ function ProjectItem({ project }: { project: Project }) {
 
 function ExportStatusDot({ tableId }: { tableId: string }) {
   const status = useExportStatus(tableId)
-  if (!status) return null
-  const tone = status === 'ready' ? 'tone-green' : status === 'warnings' ? 'tone-amber' : 'tone-red'
+  // Règle du témoin muet (DESIGN.md) : une table prête pour l'export n'affiche rien ;
+  // seuls les avertissements (ambre) et les erreurs (rouge) se signalent.
+  if (!status || status === 'ready') return null
+  const tone = status === 'warnings' ? 'bg-warn' : 'bg-down'
   return (
     <span
-      className={`${tone} tone-dot size-1.5 shrink-0 rounded-full`}
+      className={`${tone} size-1.5 shrink-0 rounded-full`}
       title={STATUS_LABELS[status]}
       aria-label={STATUS_LABELS[status]}
       role="img"
@@ -314,16 +350,30 @@ function PipelineStatus() {
   return (
     <div className="shrink-0 border-t border-line px-3 py-2.5 text-[12px] text-muted">
       <div className="flex items-center gap-2">
-        <Icon size={13} className={cn('shrink-0', connected && 'text-success')} />
-        <span className="flex-1 truncate">
+        <Icon size={14} className="shrink-0 text-faint" aria-hidden />
+        <span
+          className="flex-1 truncate"
+          title={
+            connected
+              ? 'Atelier Projets : envoi direct configuré'
+              : 'Atelier Projets : export par fichier'
+          }
+        >
           {connected
             ? 'Atelier Projets : envoi direct configuré'
             : 'Atelier Projets : export par fichier'}
         </span>
       </div>
       {last && (
-        <p className="mt-1 truncate pl-[21px]" title={last.message}>
-          <span className={last.ok ? 'text-success' : 'text-danger'}>{last.ok ? '✓' : '✕'}</span>{' '}
+        <p
+          className={cn('mt-1 flex items-center gap-1 truncate pl-[22px]', !last.ok && 'text-down')}
+          title={last.message}
+        >
+          {last.ok ? (
+            <Check size={12} className="shrink-0" aria-label="Envoyé" />
+          ) : (
+            <X size={12} className="shrink-0" aria-label="Échec" />
+          )}
           {tables[last.tableId]?.name ?? 'Table supprimée'},{' '}
           {new Date(last.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
         </p>
@@ -354,7 +404,7 @@ function RenameInput({
         if (e.key === 'Enter') e.currentTarget.blur()
         if (e.key === 'Escape') onDone(null)
       }}
-      className="h-6 min-w-0 flex-1 rounded border border-accent bg-field px-1 text-ink outline-none"
+      className="h-6 min-w-0 flex-1 rounded-md border border-focus bg-field px-1.5 text-ink shadow-focus outline-none"
     />
   )
 }
@@ -379,7 +429,7 @@ function NameInput({
         if (e.key === 'Enter') onSubmit(e.currentTarget.value)
         if (e.key === 'Escape') onCancel()
       }}
-      className="h-7 w-full rounded-md border border-accent bg-field px-2 outline-none placeholder:text-faint"
+      className="h-[30px] w-full rounded-lg border border-focus bg-field px-2 shadow-focus outline-none placeholder:text-faint"
     />
   )
 }

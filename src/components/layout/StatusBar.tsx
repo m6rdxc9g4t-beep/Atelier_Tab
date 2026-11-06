@@ -63,7 +63,7 @@ export function StatusBar({ table, mode }: { table: Table; mode: ViewMode }) {
   }, [selection, rangeEnd, rows, table, revision])
 
   return (
-    <footer className="flex h-7 shrink-0 items-center gap-3 border-t border-line bg-sidebar/70 px-3 text-[12px] text-muted backdrop-blur-sm">
+    <footer className="flex h-7 shrink-0 items-center gap-3 border-t border-line bg-page px-3 text-[12px] text-muted">
       <span className="tabular-nums">
         {data.length} ligne{data.length > 1 ? 's' : ''}
         {narrowed && ` sur ${totalData}`}
@@ -72,7 +72,7 @@ export function StatusBar({ table, mode }: { table: Table; mode: ViewMode }) {
         <button
           type="button"
           onClick={() => clearFilters(table.id)}
-          className="inline-flex items-center gap-1 rounded px-1 text-accent-fg hover:bg-surface-hover"
+          className="inline-flex items-center gap-1 rounded-md px-1 text-accent-fg hover:bg-surface-hover"
         >
           <FilterX size={12} />
           {filterCount > 0 ? `${filterCount} filtre${filterCount > 1 ? 's' : ''}` : 'Recherche'} ·

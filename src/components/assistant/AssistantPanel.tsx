@@ -384,7 +384,7 @@ function Entry({ entry }: { entry: AssistantEntry }) {
       <li className="whitespace-pre-wrap text-ink">
         {entry.text}
         {entry.engine && (
-          <span className="mt-1 block text-[10px] tracking-wide text-muted uppercase">
+          <span className="mt-1 block text-[11px] font-medium text-faint">
             via {ENGINE_LABELS[entry.engine]}
             {entry.model ? ` · ${entry.model}` : ''}
           </span>

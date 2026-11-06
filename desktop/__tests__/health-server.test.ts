@@ -58,7 +58,7 @@ describe('route de santé de l’app de bureau (SUITE.md §3)', () => {
     expect(res.status).toBe(200)
     expect(res.type).toMatch(/^text\/html/)
     expect(res.body).toContain('Atelier Tab est ouvert')
-    expect(res.body).toContain('atelier_')
+    expect(res.body).toContain('<span class="prefix">Atelier </span>Tab')
     // Page autonome : aucune ressource externe.
     expect(res.body).not.toMatch(/https?:\/\//)
     expect(onFocus).toHaveBeenCalledOnce()

@@ -41,14 +41,14 @@ export const GridFooter = memo(function GridFooter({
 
   return (
     <div
-      className="sticky bottom-0 z-20 flex border-t border-line-strong bg-surface-sunken"
+      className="sticky bottom-0 z-20 flex border-t border-line bg-surface-sunken"
       style={{ height: FOOTER_HEIGHT }}
     >
       <button
         type="button"
         onClick={() => addRowAndSelect()}
         className={cn(
-          'sticky left-0 z-10 flex shrink-0 items-center gap-1.5 border-r border-line bg-surface-sunken pl-4 text-muted hover:text-accent-fg',
+          'sticky left-0 z-10 flex shrink-0 items-center gap-1.5 border-r border-line bg-surface-sunken pl-3 font-medium text-muted hover:bg-surface-hover hover:text-ink',
           frozenShadow && 'frozen-shadow',
         )}
         style={{

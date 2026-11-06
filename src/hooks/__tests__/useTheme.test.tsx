@@ -2,13 +2,21 @@
 import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { ThemeToggle } from '@/components/layout/ThemeToggle'
-import { applyTheme, resolveTheme, THEME_STORAGE_KEY, useTheme } from '../useTheme'
+import {
+  applyTheme,
+  LEGACY_THEME_STORAGE_KEY,
+  migrateLegacyPreference,
+  resolveTheme,
+  THEME_STORAGE_KEY,
+  useTheme,
+} from '../useTheme'
 
 let systemDark = false
 const listeners = new Set<(e: MediaQueryListEvent) => void>()
 
 beforeEach(() => {
   localStorage.clear()
+  delete window.atelierTheme
   systemDark = false
   listeners.clear()
   document.documentElement.className = ''
@@ -50,12 +58,38 @@ describe('thème (SUITE.md §1.5)', () => {
     expect(markers()).toEqual({ dark: false, theme: 'light' })
   })
 
-  it('mémorise un choix explicite sous sa propre clé', () => {
+  it('mémorise un choix explicite sous la clé commune à la suite', () => {
     const { result } = renderHook(() => useTheme())
     act(() => result.current.setTheme('dark'))
     expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe('dark')
-    expect(THEME_STORAGE_KEY).toBe('atelier-tab:theme')
+    expect(THEME_STORAGE_KEY).toBe('atelier:theme')
     expect(markers()).toEqual({ dark: true, theme: 'dark' })
+  })
+
+  it('passe par window.atelierTheme (atelier-theme.js) et suit son événement', async () => {
+    await import('@/styles/atelier-brand/atelier-theme.js')
+    const api = window.atelierTheme
+    expect(api).toBeDefined()
+    const { result } = renderHook(() => useTheme())
+    act(() => result.current.setTheme('dark'))
+    expect(api?.get()).toBe('dark')
+    expect(html.dataset.themePref).toBe('dark')
+    expect(markers()).toEqual({ dark: true, theme: 'dark' })
+    // Changement venu d'ailleurs (autre composant, palette de commandes).
+    act(() => api?.set('light'))
+    expect(result.current.preference).toBe('light')
+    expect(markers()).toEqual({ dark: false, theme: 'light' })
+  })
+
+  it('reprend une fois l’ancienne préférence de Tab, puis l’efface', () => {
+    localStorage.setItem(LEGACY_THEME_STORAGE_KEY, 'dark')
+    migrateLegacyPreference()
+    expect(localStorage.getItem(LEGACY_THEME_STORAGE_KEY)).toBeNull()
+    expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe('dark')
+    // Une préférence commune existe déjà : elle l'emporte.
+    localStorage.setItem(LEGACY_THEME_STORAGE_KEY, 'light')
+    migrateLegacyPreference()
+    expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe('dark')
   })
 
   it('le menu propose Clair, Sombre et Système', () => {
