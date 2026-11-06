@@ -11,5 +11,5 @@ dist-launcher
 docs/SUITE.md
 # Copies verbatim du design system d’Atelier Projets.
 src/styles/atelier-ds/
-# Copie verbatim de la marque commune (charte « néon monochrome »).
+# Copie verbatim de la marque commune (charte v2 « Linear », police Inter, atelier-theme.js).
 src/styles/atelier-brand/
