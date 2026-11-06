@@ -34,10 +34,8 @@ export function OnlineToggle({ labelClassName }: { labelClassName?: string }) {
           : 'Hors ligne : tout reste sur la machine. Cliquer pour activer Claude.'
       }
       className={cn(
-        'flex h-7 shrink-0 items-center gap-1.5 rounded-full border px-2.5 text-[12px] font-medium transition-colors',
-        online
-          ? 'border-line-strong bg-accent-soft text-accent-fg'
-          : 'border-line-strong text-muted hover:bg-surface-hover hover:text-ink',
+        'flex h-7 shrink-0 items-center gap-1.5 rounded-lg border border-line px-2.5 text-[12px] font-medium transition-colors',
+        online ? 'bg-selection text-ink' : 'text-muted hover:bg-surface-hover hover:text-ink',
       )}
     >
       <Icon size={13} aria-hidden />

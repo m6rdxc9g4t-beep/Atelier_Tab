@@ -1,11 +1,10 @@
 import { useId, useRef } from 'react'
-import { Table2 } from 'lucide-react'
-
-import logo from '@/assets/logo-atelier-tab.webp'
+import { Table, X } from 'lucide-react'
 
 /**
- * Marque commune de la Suite Atelier (styles/atelier-brand, docs/SUITE.md §1.6) :
- * tuile + « atelier_Tab » ; un clic ouvre la fenêtre « À propos » avec le logo en grand.
+ * Marque commune de la Suite Atelier (styles/atelier-brand, docs/SUITE.md §1.6) : icône carrée
+ * en dégradé de la signature (glyphe Lucide `table` blanc) + « Atelier Tab » ; un clic ouvre la
+ * fenêtre « À propos » avec la grande icône de l'app.
  */
 export function AtelierBrand({
   showName = true,
@@ -28,11 +27,11 @@ export function AtelierBrand({
         onClick={() => dialog.current?.showModal()}
       >
         <span className="atelier-brand__tile" aria-hidden="true">
-          <Table2 />
+          <Table />
         </span>
         {showName && (
           <span className={`atelier-brand__name ${nameClassName}`}>
-            <span className="atelier-brand__prefix">atelier_</span>Tab
+            <span className="atelier-brand__prefix">Atelier </span>Tab
           </span>
         )}
       </button>
@@ -52,17 +51,13 @@ export function AtelierBrand({
             aria-label="Fermer"
             onClick={() => dialog.current?.close()}
           >
-            ×
+            <X size={16} aria-hidden />
           </button>
-          <img
-            className="atelier-about__logo"
-            src={logo}
-            alt="Logo Atelier Tab"
-            width={537}
-            height={576}
-          />
+          <span className="atelier-about__icon atelier-brand__tile" aria-hidden="true">
+            <Table />
+          </span>
           <h2 id={titleId} className="atelier-about__name">
-            <span className="atelier-brand__prefix">atelier_</span>Tab
+            <span className="atelier-brand__prefix">Atelier </span>Tab
           </h2>
           <p className="atelier-about__tagline">
             Tableur et base de données dans un même espace de travail, avec envoi direct vers

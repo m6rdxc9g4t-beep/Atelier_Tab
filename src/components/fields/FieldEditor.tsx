@@ -352,7 +352,10 @@ export function FieldEditor({ tableId, fieldId, index, anchor, onClose }: FieldE
           <button type="button" className="btn-ghost" onClick={onClose}>
             Annuler
           </button>
-          <button type="submit" className="atelier-btn-primary h-8 rounded-lg px-3 font-medium">
+          <button
+            type="submit"
+            className="atelier-btn-primary h-[30px] rounded-lg px-3 font-medium"
+          >
             {creating ? 'Créer la colonne' : 'Enregistrer'}
           </button>
         </div>

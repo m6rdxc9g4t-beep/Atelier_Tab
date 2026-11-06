@@ -3,13 +3,16 @@
  * menu des applications (courante cochée), indicateur « en marche / arrêtée » pour les
  * trois apps locales : l'app courante est toujours « en marche », les autres sont sondées.
  * Atelier Cuisine (app en ligne, sans API locale) n'est jamais sondée : « En ligne ».
+ * Marque commune (docs/SUITE.md §1.6) : icône carrée de chaque app, « Atelier Nom ». Règle du
+ * témoin muet (DESIGN.md) : seule une app arrêtée est en couleur (rouge) ; « en marche » reste
+ * neutre et « Vérification… » est un cercle vide.
  *
  * Clavier : Entrée / Espace / ↓ ouvrent le menu, ↑ ↓ Début Fin naviguent, Échap ferme et
  * rend le focus, Tab ou un clic à l'extérieur ferment. Les vérifications de santé ne
  * bloquent jamais l'affichage du menu.
  */
 import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
-import { BarChart3, CalendarCheck, Check, CookingPot, LayoutGrid, Table2 } from 'lucide-react'
+import { ChartColumn, Check, Kanban, LayoutGrid, Table, Utensils } from 'lucide-react'
 import {
   checkHealth,
   CURRENT_APP,
@@ -20,11 +23,12 @@ import {
 } from '@/lib/suite'
 import { cn } from '@/lib/cn'
 
-const ICONS: Record<SuiteAppId, typeof Table2> = {
-  viz: BarChart3,
-  tab: Table2,
-  projets: CalendarCheck,
-  cuisine: CookingPot,
+/** Icônes Lucide de la suite (docs/SUITE.md §1.6), mêmes dessins que le portail. */
+const ICONS: Record<SuiteAppId, typeof Table> = {
+  viz: ChartColumn,
+  tab: Table,
+  projets: Kanban,
+  cuisine: Utensils,
 }
 
 type Health = SuiteStatus | 'checking'
@@ -36,8 +40,12 @@ const HEALTH_TEXT: Record<Health, string> = {
 }
 /** Mention des apps en ligne, jamais sondées (docs/SUITE.md §3). */
 const ONLINE_TEXT = 'En ligne'
-/** Teinte de la pastille : statuts officiels (succès / danger), neutre pendant la vérification. */
-const HEALTH_STATUS: Record<Health, string> = { up: 'CLOSED', down: 'REJECTED', checking: 'OPEN' }
+/** Pastille d'état : seule l'app arrêtée est colorée (rouge) ; cercle vide pendant la vérification. */
+const HEALTH_DOT: Record<Health, string | null> = {
+  up: null,
+  down: 'bg-down',
+  checking: 'border border-faint',
+}
 
 export function SuiteSwitcher() {
   const [open, setOpen] = useState(false)
@@ -141,10 +149,7 @@ export function SuiteSwitcher() {
         aria-controls={open ? menuId : undefined}
         onClick={() => (open ? close(false) : openMenu('first'))}
         onKeyDown={onTriggerKey}
-        className={cn(
-          'grid size-7 place-items-center rounded-md text-muted hover:bg-surface-hover hover:text-ink',
-          open && 'bg-surface-hover text-ink',
-        )}
+        className={cn('btn-icon', open && 'bg-selection text-ink')}
       >
         <LayoutGrid size={16} aria-hidden />
       </button>
@@ -154,12 +159,9 @@ export function SuiteSwitcher() {
           role="menu"
           aria-label="Suite Atelier"
           onKeyDown={onMenuKey}
-          className="absolute top-full left-0 z-40 mt-2 w-86 rounded-lg border border-edge bg-surface-raised p-1.5 shadow-glow-strong"
+          className="absolute top-full left-0 z-40 mt-1.5 w-80 rounded-xl border border-edge bg-surface-raised p-1 shadow-glow-strong"
         >
-          <p
-            className="px-2.5 pt-1 pb-1.5 text-[11px] font-semibold tracking-wide text-muted uppercase"
-            aria-hidden
-          >
+          <p className="px-2 pt-1.5 pb-1 text-[11.5px] font-medium text-faint" aria-hidden>
             Suite Atelier
           </p>
           {SUITE_APPS.map((app, index) => {
@@ -185,7 +187,7 @@ export function SuiteSwitcher() {
                   if (!current) openSuiteApp(app)
                   close(true)
                 }}
-                className="flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-left hover:bg-surface-hover focus-visible:bg-surface-hover"
+                className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left hover:bg-surface-hover focus-visible:bg-surface-hover"
               >
                 {/* Chaque tuile prend la couleur signature de SON app (docs/SUITE.md §1.7). */}
                 <span
@@ -198,17 +200,25 @@ export function SuiteSwitcher() {
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-2 text-ink">
                     <span className="atelier-brand__name atelier-brand__name--sm">
-                      <span className="atelier-brand__prefix">atelier_</span>
+                      <span className="atelier-brand__prefix">Atelier </span>
                       {app.short}
                     </span>
                     {online ? (
-                      <span className="text-[11.5px] font-normal text-muted">{ONLINE_TEXT}</span>
+                      <span className="text-[11.5px] text-faint">{ONLINE_TEXT}</span>
                     ) : (
                       <span
-                        data-status={HEALTH_STATUS[state]}
-                        className="flex items-center gap-1 text-[11.5px] font-normal text-muted"
+                        data-state={state}
+                        className={cn(
+                          'flex items-center gap-1 text-[11.5px]',
+                          state === 'down' ? 'font-medium text-down' : 'text-faint',
+                        )}
                       >
-                        <span className="tone-dot size-1.5 rounded-full" aria-hidden />
+                        {HEALTH_DOT[state] && (
+                          <span
+                            className={cn('size-1.5 rounded-full', HEALTH_DOT[state])}
+                            aria-hidden
+                          />
+                        )}
                         {HEALTH_TEXT[state]}
                       </span>
                     )}

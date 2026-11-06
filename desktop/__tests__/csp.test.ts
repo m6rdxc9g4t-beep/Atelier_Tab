@@ -35,12 +35,20 @@ describe('politique de contenu de l’interface (SUITE.md §5.4)', () => {
     expect(directives(csp)['script-src']).not.toContain("'unsafe-inline'")
   })
 
-  it('autorise le script de thème d’index.html (et du build, s’il existe)', () => {
-    for (const file of [path.join(root, 'index.html'), path.join(root, 'dist', 'index.html')]) {
-      if (!fs.existsSync(file)) continue
-      const html = fs.readFileSync(file, 'utf8')
+  it('autorise le script de thème commun (atelier-theme.js inséré dans index.html)', () => {
+    // index.html ne porte plus de script en ligne : vite.config.ts y insère la copie verbatim.
+    expect(fs.readFileSync(path.join(root, 'index.html'), 'utf8')).toContain('atelier-theme.js')
+    const script = fs.readFileSync(
+      path.join(root, 'src', 'styles', 'atelier-brand', 'atelier-theme.js'),
+      'utf8',
+    )
+    const pages = [`<head><script>${script}</script></head>`]
+    const built = path.join(root, 'dist', 'index.html')
+    if (fs.existsSync(built)) pages.push(fs.readFileSync(built, 'utf8'))
+    for (const html of pages) {
       const body = /<script>([\s\S]*?)<\/script>/.exec(html)?.[1] ?? ''
-      expect(body).toMatch(/data-theme/)
+      expect(body).toContain('window.atelierTheme')
+      expect(body).toMatch(/dataset\.theme/)
       const hash = `'sha256-${createHash('sha256').update(body).digest('base64')}'`
       expect(directives(rendererCsp(html))['script-src']).toContain(hash)
     }

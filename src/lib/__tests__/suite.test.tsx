@@ -21,7 +21,7 @@ describe('module suite (SUITE.md §2–3)', () => {
       ['cuisine', 'Atelier Cuisine', 'https://atelier-cuisine-iota.vercel.app', null],
     ])
     expect(HEALTH_TIMEOUT_MS).toBe(1500)
-    // Marque commune (SUITE.md §1.6) : « atelier_Viz »…
+    // Marque commune (SUITE.md §1.6) : « Atelier Viz »…
     expect(SUITE_APPS.map((a) => a.short)).toEqual(['Viz', 'Tab', 'Projets', 'Cuisine'])
   })
 
@@ -85,7 +85,7 @@ describe('sélecteur « Suite Atelier »', () => {
     expect(items[1]?.getAttribute('aria-checked')).toBe('true')
     expect(fetchMock).toHaveBeenCalledTimes(2)
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes('vercel'))).toBe(false)
-    // Chaque tuile porte la couleur signature de son app (orchidée pour Cuisine).
+    // Chaque tuile porte la couleur signature de son app (lavande pour Cuisine).
     expect(
       items.map((i) => i.querySelector('[data-atelier-app]')?.getAttribute('data-atelier-app')),
     ).toEqual(['viz', 'tab', 'projets', 'cuisine'])

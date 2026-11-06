@@ -237,7 +237,7 @@ function FilePicker({
             type="button"
             disabled={pasted.trim() === ''}
             onClick={() => onPaste(pasted)}
-            className="self-end atelier-btn-primary h-8 rounded-lg px-3 font-medium disabled:opacity-50"
+            className="self-end atelier-btn-primary h-[30px] rounded-lg px-3 font-medium disabled:opacity-50"
           >
             Continuer
           </button>
@@ -390,7 +390,7 @@ function MappingStep({
             type="button"
             onClick={run}
             disabled={!canImport}
-            className="flex h-8 items-center gap-1.5 atelier-btn-primary rounded-lg px-3 font-medium disabled:opacity-50"
+            className="flex h-[30px] items-center gap-1.5 atelier-btn-primary rounded-lg px-3 font-medium disabled:opacity-50"
           >
             {busy ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
             {result?.updated && !result.inserted

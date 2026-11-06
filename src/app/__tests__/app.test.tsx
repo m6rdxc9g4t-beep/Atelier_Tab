@@ -190,11 +190,10 @@ describe('export DataFlow', () => {
     return screen.findByRole('dialog', { name: 'Exporter vers Atelier Projets' })
   }
 
-  it('montre une table prête et la pastille correspondante', async () => {
+  it('montre une table prête, sans pastille dans la navigation (témoin muet)', async () => {
     render(<App />)
-    expect(
-      screen.getAllByRole('img', { name: 'Prête pour Atelier Projets' }).length,
-    ).toBeGreaterThan(0)
+    // Charte v2 (DESIGN.md, règle du témoin muet) : seuls avertissements et erreurs se signalent.
+    expect(screen.queryAllByRole('img', { name: 'Prête pour Atelier Projets' })).toHaveLength(0)
     const dialog = await openExport()
     expect(within(dialog).getByText(/Tout est conforme au schéma 2.1.0/)).toBeTruthy()
     expect(within(dialog).getByText(/Toute la table/).textContent).toContain('3 lignes')

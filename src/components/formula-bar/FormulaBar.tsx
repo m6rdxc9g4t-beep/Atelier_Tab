@@ -81,9 +81,9 @@ export function FormulaBar({ table, onCommit }: { table: Table; onCommit: () => 
   }
 
   return (
-    <div className="flex h-10 shrink-0 items-center gap-2 px-3 pt-2.5">
+    <div className="flex h-10 shrink-0 items-center gap-2 border-b border-line bg-page px-3">
       <div
-        className="flex h-7 w-40 shrink-0 items-center gap-1.5 rounded-md border border-line-strong bg-field px-2"
+        className="flex h-7 w-40 shrink-0 items-center gap-1.5 rounded-lg border border-line-strong bg-field px-2"
         title={
           rangeLabel
             ? `${rangeLabel.text} · ${rangeLabel.size}`
@@ -143,7 +143,7 @@ export function FormulaBar({ table, onCommit }: { table: Table; onCommit: () => 
           }
           aria-label="Barre de formules"
           className={cn(
-            'h-7 w-full rounded-md border border-line-strong bg-field px-2 outline-none placeholder:text-faint',
+            'h-7 w-full rounded-lg border border-line-strong bg-field px-2 outline-none placeholder:text-faint',
             'focus:border-focus focus:shadow-focus',
             isFormula(shown) ? 'font-mono text-[12.5px] text-transparent caret-ink' : 'text-ink',
             inputError && 'border-danger',
@@ -187,7 +187,7 @@ function PreviewValue({
     <span
       className={cn(
         'shrink-0 rounded-md px-2 py-0.5 text-[12px] tabular-nums',
-        isError(value) ? 'bg-danger/10 text-danger' : 'bg-accent-soft text-ink',
+        isError(value) ? 'bg-danger/10 text-danger' : 'bg-surface-hover text-ink',
       )}
       title={isError(value) ? value.message : 'Résultat si vous validez'}
     >

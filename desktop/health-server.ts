@@ -55,36 +55,35 @@ export const OPEN_PAGE = `<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Atelier Tab</title>
 <style>
-  /* Page autonome (aucune ressource chargée) : charte « néon monochrome » (docs/SUITE.md §1.7),
-     valeurs des jetons --atelier-* de styles/atelier-brand/atelier-brand.css calculées pour le vert
-     de Tab (#21A366) et recopiées ici en clair et en sombre. */
-  :root { color-scheme: light dark; --bg-main: #F2F7F5; --bg-surface: #FFFFFF; --text-primary: #1C2A26;
-    --text-muted: #576C6C; --border-color: #89C8A2; --signature: #21A366; --tile-bg: #E8F4EC;
-    --tile-ink: #235C40; --glow: rgb(33 163 102 / 0.42); }
+  /* Page autonome (aucune ressource chargée) : charte v2 « Linear » (docs/SUITE.md §1.7), jetons
+     --atelier-* de styles/atelier-brand/atelier-brand.css recopiés ici en clair et en sombre ;
+     icône de l'app en dégradé de la signature de Tab (#1c8742), glyphe Lucide « table » blanc. */
+  :root { color-scheme: light dark; --bg: #fbfbfc; --surface: #ffffff; --text: #1a1b1e; --muted: #5f636c;
+    --border: #e3e4e8; --signature: #1c8742; }
   @media (prefers-color-scheme: dark) {
-    :root { --bg-main: #0A0E0F; --bg-surface: #101616; --text-primary: #EBF2F0; --text-muted: #8DA7A2;
-      --border-color: #207B4F; --tile-bg: #162821; --tile-ink: #59B481; --glow: rgb(33 163 102 / 0.55); }
+    :root { --bg: #0f1012; --surface: #17181b; --text: #e8e9ec; --muted: #969aa3; --border: #24262b; }
   }
-  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: var(--bg-main);
-    color: var(--text-primary); font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-  main { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 32px 40px;
-    border: 1px solid var(--border-color); border-radius: 16px; background: var(--bg-surface);
-    box-shadow: 0 0 18px -2px var(--glow); }
-  .brand { display: flex; align-items: center; gap: 10px; font-size: 20px; }
-  .tile { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px;
-    background: var(--tile-bg); color: var(--tile-ink); box-shadow: inset 0 0 0 1px var(--signature), 0 0 14px -4px var(--signature); }
-  .prefix { color: var(--text-muted); }
-  strong { font-weight: 700; }
-  p { margin: 0; color: var(--text-muted); }
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: var(--bg);
+    color: var(--text); font: 13px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased; }
+  main { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 28px 32px;
+    border: 1px solid var(--border); border-radius: 10px; background: var(--surface); text-align: center; }
+  .brand { display: flex; align-items: center; gap: 9px; font-size: 14px; font-weight: 600; }
+  .tile { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 7px; color: #fff;
+    background: linear-gradient(180deg, color-mix(in oklab, var(--signature) 78%, #fff), var(--signature));
+    box-shadow: inset 0 0 0 0.5px rgb(0 0 0 / 0.14), inset 0 1px 0 rgb(255 255 255 / 0.22); }
+  .prefix { color: var(--muted); font-weight: 500; }
+  h1 { margin: 6px 0 0; font-size: 15px; font-weight: 600; }
+  p { margin: 0; color: var(--muted); }
 </style>
 </head>
 <body>
 <main>
   <div class="brand" aria-label="Atelier Tab">
-    <span class="tile" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18"/></svg></span>
-    <span><span class="prefix">atelier_</span><strong>Tab</strong></span>
+    <span class="tile" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18M3 15h18"/></svg></span>
+    <span><span class="prefix">Atelier </span>Tab</span>
   </div>
-  <h1 style="margin:0;font-size:17px">Atelier Tab est ouvert</h1>
+  <h1>Atelier Tab est ouvert</h1>
   <p>La fenêtre de l’application vient d’être ramenée au premier plan.</p>
 </main>
 </body>

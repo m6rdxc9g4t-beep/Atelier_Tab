@@ -138,8 +138,8 @@ function createLauncher(deps) {
       title: PRODUCT,
       show: false,
       autoHideMenuBar: true,
-      // Même fond que la fenêtre principale (--atelier-bg, vert de Tab).
-      backgroundColor: dark ? '#0A0E0F' : '#F2F7F5',
+      // Même fond que la fenêtre principale (--atelier-bg de la charte v2).
+      backgroundColor: dark ? '#0f1012' : '#fbfbfc',
       webPreferences: {
         contextIsolation: true,
         nodeIntegration: false,

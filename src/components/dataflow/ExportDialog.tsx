@@ -161,7 +161,7 @@ function ExportDialogBody({ table, onClose }: { table: Table; onClose: () => voi
             type="button"
             onClick={run}
             disabled={blocked || !webhookReady || busy}
-            className="flex h-8 items-center gap-1.5 atelier-btn-primary rounded-lg px-3 font-medium disabled:opacity-50"
+            className="flex h-[30px] items-center gap-1.5 atelier-btn-primary rounded-lg px-3 font-medium disabled:opacity-50"
           >
             {busy ? (
               <Loader2 size={14} className="animate-spin" />

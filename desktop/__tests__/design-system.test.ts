@@ -99,23 +99,39 @@ describe('copies du design system', () => {
   })
 })
 
-// Marque commune « néon monochrome » (docs/SUITE.md §1.6–1.7) : copie à l'octet près.
+// Marque commune, charte v2 « Linear » (docs/SUITE.md §1.6–1.7) : copies à l'octet près.
+const BRAND_FILES = [
+  'atelier-brand.css',
+  'atelier-theme.js',
+  'inter-latin-wght-normal.woff2',
+  'inter-latin-ext-wght-normal.woff2',
+  'LICENSE-Inter.txt',
+]
 const BRAND_REFERENCE = path.resolve(REFERENCE, 'brand', 'atelier-brand.css')
 const brandCss = read('atelier-brand/atelier-brand.css')
 
 describe('marque commune (src/styles/atelier-brand/)', () => {
-  it.skipIf(!fs.existsSync(BRAND_REFERENCE))(
-    'atelier-brand.css est identique à design-system/brand/atelier-brand.css',
-    () => {
-      expect(brandCss).toBe(fs.readFileSync(BRAND_REFERENCE, 'utf8'))
+  it.skipIf(!fs.existsSync(BRAND_REFERENCE)).each(BRAND_FILES)(
+    '%s est identique à design-system/brand/',
+    (file) => {
+      expect(fs.readFileSync(path.join(styles, 'atelier-brand', file))).toEqual(
+        fs.readFileSync(path.resolve(REFERENCE, 'brand', file)),
+      )
     },
   )
 
+  it('embarque Inter (et sa licence), plus Nunito', () => {
+    const dir = fs.readdirSync(path.join(styles, 'atelier-brand'))
+    for (const file of BRAND_FILES) expect(dir).toContain(file)
+    expect(dir.some((f) => /nunito/i.test(f))).toBe(false)
+    expect(brandCss).toContain('url("./inter-latin-wght-normal.woff2")')
+  })
+
   it.each([
-    ['tab', '#21a366'],
-    ['viz', '#f2c811'],
-    ['projets', '#94d82d'],
-    ['cuisine', '#e056e2'],
+    ['tab', '#1c8742'],
+    ['viz', '#996c00'],
+    ['projets', '#568100'],
+    ['cuisine', '#8568a7'],
   ])('définit la signature de %s (%s) pour le sélecteur de la suite', (app, hex) => {
     expect(brandCss).toMatch(new RegExp(`--atelier-sig-${app}: ${hex};`, 'i'))
     expect(brandCss).toContain(
@@ -136,7 +152,7 @@ describe('jetons d’Atelier Tab (src/index.css)', () => {
     }
   })
 
-  it('branche ses jetons sur la palette « néon monochrome » de la marque (§1.7), sans couleur littérale', () => {
+  it('branche ses jetons sur la structure neutre de la marque (§1.7), sans couleur littérale', () => {
     const tokens = declarations(indexCss.split('@theme inline')[0]!)
     expect(tokens.get('--page')).toBe('var(--atelier-bg)')
     expect(tokens.get('--sidebar')).toBe('var(--atelier-sidebar)')
@@ -145,6 +161,8 @@ describe('jetons d’Atelier Tab (src/index.css)', () => {
     expect(tokens.get('--field')).toBe('var(--atelier-field)')
     expect(tokens.get('--ink')).toBe('var(--atelier-text)')
     expect(tokens.get('--muted')).toBe('var(--atelier-muted)')
+    expect(tokens.get('--faint')).toBe('var(--atelier-faint)')
+    expect(tokens.get('--selection')).toBe('var(--atelier-surface-3)')
     expect(tokens.get('--edge')).toBe('var(--atelier-border)')
     expect(tokens.get('--line')).toBe('var(--atelier-line)')
     expect(tokens.get('--line-strong')).toBe('var(--atelier-border-soft)')
@@ -155,24 +173,28 @@ describe('jetons d’Atelier Tab (src/index.css)', () => {
     expect(tokens.get('--success')).toBe('var(--status-closed)')
     expect(tokens.get('--danger')).toBe('var(--status-rejected)')
     expect(tokens.get('--warning')).toBe('var(--status-hold)')
-    for (const derived of ['--surface-sunken', '--faint', '--accent-soft']) {
+    for (const derived of ['--surface-sunken', '--accent-soft', '--row-hover']) {
       expect(tokens.get(derived), derived).toMatch(/^color-mix\(in oklab, /)
     }
     expect(indexCss).not.toMatch(/#[0-9a-f]{3,8}\b/i)
   })
 
-  it('le fond de page porte la grille et la lueur de la marque', () => {
-    expect(indexCss).toContain('background: var(--atelier-backdrop), var(--page)')
-    expect(indexCss).not.toContain('background-image: var(--atelier-backdrop)')
+  it('plat au repos : fond uni, ni grille ni lueur de fond', () => {
+    expect(indexCss).toMatch(/background: var\(--page\);/)
+    expect(indexCss).not.toContain('--atelier-backdrop')
+    expect(indexCss).not.toMatch(/text-shadow|--atelier-signature-glow/)
   })
 
-  it('rayons 6 / 10 / 16 px et polices système, sans police téléchargée (§1.3)', () => {
-    expect(indexCss).toMatch(/--ds-radius-sm: 6px/)
-    expect(indexCss).toMatch(/--ds-radius-md: 10px/)
-    expect(indexCss).toMatch(/--ds-radius-lg: 16px/)
-    expect(indexCss).toMatch(/--ds-font-sans:\s*ui-sans-serif, system-ui/)
-    expect(indexCss).toMatch(/--ds-font-mono:\s*ui-monospace/)
-    expect(indexCss).not.toMatch(/Inter|JetBrains|fonts\.googleapis|@font-face/)
+  it('rayons 5 / 7 / 10 px et police Inter embarquée de la marque, aucune police distante (§1.3)', () => {
+    expect(indexCss).toMatch(/--ds-radius-sm: var\(--atelier-radius-sm\)/)
+    expect(indexCss).toMatch(/--ds-radius-md: var\(--atelier-radius-md\)/)
+    expect(indexCss).toMatch(/--ds-radius-lg: var\(--atelier-radius-lg\)/)
+    expect(brandCss).toMatch(
+      /--atelier-radius-sm: 5px;[\s\S]*--atelier-radius-md: 7px;[\s\S]*--atelier-radius-lg: 10px;/,
+    )
+    expect(indexCss).toMatch(/--ds-font-sans: var\(--atelier-font\)/)
+    expect(indexCss).toMatch(/--ds-font-mono: var\(--atelier-font-mono\)/)
+    expect(indexCss).not.toMatch(/fonts\.googleapis|@font-face|url\(/)
   })
 
   it('le variant dark: de Tailwind suit la classe .dark et data-theme="dark"', () => {

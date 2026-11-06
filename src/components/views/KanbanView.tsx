@@ -172,8 +172,8 @@ function KanbanColumn({
       ref={setNodeRef}
       aria-label={choice?.label ?? 'Sans statut'}
       className={cn(
-        'flex w-72 shrink-0 flex-col rounded-xl border bg-surface-sunken/70 transition-colors',
-        isOver ? 'border-accent shadow-glow' : 'border-line',
+        'flex w-72 shrink-0 flex-col rounded-xl border bg-surface-sunken transition-colors',
+        isOver ? 'border-accent bg-accent-soft' : 'border-line',
       )}
     >
       <header className="flex items-center gap-2 px-3 pt-3 pb-2">
@@ -275,8 +275,8 @@ const Card = memo(function Card({
         drag?.(e)
       }}
       className={cn(
-        'flex cursor-pointer flex-col gap-1.5 rounded-lg border border-line-strong bg-surface p-2.5 text-left hover:border-edge hover:shadow-glow',
-        overlay && 'rotate-1 border-edge shadow-glow-strong',
+        'flex cursor-pointer flex-col gap-1.5 rounded-lg border border-line bg-surface p-2.5 text-left hover:border-line-strong',
+        overlay && 'rotate-1 border-line-strong shadow-glow-strong',
         className,
       )}
     >
@@ -317,11 +317,13 @@ function NoStatusField({ table }: { table: Table }) {
     <div className="grid flex-1 place-items-center p-6">
       <div className="flex max-w-sm flex-col items-center gap-2 text-center text-muted">
         <Columns3 size={22} className="text-faint" />
-        <p className="font-medium text-ink">Le Kanban regroupe les lignes par statut</p>
+        <p className="text-[15px] font-semibold text-ink">
+          Le Kanban regroupe les lignes par statut
+        </p>
         <p>Ajoutez une colonne Statut à cette table pour voir ses lignes en cartes.</p>
         <button
           type="button"
-          className="atelier-btn-primary mt-2 h-8 rounded-lg px-3 font-medium"
+          className="atelier-btn-primary mt-2 h-[30px] rounded-lg px-3 font-medium"
           onClick={() => {
             const id = createField(table.id, {
               label: 'Statut',
