@@ -131,7 +131,7 @@ describe('marque commune (src/styles/atelier-brand/)', () => {
     ['tab', '#1c8742'],
     ['viz', '#996c00'],
     ['projets', '#568100'],
-    ['cuisine', '#8568a7'],
+    ['cuisine', '#3a6c97'],
   ])('définit la signature de %s (%s) pour le sélecteur de la suite', (app, hex) => {
     expect(brandCss).toMatch(new RegExp(`--atelier-sig-${app}: ${hex};`, 'i'))
     expect(brandCss).toContain(
