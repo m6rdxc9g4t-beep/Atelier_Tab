@@ -14,7 +14,7 @@
  * - Clair par défaut ; sombre quand <html> porte `class="dark"` et `data-theme="dark"`
  *   (posés ensemble par styles/atelier-brand/atelier-theme.js, voir useTheme). Le variant `dark:`
  *   de Tailwind accepte les deux marqueurs.
- * - Structure neutre commune à la suite (gris froids) : fonds, surfaces, textes et traits viennent
+ * - Structure commune à la suite (crème en clair, bleu nuit en sombre) : fonds, surfaces, textes et traits viennent
  *   des jetons --atelier-* de styles/atelier-brand/atelier-brand.css. <html data-atelier-app="tab">
  *   y pose la signature de Tab (vert), qui ne sert qu'à l'accent : bouton principal,
  *   sélection (cellule, plage, ligne), focus, liens, icône de l'app.
@@ -78,10 +78,13 @@
   --pressed-shadow:
     0 1px 2px color-mix(in oklab, var(--atelier-text) 8%, transparent), 0 0 0 1px var(--line);
 
-  /* États (couleurs officielles : inchangées) */
-  --success: var(--status-closed);
-  --danger: var(--status-rejected);
-  --warning: var(--status-hold);
+  /* États : teinte des couleurs officielles. En clair (crème), rapprochée du texte pour rester lisible
+     (≥ 4,5:1 : l'ambre et le vert purs n'atteignent que 2:1 et 3:1) ; en sombre, la couleur officielle. */
+  --success: color-mix(in oklab, var(--status-closed) 66%, var(--atelier-text));
+  --danger: color-mix(in oklab, var(--status-rejected) 80%, var(--atelier-text));
+  --warning: color-mix(in oklab, var(--status-hold) 55%, var(--atelier-text));
+  /* Texte d'un badge teinté (.tone-soft) : même dosage que --kind-ink du design system en clair. */
+  --tone-ink-mix: 55%;
   /* États d'un service (santé d'une app, envoi) : seulement quand ce n'est pas nominal. */
   --down: var(--atelier-down);
   --warn: var(--atelier-warn);
@@ -109,6 +112,10 @@
   --scrim: color-mix(in oklab, var(--atelier-bg) 62%, transparent);
   --pressed-shadow:
     0 1px 2px color-mix(in oklab, var(--atelier-bg) 60%, transparent), 0 0 0 1px var(--line-strong);
+  --success: var(--status-closed);
+  --danger: var(--status-rejected);
+  --warning: var(--status-hold);
+  --tone-ink-mix: 72%;
 }
 
 @theme inline {
@@ -142,11 +149,13 @@
   --color-down: var(--down);
   --color-warn: var(--warn);
 
-  /* rounded-sm / -md / -lg / -xl → 4 / 5 / 7 / 10 px (touches · petites icônes · boutons, champs · panneaux) */
+  /* rounded-sm / -md / -lg / -xl / -2xl → 4 / 5 / 7 / 10 / 12 px (touches · petites icônes · boutons, champs · panneaux) */
   --radius-sm: 4px;
   --radius-md: var(--ds-radius-sm);
   --radius-lg: var(--ds-radius-md);
   --radius-xl: var(--ds-radius-lg);
+  /* rounded-2xl → 12 px : cartes de chiffres (comme .atelier-kpi). */
+  --radius-2xl: var(--atelier-radius-xl);
 
   --font-sans: var(--ds-font-sans);
   --font-mono: var(--ds-font-mono);
@@ -219,7 +228,7 @@
   /* Comme --kind-soft / --kind-ink du design system (components/semantic.css). */
   .tone-soft {
     background-color: color-mix(in oklab, var(--tone) 16%, var(--surface));
-    color: color-mix(in oklab, var(--tone) 72%, var(--ink));
+    color: color-mix(in oklab, var(--tone) var(--tone-ink-mix, 72%), var(--ink));
   }
   /* Teinte pleine (avatars) : assombrie pour que les initiales restent lisibles. */
   .tone-solid {

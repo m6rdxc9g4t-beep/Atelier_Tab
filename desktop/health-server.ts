@@ -56,12 +56,12 @@ export const OPEN_PAGE = `<!doctype html>
 <title>Atelier Tab</title>
 <style>
   /* Page autonome (aucune ressource chargée) : charte v2 « Linear » (docs/SUITE.md §1.7), jetons
-     --atelier-* de styles/atelier-brand/atelier-brand.css recopiés ici en clair et en sombre ;
+     --atelier-* de styles/atelier-brand/atelier-brand.css recopiés ici (crème en clair, bleu nuit en sombre) ;
      icône de l'app en dégradé de la signature de Tab (#1c8742), glyphe Lucide « table » blanc. */
-  :root { color-scheme: light dark; --bg: #fbfbfc; --surface: #ffffff; --text: #1a1b1e; --muted: #5f636c;
-    --border: #e3e4e8; --signature: #1c8742; }
+  :root { color-scheme: light dark; --bg: #f8f4ec; --surface: #fffdf8; --text: #1f1b16; --muted: #5f574b;
+    --border: #e4dac8; --signature: #1c8742; }
   @media (prefers-color-scheme: dark) {
-    :root { --bg: #0f1012; --surface: #17181b; --text: #e8e9ec; --muted: #969aa3; --border: #24262b; }
+    :root { --bg: #0b1220; --surface: #121b2d; --text: #e6eaf2; --muted: #a3aec2; --border: #1f2a40; }
   }
   body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: var(--bg);
     color: var(--text); font: 13px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;

@@ -131,7 +131,8 @@ function ExportDialogBody({ table, onClose }: { table: Table; onClose: () => voi
       }
       footer={
         <>
-          <div className="min-w-0 flex-1 text-[12px]">
+          {/* Téléphone : le message d'envoi prend sa propre ligne, au-dessus des boutons. */}
+          <div className={cn('min-w-0 flex-1 text-[12px]', outcome && 'max-sm:basis-full')}>
             {outcome ? (
               <span
                 role="status"
@@ -427,11 +428,12 @@ function ImportSummary({ summary }: { summary: ProjetsImportSummary }) {
           <span className="font-normal text-muted">· projet {summary.projectId}</span>
         )}
       </h3>
-      <dl className="grid grid-cols-4 gap-2">
+      {/* Cartes de chiffres (comme .atelier-kpi) : plates, trait de 1 px, coins de 12 px. */}
+      <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {counts.map(([label, value]) => (
-          <div key={label} className="rounded-md border border-line-strong bg-field px-2.5 py-1.5">
-            <dt className="text-[11.5px] text-muted">{label}</dt>
-            <dd className="text-[15px] font-semibold tabular-nums">{value}</dd>
+          <div key={label} className="min-w-0 rounded-2xl border border-edge bg-surface px-3 py-2">
+            <dt className="text-[11.5px] font-medium text-muted">{label}</dt>
+            <dd className="text-[17px] leading-tight font-semibold tabular-nums">{value}</dd>
           </div>
         ))}
       </dl>
