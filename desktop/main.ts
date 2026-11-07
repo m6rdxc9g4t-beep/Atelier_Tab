@@ -492,8 +492,8 @@ function createWindow() {
     minHeight: 600,
     title: APP_NAME,
     show: false,
-    // Fond = --atelier-bg de la charte v2 « Linear » (structure neutre commune à la suite).
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#0f1012' : '#fbfbfc',
+    // Fond = --atelier-bg de la marque commune (bleu nuit en sombre, crème en clair).
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#0b1220' : '#f8f4ec',
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
