@@ -53,6 +53,9 @@ describe('définitions', () => {
       'configure_export',
       'export_table',
       'query_table',
+      'list_suite_examples',
+      'load_suite_example',
+      'remove_suite_example',
       'atelier_manifest',
       'atelier_events',
     ])

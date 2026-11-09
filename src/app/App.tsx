@@ -22,6 +22,11 @@ const AssistantPanel = lazy(() =>
 )
 
 // Chargé à la première ouverture, comme l'export.
+const SuiteExamplesDialog = lazy(() =>
+  import('@/components/examples/SuiteExamplesDialog').then((m) => ({
+    default: m.SuiteExamplesDialog,
+  })),
+)
 const ImportDialog = lazy(() =>
   import('@/components/dataflow/ImportDialog').then((m) => ({ default: m.ImportDialog })),
 )
@@ -44,6 +49,7 @@ export function App() {
   const mode = table?.views.find((v) => v.id === table.activeViewId)?.mode ?? 'hybrid'
   const assistantOpen = useAssistant((s) => s.open)
   const importOpen = useUIStore((s) => s.importRequest !== null)
+  const examplesOpen = useUIStore((s) => s.examplesOpen)
   const [dropping, setDropping] = useState(false)
 
   // Fichier CSV glissé sur la zone de travail : assistant d'import sur la table ouverte.
@@ -156,6 +162,11 @@ export function App() {
       {importOpen && (
         <Suspense fallback={null}>
           <ImportDialog />
+        </Suspense>
+      )}
+      {examplesOpen && (
+        <Suspense fallback={null}>
+          <SuiteExamplesDialog />
         </Suspense>
       )}
       <CommandPalette />

@@ -1,0 +1,529 @@
+{
+ "format": "atelier-exemples/1",
+ "histoire": {
+  "id": "studio-garance",
+  "titre": "Studio Garance",
+  "sous_titre": "Clôture comptable d'un studio de design",
+  "secteur": "Compta",
+  "resume": "Un studio de design graphique d'Arles clôture son mois : relevés bancaires convertis, catégorisés, comparés au budget ; le poste Matériel dépasse et devient une tâche de suivi."
+ },
+ "espace": {
+  "id": "ws_ex_studio-garance",
+  "nom": "Studio Garance"
+ },
+ "projet": {
+  "id": "prj_ex_studio-garance",
+  "nom": "Compta 2026"
+ },
+ "tables": [
+  {
+   "nom": "Opérations août-oct. 2026",
+   "colonnes": [
+    {
+     "label": "Date",
+     "type": "date"
+    },
+    {
+     "label": "Libellé",
+     "type": "text",
+     "mapping": "entity_title"
+    },
+    {
+     "label": "Débit",
+     "type": "currency"
+    },
+    {
+     "label": "Crédit",
+     "type": "currency"
+    },
+    {
+     "label": "Montant",
+     "type": "currency"
+    },
+    {
+     "label": "Catégorie",
+     "type": "select",
+     "choices": [
+      "Assurances",
+      "Banque",
+      "Charges sociales",
+      "Déplacements",
+      "Formation",
+      "Locaux",
+      "Logiciels",
+      "Matériel",
+      "Repas",
+      "Télécom",
+      "Ventes"
+     ]
+    },
+    {
+     "label": "Mois",
+     "type": "text"
+    }
+   ],
+   "lignes": [
+    {
+     "Date": "2026-08-01",
+     "Libellé": "PRLV SEPA SCI DES TANNEURS LOYER ATELIER",
+     "Débit": 1150,
+     "Crédit": null,
+     "Montant": -1150.0,
+     "Catégorie": "Locaux",
+     "Mois": "2026-08"
+    },
+    {
+     "Date": "2026-08-04",
+     "Libellé": "PRLV SEPA ADOBE CREATIVE CLOUD",
+     "Débit": 71.99,
+     "Crédit": null,
+     "Montant": -71.99,
+     "Catégorie": "Logiciels",
+     "Mois": "2026-08"
+    },
+    {
+     "Date": "2026-08-06",
+     "Libellé": "VIR SEPA RECU MAISON VAUCLAIR FACT 2026-031",
+     "Débit": null,
+     "Crédit": 1800,
+     "Montant": 1800.0,
+     "Catégorie": "Ventes",
+     "Mois": "2026-08"
+    },
+    {
+     "Date": "2026-08-08",
+     "Libellé": "PRLV SEPA ORANGE PRO",
+     "Débit": 54.99,
+     "Crédit": null,
+     "Montant": -54.99,
+     "Catégorie": "Télécom",
+     "Mois": "2026-08"
+    },
+    {
+     "Date": "2026-08-12",
+     "Libellé": "CARTE BOESNER FOURNITURES ARLES",
+     "Débit": 186.3,
+     "Crédit": null,
+     "Montant": -186.3,
+     "Catégorie": "Matériel",
+     "Mois": "2026-08"
+    },
+    {
+     "Date": "2026-08-16",
+     "Libellé": "PRLV SEPA URSSAF",
+     "Débit": 640,
+     "Crédit": null,
+     "Montant": -640.0,
+     "Catégorie": "Charges sociales",
+     "Mois": "2026-08"
+    },
+    {
+     "Date": "2026-08-18",
+     "Libellé": "CARTE LDLC PRO DISQUE SSD",
+     "Débit": 389,
+     "Crédit": null,
+     "Montant": -389.0,
+     "Catégorie": "Matériel",
+     "Mois": "2026-08"
+    },
+    {
+     "Date": "2026-08-20",
+     "Libellé": "VIR SEPA RECU CAFE LISIERE FACT 2026-033",
+     "Débit": null,
+     "Crédit": 1800,
+     "Montant": 1800.0,
+     "Catégorie": "Ventes",
+     "Mois": "2026-08"
+    },
+    {
+     "Date": "2026-08-22",
+     "Libellé": "CARTE SNCF CONNECT",
+     "Débit": 124,
+     "Crédit": null,
+     "Montant": -124.0,
+     "Catégorie": "Déplacements",
+     "Mois": "2026-08"
+    },
+    {
+     "Date": "2026-08-25",
+     "Libellé": "CARTE BRASSERIE DU FORUM",
+     "Débit": 58.4,
+     "Crédit": null,
+     "Montant": -58.4,
+     "Catégorie": "Repas",
+     "Mois": "2026-08"
+    },
+    {
+     "Date": "2026-08-26",
+     "Libellé": "PRLV SEPA IONOS HEBERGEMENT",
+     "Débit": 182.32,
+     "Crédit": null,
+     "Montant": -182.32,
+     "Catégorie": "Logiciels",
+     "Mois": "2026-08"
+    },
+    {
+     "Date": "2026-08-27",
+     "Libellé": "PRLV SEPA ASSURANCE RC PRO",
+     "Débit": 48.2,
+     "Crédit": null,
+     "Montant": -48.2,
+     "Catégorie": "Assurances",
+     "Mois": "2026-08"
+    },
+    {
+     "Date": "2026-08-29",
+     "Libellé": "FRAIS TENUE DE COMPTE",
+     "Débit": 9,
+     "Crédit": null,
+     "Montant": -9.0,
+     "Catégorie": "Banque",
+     "Mois": "2026-08"
+    },
+    {
+     "Date": "2026-09-01",
+     "Libellé": "PRLV SEPA SCI DES TANNEURS LOYER ATELIER",
+     "Débit": 1150,
+     "Crédit": null,
+     "Montant": -1150.0,
+     "Catégorie": "Locaux",
+     "Mois": "2026-09"
+    },
+    {
+     "Date": "2026-09-04",
+     "Libellé": "PRLV SEPA ADOBE CREATIVE CLOUD",
+     "Débit": 71.99,
+     "Crédit": null,
+     "Montant": -71.99,
+     "Catégorie": "Logiciels",
+     "Mois": "2026-09"
+    },
+    {
+     "Date": "2026-09-05",
+     "Libellé": "VIR SEPA RECU LES HALLES D ARLES FACT 2026-034",
+     "Débit": null,
+     "Crédit": 2350,
+     "Montant": 2350.0,
+     "Catégorie": "Ventes",
+     "Mois": "2026-09"
+    },
+    {
+     "Date": "2026-09-09",
+     "Libellé": "PRLV SEPA ORANGE PRO",
+     "Débit": 54.99,
+     "Crédit": null,
+     "Montant": -54.99,
+     "Catégorie": "Télécom",
+     "Mois": "2026-09"
+    },
+    {
+     "Date": "2026-09-11",
+     "Libellé": "CARTE BOESNER FOURNITURES ARLES",
+     "Débit": 212.8,
+     "Crédit": null,
+     "Montant": -212.8,
+     "Catégorie": "Matériel",
+     "Mois": "2026-09"
+    },
+    {
+     "Date": "2026-09-15",
+     "Libellé": "VIR SEPA EMIS ECOLE ESTIENNE FORMATION",
+     "Débit": 450,
+     "Crédit": null,
+     "Montant": -450.0,
+     "Catégorie": "Formation",
+     "Mois": "2026-09"
+    },
+    {
+     "Date": "2026-09-16",
+     "Libellé": "PRLV SEPA URSSAF",
+     "Débit": 640,
+     "Crédit": null,
+     "Montant": -640.0,
+     "Catégorie": "Charges sociales",
+     "Mois": "2026-09"
+    },
+    {
+     "Date": "2026-09-17",
+     "Libellé": "CARTE LDLC PRO ECRAN 27 POUCES",
+     "Débit": 304.22,
+     "Crédit": null,
+     "Montant": -304.22,
+     "Catégorie": "Matériel",
+     "Mois": "2026-09"
+    },
+    {
+     "Date": "2026-09-19",
+     "Libellé": "VIR SEPA RECU MAISON VAUCLAIR FACT 2026-036",
+     "Débit": null,
+     "Crédit": 1800,
+     "Montant": 1800.0,
+     "Catégorie": "Ventes",
+     "Mois": "2026-09"
+    },
+    {
+     "Date": "2026-09-22",
+     "Libellé": "CARTE SNCF CONNECT",
+     "Débit": 156.4,
+     "Crédit": null,
+     "Montant": -156.4,
+     "Catégorie": "Déplacements",
+     "Mois": "2026-09"
+    },
+    {
+     "Date": "2026-09-24",
+     "Libellé": "CARTE IMPRIMERIE DU RHONE",
+     "Débit": 268,
+     "Crédit": null,
+     "Montant": -268.0,
+     "Catégorie": "Matériel",
+     "Mois": "2026-09"
+    },
+    {
+     "Date": "2026-09-26",
+     "Libellé": "PRLV SEPA ASSURANCE RC PRO",
+     "Débit": 48.2,
+     "Crédit": null,
+     "Montant": -48.2,
+     "Catégorie": "Assurances",
+     "Mois": "2026-09"
+    },
+    {
+     "Date": "2026-09-29",
+     "Libellé": "FRAIS TENUE DE COMPTE",
+     "Débit": 9,
+     "Crédit": null,
+     "Montant": -9.0,
+     "Catégorie": "Banque",
+     "Mois": "2026-09"
+    },
+    {
+     "Date": "2026-09-30",
+     "Libellé": "CARTE BRASSERIE DU FORUM",
+     "Débit": 36.5,
+     "Crédit": null,
+     "Montant": -36.5,
+     "Catégorie": "Repas",
+     "Mois": "2026-09"
+    },
+    {
+     "Date": "2026-10-01",
+     "Libellé": "PRLV SEPA SCI DES TANNEURS LOYER ATELIER",
+     "Débit": 1150,
+     "Crédit": null,
+     "Montant": -1150.0,
+     "Catégorie": "Locaux",
+     "Mois": "2026-10"
+    },
+    {
+     "Date": "2026-10-02",
+     "Libellé": "VIR SEPA RECU MAISON VAUCLAIR FACT 2026-038",
+     "Débit": null,
+     "Crédit": 2400,
+     "Montant": 2400.0,
+     "Catégorie": "Ventes",
+     "Mois": "2026-10"
+    },
+    {
+     "Date": "2026-10-04",
+     "Libellé": "PRLV SEPA ADOBE CREATIVE CLOUD",
+     "Débit": 71.99,
+     "Crédit": null,
+     "Montant": -71.99,
+     "Catégorie": "Logiciels",
+     "Mois": "2026-10"
+    },
+    {
+     "Date": "2026-10-07",
+     "Libellé": "CARTE BOESNER FOURNITURES ARLES",
+     "Débit": 238.4,
+     "Crédit": null,
+     "Montant": -238.4,
+     "Catégorie": "Matériel",
+     "Mois": "2026-10"
+    },
+    {
+     "Date": "2026-10-09",
+     "Libellé": "PRLV SEPA ORANGE PRO",
+     "Débit": 54.99,
+     "Crédit": null,
+     "Montant": -54.99,
+     "Catégorie": "Télécom",
+     "Mois": "2026-10"
+    },
+    {
+     "Date": "2026-10-12",
+     "Libellé": "VIR SEPA RECU LES HALLES D ARLES FACT 2026-039",
+     "Débit": null,
+     "Crédit": 1850,
+     "Montant": 1850.0,
+     "Catégorie": "Ventes",
+     "Mois": "2026-10"
+    },
+    {
+     "Date": "2026-10-14",
+     "Libellé": "CARTE IMPRIMERIE DU RHONE",
+     "Débit": 312,
+     "Crédit": null,
+     "Montant": -312.0,
+     "Catégorie": "Matériel",
+     "Mois": "2026-10"
+    },
+    {
+     "Date": "2026-10-16",
+     "Libellé": "PRLV SEPA URSSAF",
+     "Débit": 640,
+     "Crédit": null,
+     "Montant": -640.0,
+     "Catégorie": "Charges sociales",
+     "Mois": "2026-10"
+    },
+    {
+     "Date": "2026-10-19",
+     "Libellé": "CARTE SNCF CONNECT",
+     "Débit": 89.5,
+     "Crédit": null,
+     "Montant": -89.5,
+     "Catégorie": "Déplacements",
+     "Mois": "2026-10"
+    },
+    {
+     "Date": "2026-10-21",
+     "Libellé": "CARTE BOESNER FOURNITURES ARLES",
+     "Débit": 157.6,
+     "Crédit": null,
+     "Montant": -157.6,
+     "Catégorie": "Matériel",
+     "Mois": "2026-10"
+    },
+    {
+     "Date": "2026-10-23",
+     "Libellé": "VIR SEPA RECU CAFE LISIERE FACT 2026-041",
+     "Débit": null,
+     "Crédit": 960,
+     "Montant": 960.0,
+     "Catégorie": "Ventes",
+     "Mois": "2026-10"
+    },
+    {
+     "Date": "2026-10-27",
+     "Libellé": "PRLV SEPA ASSURANCE RC PRO",
+     "Débit": 48.2,
+     "Crédit": null,
+     "Montant": -48.2,
+     "Catégorie": "Assurances",
+     "Mois": "2026-10"
+    },
+    {
+     "Date": "2026-10-29",
+     "Libellé": "FRAIS TENUE DE COMPTE",
+     "Débit": 9,
+     "Crédit": null,
+     "Montant": -9.0,
+     "Catégorie": "Banque",
+     "Mois": "2026-10"
+    },
+    {
+     "Date": "2026-10-30",
+     "Libellé": "CARTE BRASSERIE DU FORUM",
+     "Débit": 42.8,
+     "Crédit": null,
+     "Montant": -42.8,
+     "Catégorie": "Repas",
+     "Mois": "2026-10"
+    }
+   ]
+  },
+  {
+   "nom": "Clients et factures",
+   "colonnes": [
+    {
+     "label": "Facture",
+     "type": "text",
+     "mapping": "entity_title"
+    },
+    {
+     "label": "Client",
+     "type": "text"
+    },
+    {
+     "label": "Émise le",
+     "type": "date"
+    },
+    {
+     "label": "Montant HT",
+     "type": "currency",
+     "mapping": "financial_ht"
+    },
+    {
+     "label": "Statut",
+     "type": "select",
+     "choices": [
+      "À faire",
+      "En cours",
+      "Terminée"
+     ],
+     "mapping": "workflow_state"
+    }
+   ],
+   "lignes": [
+    {
+     "Facture": "2026-031",
+     "Client": "Maison Vauclair",
+     "Émise le": "2026-07-28",
+     "Montant HT": 1500,
+     "Statut": "Terminée"
+    },
+    {
+     "Facture": "2026-033",
+     "Client": "Café Lisière",
+     "Émise le": "2026-08-05",
+     "Montant HT": 1500,
+     "Statut": "Terminée"
+    },
+    {
+     "Facture": "2026-034",
+     "Client": "Les Halles d'Arles",
+     "Émise le": "2026-08-25",
+     "Montant HT": 1958.33,
+     "Statut": "Terminée"
+    },
+    {
+     "Facture": "2026-036",
+     "Client": "Maison Vauclair",
+     "Émise le": "2026-09-08",
+     "Montant HT": 1500,
+     "Statut": "Terminée"
+    },
+    {
+     "Facture": "2026-038",
+     "Client": "Maison Vauclair",
+     "Émise le": "2026-09-25",
+     "Montant HT": 2000,
+     "Statut": "Terminée"
+    },
+    {
+     "Facture": "2026-039",
+     "Client": "Les Halles d'Arles",
+     "Émise le": "2026-10-01",
+     "Montant HT": 1541.67,
+     "Statut": "Terminée"
+    },
+    {
+     "Facture": "2026-041",
+     "Client": "Café Lisière",
+     "Émise le": "2026-10-10",
+     "Montant HT": 800,
+     "Statut": "Terminée"
+    },
+    {
+     "Facture": "2026-043",
+     "Client": "Domaine des Alpilles",
+     "Émise le": "2026-10-28",
+     "Montant HT": 2650,
+     "Statut": "En cours"
+    }
+   ]
+  }
+ ]
+}

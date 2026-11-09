@@ -1,0 +1,478 @@
+{
+ "format": "atelier-exemples/1",
+ "histoire": {
+  "id": "app-ecommerce",
+  "titre": "App E-Commerce v2",
+  "sous_titre": "Une boutique en ligne lance la v2 de son app",
+  "secteur": "Produit",
+  "resume": "Verveine & Co, boutique de thés en ligne, sort la v2 de son app en octobre : backlog et sprints, commandes du back-office, virements Stripe ; la pub du lancement dépasse son budget."
+ },
+ "espace": {
+  "id": "ws_ex_app-ecommerce",
+  "nom": "Verveine & Co"
+ },
+ "projet": {
+  "id": "prj_ex_app-ecommerce",
+  "nom": "App E-Commerce v2"
+ },
+ "tables": [
+  {
+   "nom": "Opérations août-oct. 2026",
+   "colonnes": [
+    {
+     "label": "Date",
+     "type": "date"
+    },
+    {
+     "label": "Libellé",
+     "type": "text",
+     "mapping": "entity_title"
+    },
+    {
+     "label": "Débit",
+     "type": "currency"
+    },
+    {
+     "label": "Crédit",
+     "type": "currency"
+    },
+    {
+     "label": "Montant",
+     "type": "currency"
+    },
+    {
+     "label": "Catégorie",
+     "type": "select",
+     "choices": [
+      "Achats marchandises",
+      "Banque",
+      "Hébergement",
+      "Logistique",
+      "Outils",
+      "Prestataires",
+      "Publicité",
+      "Salaires",
+      "Ventes"
+     ]
+    },
+    {
+     "label": "Mois",
+     "type": "text"
+    }
+   ],
+   "lignes": [
+    {
+     "Date": "2026-08-02",
+     "Libellé": "PRLV SEPA SCALINGO HEBERGEMENT",
+     "Débit": 389,
+     "Crédit": null,
+     "Montant": -389.0,
+     "Catégorie": "Hébergement",
+     "Mois": "2026-08"
+    },
+    {
+     "Date": "2026-08-05",
+     "Libellé": "VIR SEPA EMIS SALAIRES AOÛT",
+     "Débit": 9800,
+     "Crédit": null,
+     "Montant": -9800.0,
+     "Catégorie": "Salaires",
+     "Mois": "2026-08"
+    },
+    {
+     "Date": "2026-08-07",
+     "Libellé": "VIR SEPA RECU STRIPE PAYOUTS",
+     "Débit": null,
+     "Crédit": 2463.46,
+     "Montant": 2463.46,
+     "Catégorie": "Ventes",
+     "Mois": "2026-08"
+    },
+    {
+     "Date": "2026-08-08",
+     "Libellé": "PRLV SEPA COLISSIMO EXPEDITIONS",
+     "Débit": 589.69,
+     "Crédit": null,
+     "Montant": -589.69,
+     "Catégorie": "Logistique",
+     "Mois": "2026-08"
+    },
+    {
+     "Date": "2026-08-12",
+     "Libellé": "VIR SEPA EMIS JARDINS DE NILGIRI ACHAT THES",
+     "Débit": 2850,
+     "Crédit": null,
+     "Montant": -2850.0,
+     "Catégorie": "Achats marchandises",
+     "Mois": "2026-08"
+    },
+    {
+     "Date": "2026-08-15",
+     "Libellé": "PRLV SEPA FIGMA GITHUB SENTRY",
+     "Débit": 212,
+     "Crédit": null,
+     "Montant": -212.0,
+     "Catégorie": "Outils",
+     "Mois": "2026-08"
+    },
+    {
+     "Date": "2026-08-19",
+     "Libellé": "CARTE META ADS",
+     "Débit": 420,
+     "Crédit": null,
+     "Montant": -420.0,
+     "Catégorie": "Publicité",
+     "Mois": "2026-08"
+    },
+    {
+     "Date": "2026-08-21",
+     "Libellé": "VIR SEPA RECU STRIPE PAYOUTS",
+     "Débit": null,
+     "Crédit": 2566.1,
+     "Montant": 2566.1,
+     "Catégorie": "Ventes",
+     "Mois": "2026-08"
+    },
+    {
+     "Date": "2026-08-28",
+     "Libellé": "FRAIS TENUE DE COMPTE",
+     "Débit": 24,
+     "Crédit": null,
+     "Montant": -24.0,
+     "Catégorie": "Banque",
+     "Mois": "2026-08"
+    },
+    {
+     "Date": "2026-09-02",
+     "Libellé": "PRLV SEPA SCALINGO HEBERGEMENT",
+     "Débit": 389,
+     "Crédit": null,
+     "Montant": -389.0,
+     "Catégorie": "Hébergement",
+     "Mois": "2026-09"
+    },
+    {
+     "Date": "2026-09-04",
+     "Libellé": "VIR SEPA RECU STRIPE PAYOUTS",
+     "Débit": null,
+     "Crédit": 2745.94,
+     "Montant": 2745.94,
+     "Catégorie": "Ventes",
+     "Mois": "2026-09"
+    },
+    {
+     "Date": "2026-09-05",
+     "Libellé": "VIR SEPA EMIS SALAIRES SEPTEMBRE",
+     "Débit": 9800,
+     "Crédit": null,
+     "Montant": -9800.0,
+     "Catégorie": "Salaires",
+     "Mois": "2026-09"
+    },
+    {
+     "Date": "2026-09-08",
+     "Libellé": "PRLV SEPA COLISSIMO EXPEDITIONS",
+     "Débit": 648.49,
+     "Crédit": null,
+     "Montant": -648.49,
+     "Catégorie": "Logistique",
+     "Mois": "2026-09"
+    },
+    {
+     "Date": "2026-09-10",
+     "Libellé": "VIR SEPA EMIS JARDINS DE NILGIRI ACHAT THES",
+     "Débit": 3120,
+     "Crédit": null,
+     "Montant": -3120.0,
+     "Catégorie": "Achats marchandises",
+     "Mois": "2026-09"
+    },
+    {
+     "Date": "2026-09-15",
+     "Libellé": "PRLV SEPA FIGMA GITHUB SENTRY",
+     "Débit": 212,
+     "Crédit": null,
+     "Montant": -212.0,
+     "Catégorie": "Outils",
+     "Mois": "2026-09"
+    },
+    {
+     "Date": "2026-09-18",
+     "Libellé": "VIR SEPA RECU STRIPE PAYOUTS",
+     "Débit": null,
+     "Crédit": 2979.64,
+     "Montant": 2979.64,
+     "Catégorie": "Ventes",
+     "Mois": "2026-09"
+    },
+    {
+     "Date": "2026-09-23",
+     "Libellé": "CARTE META ADS",
+     "Débit": 510,
+     "Crédit": null,
+     "Montant": -510.0,
+     "Catégorie": "Publicité",
+     "Mois": "2026-09"
+    },
+    {
+     "Date": "2026-09-28",
+     "Libellé": "FRAIS TENUE DE COMPTE",
+     "Débit": 24,
+     "Crédit": null,
+     "Montant": -24.0,
+     "Catégorie": "Banque",
+     "Mois": "2026-09"
+    },
+    {
+     "Date": "2026-09-30",
+     "Libellé": "VIR SEPA EMIS STUDIO PIXEL FREELANCE DESIGN V2",
+     "Débit": 2400,
+     "Crédit": null,
+     "Montant": -2400.0,
+     "Catégorie": "Prestataires",
+     "Mois": "2026-09"
+    },
+    {
+     "Date": "2026-10-02",
+     "Libellé": "VIR SEPA RECU STRIPE PAYOUTS",
+     "Débit": null,
+     "Crédit": 2975.34,
+     "Montant": 2975.34,
+     "Catégorie": "Ventes",
+     "Mois": "2026-10"
+    },
+    {
+     "Date": "2026-10-02",
+     "Libellé": "PRLV SEPA SCALINGO HEBERGEMENT",
+     "Débit": 389,
+     "Crédit": null,
+     "Montant": -389.0,
+     "Catégorie": "Hébergement",
+     "Mois": "2026-10"
+    },
+    {
+     "Date": "2026-10-05",
+     "Libellé": "VIR SEPA EMIS SALAIRES OCTOBRE",
+     "Débit": 9800,
+     "Crédit": null,
+     "Montant": -9800.0,
+     "Catégorie": "Salaires",
+     "Mois": "2026-10"
+    },
+    {
+     "Date": "2026-10-06",
+     "Libellé": "CARTE META ADS LANCEMENT V2",
+     "Débit": 1180,
+     "Crédit": null,
+     "Montant": -1180.0,
+     "Catégorie": "Publicité",
+     "Mois": "2026-10"
+    },
+    {
+     "Date": "2026-10-08",
+     "Libellé": "PRLV SEPA COLISSIMO EXPEDITIONS",
+     "Débit": 615.03,
+     "Crédit": null,
+     "Montant": -615.03,
+     "Catégorie": "Logistique",
+     "Mois": "2026-10"
+    },
+    {
+     "Date": "2026-10-08",
+     "Libellé": "CARTE GOOGLE ADS LANCEMENT V2",
+     "Débit": 760,
+     "Crédit": null,
+     "Montant": -760.0,
+     "Catégorie": "Publicité",
+     "Mois": "2026-10"
+    },
+    {
+     "Date": "2026-10-13",
+     "Libellé": "VIR SEPA EMIS JARDINS DE NILGIRI ACHAT THES",
+     "Débit": 3990,
+     "Crédit": null,
+     "Montant": -3990.0,
+     "Catégorie": "Achats marchandises",
+     "Mois": "2026-10"
+    },
+    {
+     "Date": "2026-10-15",
+     "Libellé": "PRLV SEPA FIGMA GITHUB SENTRY",
+     "Débit": 212,
+     "Crédit": null,
+     "Montant": -212.0,
+     "Catégorie": "Outils",
+     "Mois": "2026-10"
+    },
+    {
+     "Date": "2026-10-16",
+     "Libellé": "VIR SEPA RECU STRIPE PAYOUTS",
+     "Débit": null,
+     "Crédit": 3363.42,
+     "Montant": 3363.42,
+     "Catégorie": "Ventes",
+     "Mois": "2026-10"
+    },
+    {
+     "Date": "2026-10-22",
+     "Libellé": "CARTE META ADS",
+     "Débit": 540,
+     "Crédit": null,
+     "Montant": -540.0,
+     "Catégorie": "Publicité",
+     "Mois": "2026-10"
+    },
+    {
+     "Date": "2026-10-28",
+     "Libellé": "FRAIS TENUE DE COMPTE",
+     "Débit": 24,
+     "Crédit": null,
+     "Montant": -24.0,
+     "Catégorie": "Banque",
+     "Mois": "2026-10"
+    }
+   ]
+  },
+  {
+   "nom": "Backlog v2",
+   "colonnes": [
+    {
+     "label": "Récit",
+     "type": "text",
+     "mapping": "entity_title"
+    },
+    {
+     "label": "Type",
+     "type": "select",
+     "choices": [
+      "Feature",
+      "Bug",
+      "Task"
+     ],
+     "mapping": "item_type"
+    },
+    {
+     "label": "Sprint",
+     "type": "select",
+     "choices": [
+      "Sprint 7",
+      "Sprint 8",
+      "Sprint 9"
+     ]
+    },
+    {
+     "label": "Points",
+     "type": "number"
+    },
+    {
+     "label": "Statut",
+     "type": "select",
+     "choices": [
+      "À faire",
+      "En cours",
+      "En revue",
+      "Terminée"
+     ],
+     "mapping": "workflow_state"
+    },
+    {
+     "label": "Responsable",
+     "type": "text",
+     "mapping": "assignee"
+    },
+    {
+     "label": "Échéance",
+     "type": "date",
+     "mapping": "due_date"
+    },
+    {
+     "label": "Temps passé (h)",
+     "type": "number",
+     "mapping": "time_spent"
+    }
+   ],
+   "lignes": [
+    {
+     "Récit": "Paiement en un clic (Apple Pay, Google Pay)",
+     "Type": "Feature",
+     "Sprint": "Sprint 7",
+     "Points": 8,
+     "Statut": "Terminée",
+     "Responsable": "Inès Garnier",
+     "Échéance": "2026-09-12",
+     "Temps passé (h)": 26
+    },
+    {
+     "Récit": "Nouveau tunnel de commande en 3 étapes",
+     "Type": "Feature",
+     "Sprint": "Sprint 7",
+     "Points": 13,
+     "Statut": "Terminée",
+     "Responsable": "Hugo Petit",
+     "Échéance": "2026-09-12",
+     "Temps passé (h)": 41
+    },
+    {
+     "Récit": "Fiches produit : notes de dégustation",
+     "Type": "Feature",
+     "Sprint": "Sprint 8",
+     "Points": 5,
+     "Statut": "Terminée",
+     "Responsable": "Inès Garnier",
+     "Échéance": "2026-09-26",
+     "Temps passé (h)": 14
+    },
+    {
+     "Récit": "Abonnement mensuel « Thé du mois »",
+     "Type": "Feature",
+     "Sprint": "Sprint 8",
+     "Points": 13,
+     "Statut": "En revue",
+     "Responsable": "Hugo Petit",
+     "Échéance": "2026-10-10",
+     "Temps passé (h)": 38
+    },
+    {
+     "Récit": "Panier perdu après mise en veille (iOS)",
+     "Type": "Bug",
+     "Sprint": "Sprint 8",
+     "Points": 3,
+     "Statut": "Terminée",
+     "Responsable": "Lina Haddad",
+     "Échéance": "2026-09-30",
+     "Temps passé (h)": 7
+    },
+    {
+     "Récit": "Mise en production v2 (stores)",
+     "Type": "Task",
+     "Sprint": "Sprint 9",
+     "Points": 5,
+     "Statut": "Terminée",
+     "Responsable": "Lina Haddad",
+     "Échéance": "2026-10-05",
+     "Temps passé (h)": 12
+    },
+    {
+     "Récit": "Relances paniers abandonnés par notification",
+     "Type": "Feature",
+     "Sprint": "Sprint 9",
+     "Points": 8,
+     "Statut": "En cours",
+     "Responsable": "Inès Garnier",
+     "Échéance": "2026-10-24",
+     "Temps passé (h)": 15
+    },
+    {
+     "Récit": "Panier moyen en baisse depuis la v2 : analyser",
+     "Type": "Task",
+     "Sprint": "Sprint 9",
+     "Points": 3,
+     "Statut": "À faire",
+     "Responsable": "Hugo Petit",
+     "Échéance": "2026-10-31",
+     "Temps passé (h)": 0
+    }
+   ]
+  }
+ ]
+}

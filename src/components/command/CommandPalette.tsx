@@ -2,6 +2,7 @@ import { useEffect, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { Command } from 'cmdk'
 import {
+  BookOpen,
   ArrowDownUp,
   Columns3,
   Grid3x3,
@@ -183,6 +184,13 @@ export function CommandPalette() {
             </Command.Group>
           )}
           <Command.Group heading="Général" className={GROUP}>
+            <Item
+              value="exemples de la suite histoire demo"
+              icon={<BookOpen size={14} />}
+              onSelect={run(() => useUIStore.getState().setExamplesOpen(true))}
+            >
+              Exemples de la suite…
+            </Item>
             <Item
               value="annuler"
               icon={<Undo2 size={14} />}

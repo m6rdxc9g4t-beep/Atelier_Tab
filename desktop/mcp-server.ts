@@ -26,6 +26,7 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js'
@@ -35,6 +36,7 @@ import { IDEMPOTENT_TOOLS, runTool, toolSchemas, type ToolResult } from '@/ai/to
 import { APP_VERSION } from '@/lib/version'
 import type { AppData } from '@/types/domain'
 import { NodeJournal, type DiskLedger } from './atelier-node'
+import { defaultExamplesDir, folderExamples } from './examples-source'
 import { defaultDataDir, defaultPreferencesFile, defaultSecretsFile, FileStore } from './file-store'
 import { SnapshotWriter } from './snapshots'
 
@@ -44,10 +46,17 @@ const preferencesFile = defaultPreferencesFile()
 // Préférences lues seulement : aucun outil ne peut passer l'app en ligne.
 const store = new FileStore({ dir: dataDir, secretsFile, preferencesFile })
 const journal = new NodeJournal({ dataDir })
+// Exemples de la suite : dossier exemples-suite/ du dépôt (dist-desktop/../exemples-suite).
+const examples = folderExamples(defaultExamplesDir(path.dirname(fileURLToPath(import.meta.url))))
 const snapshots = new SnapshotWriter({ dir: dataDir, journal })
 
 /** Outils qui ne lisent que les métadonnées du nœud : utilisables sans `atelier.json`. */
 const META_TOOLS = new Set(['atelier_manifest', 'atelier_events'])
+/**
+ * Outils qui peuvent créer les données d'un dossier vide : charger un exemple de la suite sur un
+ * serveur où l'app n'a jamais été ouverte (VPS : Atelier Nexus écrit dans data/atelier_tab).
+ */
+const INIT_TOOLS = new Set(['load_suite_example'])
 
 /** État vide : sert aux outils de métadonnées quand le dossier n'a pas encore de données. */
 const EMPTY_DATA: AppData = {
@@ -150,7 +159,7 @@ function toMcp(result: ToolResult, errors: string[] = []) {
 
 async function callTool(name: string, args: Record<string, unknown>) {
   const { data, errors } = store.load()
-  if (!data && !META_TOOLS.has(name)) {
+  if (!data && !META_TOOLS.has(name) && !INIT_TOOLS.has(name)) {
     return {
       isError: true,
       content: [
@@ -164,9 +173,11 @@ async function callTool(name: string, args: Record<string, unknown>) {
   const keyed = IDEMPOTENT_TOOLS.includes(name) && typeof args.idempotency_key === 'string'
   const run = async (ledger?: DiskLedger) => {
     // Sous le verrou, l'état est relu : un autre écrivain a pu agir pendant l'attente.
-    const current = ledger ? (store.load().data ?? data) : data
+    const loaded = ledger ? (store.load().data ?? data) : data
+    const current = loaded ?? (INIT_TOOLS.has(name) ? EMPTY_DATA : null)
     const session = createHeadlessSession(current ?? EMPTY_DATA, saveExport, {
       caller: 'mcp',
+      examples,
       readEvents: (query) => journal.readEvents(query),
       ...(ledger ? { ledger } : {}),
     })

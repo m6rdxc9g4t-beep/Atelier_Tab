@@ -51,6 +51,7 @@ import {
   type CsvAnalysis,
 } from '@/dataflow/import'
 import { buildSnapshotPayload } from '@/dataflow/snapshot'
+import { buildExampleTables, type ExampleSource } from '@/examples/suite'
 import {
   ATELIER_STATUS_PRESET_NAME,
   choicesFromLabels,
@@ -139,6 +140,11 @@ export interface ToolHost {
    * lu et écrit sous le verrou du nœud. Absent : registre en mémoire propre à ce store.
    */
   ledger?: IdempotencyLedger
+  /**
+   * Exemples de la suite (`exemples-suite/`) : livrés avec l'app (assistant) ou lus dans le dépôt
+   * (serveur MCP). Absent : les outils `*_suite_example*` répondent qu'ils ne sont pas disponibles.
+   */
+  examples?: ExampleSource
 }
 
 /** Codes d'erreur communs du contrat `atelier-node/1` (docs/SUITE.md §7.5). */
@@ -242,6 +248,28 @@ const statusPreset = z
   .describe(
     `Pour type=select : "atelier" applique le préréglage « ${ATELIER_STATUS_PRESET_NAME} », les 8 statuts communs de la Suite Atelier (${WORKFLOW_STATUSES.map((s) => s.label).join(', ')}), affichés avec leurs couleurs officielles. Remplace \`choices\`.`,
   )
+
+function examplesOf(host: ToolHost): ExampleSource {
+  if (!host.examples) {
+    throw new CodedToolError(
+      'UNAVAILABLE',
+      'Aucun exemple de la suite livré avec cette installation.',
+    )
+  }
+  return host.examples
+}
+
+async function loadExample(host: ToolHost, id: string) {
+  try {
+    return await examplesOf(host).load(id)
+  } catch (e) {
+    if (e instanceof ToolError) throw e
+    throw new CodedToolError(
+      'NOT_FOUND',
+      `Exemple « ${id} » introuvable (voir list_suite_examples).`,
+    )
+  }
+}
 
 function data(host: ToolHost): AppData {
   return host.store.getState()
@@ -1545,6 +1573,99 @@ export const TOOLS = [
         if (e instanceof TableQueryError) throw new CodedToolError('VALIDATION', e.message)
         throw e
       }
+    },
+  }),
+
+  tool({
+    name: 'list_suite_examples',
+    description:
+      'Exemples de la suite Atelier : histoires fictives (studio de design, chantier, e-commerce, freelance…) suivies d’une app à l’autre (Convert → Tab → Viz → Trésorerie → Nexus → Projets → Wiki). Pour chacune : id, titre, résumé, si son projet est déjà dans Tab, et ce qu’elle fait ici. Lecture seule.',
+    input: z.object({}),
+    async run(_args, host) {
+      const source = examplesOf(host)
+      const stories = await source.list()
+      const projects = data(host).projects
+      return {
+        examples: await Promise.all(
+          stories.map(async (s) => {
+            const step = s.parcours.find((e) => e.app === 'tab')
+            let projectId: string | null = null
+            try {
+              projectId = (await source.load(s.id)).projet.id
+            } catch {
+              /* part absente : listée sans projet */
+            }
+            return {
+              id: s.id,
+              title: s.titre,
+              subtitle: s.sous_titre,
+              sector: s.secteur,
+              summary: s.resume,
+              in_tab: step?.texte ?? null,
+              loaded: projectId !== null && projects[projectId] !== undefined,
+            }
+          }),
+        ),
+      }
+    },
+  }),
+
+  tool({
+    name: 'load_suite_example',
+    description:
+      'Charge dans Tab le projet d’une histoire des exemples de la suite (list_suite_examples) : son espace, son projet et ses tables (opérations des relevés catégorisées, tables métier). Recharger remet ces tables dans leur état d’origine ; rien d’autre n’est touché.',
+    input: z.object({
+      example: z.string().min(1).describe('id de l’histoire, ex. studio-garance'),
+    }),
+    async run({ example }, host) {
+      const part = await loadExample(host, example)
+      const existing = data(host).projects[part.projet.id]
+      if (existing) {
+        await requireConfirmation(host, {
+          tool: 'load_suite_example',
+          kind: 'delete',
+          message: `L’assistant veut recharger l’exemple « ${part.histoire.titre} » : les tables du projet « ${existing.name} » reviennent à leur état d’origine.`,
+        })
+      }
+      const tables = buildExampleTables(part)
+      host.store
+        .getState()
+        .installProject(
+          { id: part.espace.id, name: part.espace.nom },
+          { id: part.projet.id, name: part.projet.nom },
+          tables,
+        )
+      return {
+        example: part.histoire.id,
+        reloaded: existing !== undefined,
+        workspace: { id: part.espace.id, name: part.espace.nom },
+        project: { id: part.projet.id, name: part.projet.nom },
+        tables: tables.map((t) => ({ id: t.id, name: t.name, rows: t.rowOrder.length })),
+      }
+    },
+  }),
+
+  tool({
+    name: 'remove_suite_example',
+    description:
+      'Retire de Tab le projet d’une histoire des exemples de la suite (et son espace s’il ne contient plus rien). Ne touche à aucune autre donnée.',
+    input: z.object({
+      example: z.string().min(1).describe('id de l’histoire, ex. studio-garance'),
+    }),
+    async run({ example }, host) {
+      const part = await loadExample(host, example)
+      const project = data(host).projects[part.projet.id]
+      if (!project) return { example: part.histoire.id, removed: false }
+      await requireConfirmation(host, {
+        tool: 'remove_suite_example',
+        kind: 'delete',
+        message: `L’assistant veut retirer l’exemple « ${part.histoire.titre} » (projet « ${project.name} », ${plural(project.tableIds.length, 'table', 'tables')}).`,
+      })
+      const state = host.store.getState()
+      state.deleteProject(project.id)
+      const ws = host.store.getState().workspaces[part.espace.id]
+      if (ws && ws.projectIds.length === 0) state.deleteWorkspace(ws.id)
+      return { example: part.histoire.id, removed: true }
     },
   }),
 

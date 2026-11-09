@@ -49,6 +49,8 @@ export interface UIState {
   expandedRecordId: string | null
   /** Palette de commandes (⌘K). */
   paletteOpen: boolean
+  /** Fenêtre « Exemples de la suite » ouverte. */
+  examplesOpen: boolean
 
   openTable(tableId: string | null): void
   select(cell: CellPosition | null): void
@@ -69,6 +71,7 @@ export interface UIState {
   clearPins(): void
   openRecord(recordId: string | null): void
   setPaletteOpen(open: boolean): void
+  setExamplesOpen(open: boolean): void
 }
 
 export const useUIStore = create<UIState>()(
@@ -86,6 +89,7 @@ export const useUIStore = create<UIState>()(
       pinnedRecordIds: [],
       expandedRecordId: null,
       paletteOpen: false,
+      examplesOpen: false,
 
       openTable: (tableId) =>
         set({
@@ -150,6 +154,7 @@ export const useUIStore = create<UIState>()(
       clearPins: () => set((s) => (s.pinnedRecordIds.length ? { pinnedRecordIds: [] } : s)),
       openRecord: (recordId) => set({ expandedRecordId: recordId, editing: null }),
       setPaletteOpen: (open) => set({ paletteOpen: open }),
+      setExamplesOpen: (open) => set({ examplesOpen: open }),
     }),
     {
       name: 'atelier-tab:ui',
