@@ -1,0 +1,438 @@
+{
+ "format": "atelier-exemples/1",
+ "histoire": {
+  "id": "boutique-librairie",
+  "titre": "Librairie Les Pages Vives",
+  "sous_titre": "Ventes, stock et commandes d'une librairie-papeterie",
+  "secteur": "Boutique",
+  "resume": "Une librairie-papeterie de la Croix-Rousse à Lyon : caisse par rayon, stock et commandes aux distributeurs, rentrée scolaire puis préparation des fêtes ; les achats de livres d'octobre dépassent."
+ },
+ "espace": {
+  "id": "ws_ex_boutique-librairie",
+  "nom": "Les Pages Vives"
+ },
+ "projet": {
+  "id": "prj_ex_boutique-librairie",
+  "nom": "Boutique 2026"
+ },
+ "tables": [
+  {
+   "nom": "Opérations août-oct. 2026",
+   "colonnes": [
+    {
+     "label": "Date",
+     "type": "date"
+    },
+    {
+     "label": "Libellé",
+     "type": "text",
+     "mapping": "entity_title"
+    },
+    {
+     "label": "Débit",
+     "type": "currency"
+    },
+    {
+     "label": "Crédit",
+     "type": "currency"
+    },
+    {
+     "label": "Montant",
+     "type": "currency"
+    },
+    {
+     "label": "Catégorie",
+     "type": "select",
+     "choices": [
+      "Achats livres",
+      "Achats papeterie",
+      "Banque",
+      "Logiciels",
+      "Loyer",
+      "Salaires",
+      "Ventes",
+      "Vitrine et animation",
+      "Énergie"
+     ]
+    },
+    {
+     "label": "Mois",
+     "type": "text"
+    }
+   ],
+   "lignes": [
+    {
+     "Date": "2026-08-01",
+     "Libellé": "PRLV SEPA LOYER LOCAL COMMERCIAL GRANDE RUE",
+     "Débit": 1680,
+     "Crédit": null,
+     "Montant": -1680.0,
+     "Catégorie": "Loyer",
+     "Mois": "2026-08"
+    },
+    {
+     "Date": "2026-08-05",
+     "Libellé": "VIR SEPA EMIS SALAIRES AOÛT",
+     "Débit": 4900,
+     "Crédit": null,
+     "Montant": -4900.0,
+     "Catégorie": "Salaires",
+     "Mois": "2026-08"
+    },
+    {
+     "Date": "2026-08-09",
+     "Libellé": "PRLV SEPA LOGICIEL DE CAISSE ET STOCK",
+     "Débit": 89,
+     "Crédit": null,
+     "Montant": -89.0,
+     "Catégorie": "Logiciels",
+     "Mois": "2026-08"
+    },
+    {
+     "Date": "2026-08-10",
+     "Libellé": "PRLV SEPA DISTRIBUTEUR LIVRES NORD SUD",
+     "Débit": 6200,
+     "Crédit": null,
+     "Montant": -6200.0,
+     "Catégorie": "Achats livres",
+     "Mois": "2026-08"
+    },
+    {
+     "Date": "2026-08-12",
+     "Libellé": "PRLV SEPA EDF ENTREPRISES",
+     "Débit": 138.02,
+     "Crédit": null,
+     "Montant": -138.02,
+     "Catégorie": "Énergie",
+     "Mois": "2026-08"
+    },
+    {
+     "Date": "2026-08-20",
+     "Libellé": "PRLV SEPA FOURNITURES SCOLAIRES CLAIREFONTAINE",
+     "Débit": 2850,
+     "Crédit": null,
+     "Montant": -2850.0,
+     "Catégorie": "Achats papeterie",
+     "Mois": "2026-08"
+    },
+    {
+     "Date": "2026-08-28",
+     "Libellé": "FRAIS TERMINAL CARTES BANCAIRES",
+     "Débit": 108.18,
+     "Crédit": null,
+     "Montant": -108.18,
+     "Catégorie": "Banque",
+     "Mois": "2026-08"
+    },
+    {
+     "Date": "2026-08-31",
+     "Libellé": "REMISES CARTES BANCAIRES AOUT",
+     "Débit": null,
+     "Crédit": 16389.26,
+     "Montant": 16389.26,
+     "Catégorie": "Ventes",
+     "Mois": "2026-08"
+    },
+    {
+     "Date": "2026-08-31",
+     "Libellé": "REMISE ESPECES AOUT",
+     "Débit": null,
+     "Crédit": 3597.64,
+     "Montant": 3597.64,
+     "Catégorie": "Ventes",
+     "Mois": "2026-08"
+    },
+    {
+     "Date": "2026-09-01",
+     "Libellé": "PRLV SEPA LOYER LOCAL COMMERCIAL GRANDE RUE",
+     "Débit": 1680,
+     "Crédit": null,
+     "Montant": -1680.0,
+     "Catégorie": "Loyer",
+     "Mois": "2026-09"
+    },
+    {
+     "Date": "2026-09-05",
+     "Libellé": "VIR SEPA EMIS SALAIRES SEPTEMBRE",
+     "Débit": 4900,
+     "Crédit": null,
+     "Montant": -4900.0,
+     "Catégorie": "Salaires",
+     "Mois": "2026-09"
+    },
+    {
+     "Date": "2026-09-09",
+     "Libellé": "PRLV SEPA LOGICIEL DE CAISSE ET STOCK",
+     "Débit": 89,
+     "Crédit": null,
+     "Montant": -89.0,
+     "Catégorie": "Logiciels",
+     "Mois": "2026-09"
+    },
+    {
+     "Date": "2026-09-10",
+     "Libellé": "PRLV SEPA DISTRIBUTEUR LIVRES NORD SUD",
+     "Débit": 9400,
+     "Crédit": null,
+     "Montant": -9400.0,
+     "Catégorie": "Achats livres",
+     "Mois": "2026-09"
+    },
+    {
+     "Date": "2026-09-12",
+     "Libellé": "PRLV SEPA EDF ENTREPRISES",
+     "Débit": 135.09,
+     "Crédit": null,
+     "Montant": -135.09,
+     "Catégorie": "Énergie",
+     "Mois": "2026-09"
+    },
+    {
+     "Date": "2026-09-18",
+     "Libellé": "PRLV SEPA DIFFUSEUR BD ET MANGAS",
+     "Débit": 3100,
+     "Crédit": null,
+     "Montant": -3100.0,
+     "Catégorie": "Achats livres",
+     "Mois": "2026-09"
+    },
+    {
+     "Date": "2026-09-28",
+     "Libellé": "FRAIS TERMINAL CARTES BANCAIRES",
+     "Débit": 100.84,
+     "Crédit": null,
+     "Montant": -100.84,
+     "Catégorie": "Banque",
+     "Mois": "2026-09"
+    },
+    {
+     "Date": "2026-09-30",
+     "Libellé": "REMISES CARTES BANCAIRES SEPTEMBRE",
+     "Débit": null,
+     "Crédit": 22712.02,
+     "Montant": 22712.02,
+     "Catégorie": "Ventes",
+     "Mois": "2026-09"
+    },
+    {
+     "Date": "2026-09-30",
+     "Libellé": "REMISE ESPECES SEPTEMBRE",
+     "Débit": null,
+     "Crédit": 4985.57,
+     "Montant": 4985.57,
+     "Catégorie": "Ventes",
+     "Mois": "2026-09"
+    },
+    {
+     "Date": "2026-10-01",
+     "Libellé": "PRLV SEPA LOYER LOCAL COMMERCIAL GRANDE RUE",
+     "Débit": 1680,
+     "Crédit": null,
+     "Montant": -1680.0,
+     "Catégorie": "Loyer",
+     "Mois": "2026-10"
+    },
+    {
+     "Date": "2026-10-05",
+     "Libellé": "VIR SEPA EMIS SALAIRES OCTOBRE",
+     "Débit": 4900,
+     "Crédit": null,
+     "Montant": -4900.0,
+     "Catégorie": "Salaires",
+     "Mois": "2026-10"
+    },
+    {
+     "Date": "2026-10-09",
+     "Libellé": "PRLV SEPA LOGICIEL DE CAISSE ET STOCK",
+     "Débit": 89,
+     "Crédit": null,
+     "Montant": -89.0,
+     "Catégorie": "Logiciels",
+     "Mois": "2026-10"
+    },
+    {
+     "Date": "2026-10-10",
+     "Libellé": "PRLV SEPA DISTRIBUTEUR LIVRES NORD SUD",
+     "Débit": 8900,
+     "Crédit": null,
+     "Montant": -8900.0,
+     "Catégorie": "Achats livres",
+     "Mois": "2026-10"
+    },
+    {
+     "Date": "2026-10-12",
+     "Libellé": "PRLV SEPA EDF ENTREPRISES",
+     "Débit": 133.89,
+     "Crédit": null,
+     "Montant": -133.89,
+     "Catégorie": "Énergie",
+     "Mois": "2026-10"
+    },
+    {
+     "Date": "2026-10-15",
+     "Libellé": "CARTE DECORATION VITRINE FETES",
+     "Débit": 240,
+     "Crédit": null,
+     "Montant": -240.0,
+     "Catégorie": "Vitrine et animation",
+     "Mois": "2026-10"
+    },
+    {
+     "Date": "2026-10-17",
+     "Libellé": "PRLV SEPA DIFFUSEUR BD ET MANGAS",
+     "Débit": 3600,
+     "Crédit": null,
+     "Montant": -3600.0,
+     "Catégorie": "Achats livres",
+     "Mois": "2026-10"
+    },
+    {
+     "Date": "2026-10-24",
+     "Libellé": "PRLV SEPA DISTRIBUTEUR LIVRES NORD SUD BEAUX LIVRES FETES",
+     "Débit": 2700,
+     "Crédit": null,
+     "Montant": -2700.0,
+     "Catégorie": "Achats livres",
+     "Mois": "2026-10"
+    },
+    {
+     "Date": "2026-10-28",
+     "Libellé": "FRAIS TERMINAL CARTES BANCAIRES",
+     "Débit": 87.8,
+     "Crédit": null,
+     "Montant": -87.8,
+     "Catégorie": "Banque",
+     "Mois": "2026-10"
+    },
+    {
+     "Date": "2026-10-31",
+     "Libellé": "REMISES CARTES BANCAIRES OCTOBRE",
+     "Débit": null,
+     "Crédit": 20520.09,
+     "Montant": 20520.09,
+     "Catégorie": "Ventes",
+     "Mois": "2026-10"
+    },
+    {
+     "Date": "2026-10-31",
+     "Libellé": "REMISE ESPECES OCTOBRE",
+     "Débit": null,
+     "Crédit": 4504.41,
+     "Montant": 4504.41,
+     "Catégorie": "Ventes",
+     "Mois": "2026-10"
+    }
+   ]
+  },
+  {
+   "nom": "Stock et commandes",
+   "colonnes": [
+    {
+     "label": "Référence",
+     "type": "text",
+     "mapping": "entity_title"
+    },
+    {
+     "label": "Rayon",
+     "type": "select",
+     "choices": [
+      "Romans",
+      "Jeunesse",
+      "BD et mangas",
+      "Papeterie",
+      "Beaux livres"
+     ]
+    },
+    {
+     "label": "En stock",
+     "type": "number"
+    },
+    {
+     "label": "Seuil",
+     "type": "number"
+    },
+    {
+     "label": "À commander",
+     "type": "formula",
+     "formula": "=MAX(0,D1*2-C1)",
+     "format": "number"
+    },
+    {
+     "label": "Fournisseur",
+     "type": "text"
+    },
+    {
+     "label": "Commande",
+     "type": "select",
+     "choices": [
+      "À faire",
+      "En cours",
+      "Terminée"
+     ],
+     "mapping": "workflow_state"
+    },
+    {
+     "label": "Livraison prévue",
+     "type": "date",
+     "mapping": "due_date"
+    }
+   ],
+   "lignes": [
+    {
+     "Référence": "Prix Goncourt 2026 (roman)",
+     "Rayon": "Romans",
+     "En stock": 4,
+     "Seuil": 15,
+     "Fournisseur": "Nord Sud",
+     "Commande": "En cours",
+     "Livraison prévue": "2026-11-06"
+    },
+    {
+     "Référence": "Agenda scolaire 2026-2027",
+     "Rayon": "Papeterie",
+     "En stock": 22,
+     "Seuil": 10,
+     "Fournisseur": "Clairefontaine",
+     "Commande": "Terminée",
+     "Livraison prévue": "2026-08-20"
+    },
+    {
+     "Référence": "Manga « Les Marées » tome 12",
+     "Rayon": "BD et mangas",
+     "En stock": 3,
+     "Seuil": 12,
+     "Fournisseur": "Diffuseur BD",
+     "Commande": "À faire",
+     "Livraison prévue": "2026-11-13"
+    },
+    {
+     "Référence": "Album jeunesse « Le Renard de neige »",
+     "Rayon": "Jeunesse",
+     "En stock": 18,
+     "Seuil": 8,
+     "Fournisseur": "Nord Sud",
+     "Commande": "Terminée",
+     "Livraison prévue": "2026-10-24"
+    },
+    {
+     "Référence": "Beau livre « Lyon vu du ciel »",
+     "Rayon": "Beaux livres",
+     "En stock": 6,
+     "Seuil": 6,
+     "Fournisseur": "Nord Sud",
+     "Commande": "À faire",
+     "Livraison prévue": "2026-11-20"
+    },
+    {
+     "Référence": "Carnets kraft A5 (lot de 3)",
+     "Rayon": "Papeterie",
+     "En stock": 40,
+     "Seuil": 15,
+     "Fournisseur": "Clairefontaine",
+     "Commande": "Terminée",
+     "Livraison prévue": "2026-09-02"
+    }
+   ]
+  }
+ ]
+}

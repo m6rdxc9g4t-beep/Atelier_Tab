@@ -95,12 +95,12 @@ describe('serveur MCP sans données (app jamais ouverte)', () => {
 })
 
 describe('serveur MCP', () => {
-  it('se présente avec des instructions et 25 outils, dont ceux du nœud Atelier', async () => {
+  it('se présente avec des instructions et 28 outils, dont ceux du nœud Atelier', async () => {
     expect(client.getServerVersion()?.name).toBe('atelier-tab')
     expect(client.getInstructions()).toMatch(/list_tables puis read_table/)
     expect(client.getInstructions()).toMatch(/Instantanés lus par Atelier Viz/)
     const { tools } = await client.listTools()
-    expect(tools).toHaveLength(25)
+    expect(tools).toHaveLength(28)
     expect(tools.map((t) => t.name)).toEqual(
       expect.arrayContaining(['atelier_manifest', 'atelier_events', 'query_table', 'import_csv']),
     )
@@ -284,5 +284,19 @@ describe('serveur MCP', () => {
     expect(JSON.parse(fs.readFileSync(prefs, 'utf8'))).toEqual({ onlineMode: true })
     fs.writeFileSync(prefs, JSON.stringify({ onlineMode: false }))
     expect((await call('get_settings')).json).toMatchObject({ online_mode: false })
+  })
+})
+
+// En dernier : ses événements ne doivent pas se mêler à ceux que vérifient les tests précédents.
+describe('serveur MCP : exemples de la suite', () => {
+  it('charge un exemple de la suite (dossier exemples-suite/ du dépôt) et l’écrit sur disque', async () => {
+    const list = await call('list_suite_examples')
+    expect(list.json.examples.map((e: { id: string }) => e.id)).toContain('studio-garance')
+    const { json } = await call('load_suite_example', { example: 'studio-garance' })
+    expect(json.project.id).toBe('prj_ex_studio-garance')
+    const reloaded = new FileStore({ dir }).load().data
+    expect(reloaded?.projects['prj_ex_studio-garance']?.tableIds).toHaveLength(json.tables.length)
+    expect((await call('remove_suite_example', { example: 'studio-garance' })).json.removed).toBe(true)
+    expect(new FileStore({ dir }).load().data?.projects['prj_ex_studio-garance']).toBeUndefined()
   })
 })

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import {
+  BookOpen,
   Check,
   ChevronRight,
   FolderClosed,
@@ -91,6 +92,7 @@ export function Sidebar() {
         })}
       </nav>
 
+      <ExamplesButton />
       <PipelineStatus />
     </aside>
   )
@@ -340,6 +342,23 @@ function ExportStatusDot({ tableId }: { tableId: string }) {
 }
 
 /** Pied de sidebar : état de la connexion à Atelier Projets et dernier export. */
+/** Ouvre « Exemples de la suite » : histoires fictives à suivre d'une app à l'autre. */
+function ExamplesButton() {
+  const setExamplesOpen = useUIStore((s) => s.setExamplesOpen)
+  return (
+    <div className="shrink-0 px-2 pb-1">
+      <button
+        type="button"
+        onClick={() => setExamplesOpen(true)}
+        className="flex h-7 w-full items-center gap-2 rounded-lg px-2 text-[12.5px] text-muted hover:bg-surface-hover hover:text-ink"
+      >
+        <BookOpen size={14} className="shrink-0 text-faint" aria-hidden />
+        Exemples de la suite
+      </button>
+    </div>
+  )
+}
+
 function PipelineStatus() {
   const integration = useDataStore((s) => s.integrations.atelierProjets)
   const tables = useDataStore((s) => s.tables)

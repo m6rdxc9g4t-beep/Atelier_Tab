@@ -1,0 +1,353 @@
+{
+ "format": "atelier-exemples/1",
+ "histoire": {
+  "id": "finance-patrimoine",
+  "titre": "Lemaire Patrimoine",
+  "sous_titre": "Portefeuille et allocation d'une holding familiale",
+  "secteur": "Finance",
+  "resume": "La holding de la famille Lemaire place sa trésorerie : achats d'ETF, dividendes, comité mensuel, allocation cible ; les frais de courtage d'octobre dépassent l'enveloppe après un rééquilibrage."
+ },
+ "espace": {
+  "id": "ws_ex_finance-patrimoine",
+  "nom": "Lemaire Patrimoine"
+ },
+ "projet": {
+  "id": "prj_ex_finance-patrimoine",
+  "nom": "Allocation 2026"
+ },
+ "tables": [
+  {
+   "nom": "Opérations août-oct. 2026",
+   "colonnes": [
+    {
+     "label": "Date",
+     "type": "date"
+    },
+    {
+     "label": "Libellé",
+     "type": "text",
+     "mapping": "entity_title"
+    },
+    {
+     "label": "Débit",
+     "type": "currency"
+    },
+    {
+     "label": "Crédit",
+     "type": "currency"
+    },
+    {
+     "label": "Montant",
+     "type": "currency"
+    },
+    {
+     "label": "Catégorie",
+     "type": "select",
+     "choices": [
+      "Achats de titres",
+      "Banque",
+      "Coupons",
+      "Dividendes",
+      "Frais de courtage",
+      "Honoraires comptables",
+      "Loyers perçus",
+      "Ventes de titres"
+     ]
+    },
+    {
+     "label": "Mois",
+     "type": "text"
+    }
+   ],
+   "lignes": [
+    {
+     "Date": "2026-08-04",
+     "Libellé": "ACHAT ETF MSCI WORLD 120 PARTS",
+     "Débit": 12840,
+     "Crédit": null,
+     "Montant": -12840.0,
+     "Catégorie": "Achats de titres",
+     "Mois": "2026-08"
+    },
+    {
+     "Date": "2026-08-04",
+     "Libellé": "COMMISSION COURTAGE ORDRE BOURSE",
+     "Débit": 38.52,
+     "Crédit": null,
+     "Montant": -38.52,
+     "Catégorie": "Frais de courtage",
+     "Mois": "2026-08"
+    },
+    {
+     "Date": "2026-08-05",
+     "Libellé": "PRLV SEPA HONORAIRES CABINET COMPTABLE AQUITAINE",
+     "Débit": 480,
+     "Crédit": null,
+     "Montant": -480.0,
+     "Catégorie": "Honoraires comptables",
+     "Mois": "2026-08"
+    },
+    {
+     "Date": "2026-08-18",
+     "Libellé": "DIVIDENDE TOTALENERGIES 400 ACTIONS",
+     "Débit": null,
+     "Crédit": 316.8,
+     "Montant": 316.8,
+     "Catégorie": "Dividendes",
+     "Mois": "2026-08"
+    },
+    {
+     "Date": "2026-08-25",
+     "Libellé": "VIR SEPA RECU LOYER BUREAUX SCI CHARTRONS",
+     "Débit": null,
+     "Crédit": 3600,
+     "Montant": 3600.0,
+     "Catégorie": "Loyers perçus",
+     "Mois": "2026-08"
+    },
+    {
+     "Date": "2026-08-27",
+     "Libellé": "SOUSCRIPTION SCPI RENDEMENT PIERRE 25 PARTS",
+     "Débit": 6250,
+     "Crédit": null,
+     "Montant": -6250.0,
+     "Catégorie": "Achats de titres",
+     "Mois": "2026-08"
+    },
+    {
+     "Date": "2026-08-28",
+     "Libellé": "FRAIS TENUE DE COMPTE",
+     "Débit": 30,
+     "Crédit": null,
+     "Montant": -30.0,
+     "Catégorie": "Banque",
+     "Mois": "2026-08"
+    },
+    {
+     "Date": "2026-09-02",
+     "Libellé": "ACHAT OBLIGATION ETAT 2032 10000 NOMINAL",
+     "Débit": 9870,
+     "Crédit": null,
+     "Montant": -9870.0,
+     "Catégorie": "Achats de titres",
+     "Mois": "2026-09"
+    },
+    {
+     "Date": "2026-09-02",
+     "Libellé": "COMMISSION COURTAGE ORDRE BOURSE",
+     "Débit": 29.61,
+     "Crédit": null,
+     "Montant": -29.61,
+     "Catégorie": "Frais de courtage",
+     "Mois": "2026-09"
+    },
+    {
+     "Date": "2026-09-05",
+     "Libellé": "PRLV SEPA HONORAIRES CABINET COMPTABLE AQUITAINE",
+     "Débit": 480,
+     "Crédit": null,
+     "Montant": -480.0,
+     "Catégorie": "Honoraires comptables",
+     "Mois": "2026-09"
+    },
+    {
+     "Date": "2026-09-15",
+     "Libellé": "COUPON OBLIGATION EDF 2029",
+     "Débit": null,
+     "Crédit": 412.5,
+     "Montant": 412.5,
+     "Catégorie": "Coupons",
+     "Mois": "2026-09"
+    },
+    {
+     "Date": "2026-09-22",
+     "Libellé": "DIVIDENDE SANOFI 250 ACTIONS",
+     "Débit": null,
+     "Crédit": 990,
+     "Montant": 990.0,
+     "Catégorie": "Dividendes",
+     "Mois": "2026-09"
+    },
+    {
+     "Date": "2026-09-25",
+     "Libellé": "VIR SEPA RECU LOYER BUREAUX SCI CHARTRONS",
+     "Débit": null,
+     "Crédit": 3600,
+     "Montant": 3600.0,
+     "Catégorie": "Loyers perçus",
+     "Mois": "2026-09"
+    },
+    {
+     "Date": "2026-09-28",
+     "Libellé": "FRAIS TENUE DE COMPTE",
+     "Débit": 30,
+     "Crédit": null,
+     "Montant": -30.0,
+     "Catégorie": "Banque",
+     "Mois": "2026-09"
+    },
+    {
+     "Date": "2026-10-01",
+     "Libellé": "VENTE ETF S&P 500 80 PARTS REEQUILIBRAGE",
+     "Débit": null,
+     "Crédit": 41280,
+     "Montant": 41280.0,
+     "Catégorie": "Ventes de titres",
+     "Mois": "2026-10"
+    },
+    {
+     "Date": "2026-10-01",
+     "Libellé": "COMMISSION COURTAGE ORDRE BOURSE",
+     "Débit": 123.84,
+     "Crédit": null,
+     "Montant": -123.84,
+     "Catégorie": "Frais de courtage",
+     "Mois": "2026-10"
+    },
+    {
+     "Date": "2026-10-02",
+     "Libellé": "ACHAT ETF EURO STOXX 50 300 PARTS",
+     "Débit": 15360,
+     "Crédit": null,
+     "Montant": -15360.0,
+     "Catégorie": "Achats de titres",
+     "Mois": "2026-10"
+    },
+    {
+     "Date": "2026-10-02",
+     "Libellé": "COMMISSION COURTAGE ORDRE BOURSE",
+     "Débit": 46.08,
+     "Crédit": null,
+     "Montant": -46.08,
+     "Catégorie": "Frais de courtage",
+     "Mois": "2026-10"
+    },
+    {
+     "Date": "2026-10-03",
+     "Libellé": "ACHAT ETF OBLIGATIONS EURO 200 PARTS",
+     "Débit": 21900,
+     "Crédit": null,
+     "Montant": -21900.0,
+     "Catégorie": "Achats de titres",
+     "Mois": "2026-10"
+    },
+    {
+     "Date": "2026-10-03",
+     "Libellé": "COMMISSION COURTAGE ORDRE BOURSE",
+     "Débit": 65.7,
+     "Crédit": null,
+     "Montant": -65.7,
+     "Catégorie": "Frais de courtage",
+     "Mois": "2026-10"
+    },
+    {
+     "Date": "2026-10-05",
+     "Libellé": "PRLV SEPA HONORAIRES CABINET COMPTABLE AQUITAINE",
+     "Débit": 480,
+     "Crédit": null,
+     "Montant": -480.0,
+     "Catégorie": "Honoraires comptables",
+     "Mois": "2026-10"
+    },
+    {
+     "Date": "2026-10-15",
+     "Libellé": "DROITS DE GARDE COMPTE-TITRES T3",
+     "Débit": 186,
+     "Crédit": null,
+     "Montant": -186.0,
+     "Catégorie": "Frais de courtage",
+     "Mois": "2026-10"
+    },
+    {
+     "Date": "2026-10-20",
+     "Libellé": "DIVIDENDE AIR LIQUIDE 150 ACTIONS",
+     "Débit": null,
+     "Crédit": 495,
+     "Montant": 495.0,
+     "Catégorie": "Dividendes",
+     "Mois": "2026-10"
+    },
+    {
+     "Date": "2026-10-25",
+     "Libellé": "VIR SEPA RECU LOYER BUREAUX SCI CHARTRONS",
+     "Débit": null,
+     "Crédit": 3600,
+     "Montant": 3600.0,
+     "Catégorie": "Loyers perçus",
+     "Mois": "2026-10"
+    },
+    {
+     "Date": "2026-10-28",
+     "Libellé": "FRAIS TENUE DE COMPTE",
+     "Débit": 30,
+     "Crédit": null,
+     "Montant": -30.0,
+     "Catégorie": "Banque",
+     "Mois": "2026-10"
+    }
+   ]
+  },
+  {
+   "nom": "Allocation cible",
+   "colonnes": [
+    {
+     "label": "Classe d'actifs",
+     "type": "text",
+     "mapping": "entity_title"
+    },
+    {
+     "label": "Cible",
+     "type": "percent"
+    },
+    {
+     "label": "Réelle au 30/09",
+     "type": "percent"
+    },
+    {
+     "label": "Réelle au 31/10",
+     "type": "percent"
+    },
+    {
+     "label": "Écart",
+     "type": "formula",
+     "formula": "=D1-B1",
+     "format": "percent"
+    },
+    {
+     "label": "Valeur au 31/10",
+     "type": "currency"
+    }
+   ],
+   "lignes": [
+    {
+     "Classe d'actifs": "Actions monde",
+     "Cible": 0.4,
+     "Réelle au 30/09": 0.49,
+     "Réelle au 31/10": 0.42,
+     "Valeur au 31/10": 302400
+    },
+    {
+     "Classe d'actifs": "Obligations",
+     "Cible": 0.3,
+     "Réelle au 30/09": 0.24,
+     "Réelle au 31/10": 0.29,
+     "Valeur au 31/10": 208800
+    },
+    {
+     "Classe d'actifs": "Immobilier (SCPI, bureaux)",
+     "Cible": 0.2,
+     "Réelle au 30/09": 0.19,
+     "Réelle au 31/10": 0.19,
+     "Valeur au 31/10": 136800
+    },
+    {
+     "Classe d'actifs": "Trésorerie",
+     "Cible": 0.1,
+     "Réelle au 30/09": 0.08,
+     "Réelle au 31/10": 0.1,
+     "Valeur au 31/10": 72000
+    }
+   ]
+  }
+ ]
+}

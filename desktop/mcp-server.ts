@@ -26,6 +26,7 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js'
@@ -35,6 +36,7 @@ import { IDEMPOTENT_TOOLS, runTool, toolSchemas, type ToolResult } from '@/ai/to
 import { APP_VERSION } from '@/lib/version'
 import type { AppData } from '@/types/domain'
 import { NodeJournal, type DiskLedger } from './atelier-node'
+import { defaultExamplesDir, folderExamples } from './examples-source'
 import { defaultDataDir, defaultPreferencesFile, defaultSecretsFile, FileStore } from './file-store'
 import { SnapshotWriter } from './snapshots'
 
@@ -44,6 +46,8 @@ const preferencesFile = defaultPreferencesFile()
 // Préférences lues seulement : aucun outil ne peut passer l'app en ligne.
 const store = new FileStore({ dir: dataDir, secretsFile, preferencesFile })
 const journal = new NodeJournal({ dataDir })
+// Exemples de la suite : dossier exemples-suite/ du dépôt (dist-desktop/../exemples-suite).
+const examples = folderExamples(defaultExamplesDir(path.dirname(fileURLToPath(import.meta.url))))
 const snapshots = new SnapshotWriter({ dir: dataDir, journal })
 
 /** Outils qui ne lisent que les métadonnées du nœud : utilisables sans `atelier.json`. */
@@ -167,6 +171,7 @@ async function callTool(name: string, args: Record<string, unknown>) {
     const current = ledger ? (store.load().data ?? data) : data
     const session = createHeadlessSession(current ?? EMPTY_DATA, saveExport, {
       caller: 'mcp',
+      examples,
       readEvents: (query) => journal.readEvents(query),
       ...(ledger ? { ledger } : {}),
     })

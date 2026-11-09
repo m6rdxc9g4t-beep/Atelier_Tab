@@ -12,6 +12,7 @@ import type { ConfirmRequest, ToolHost } from '@/ai/tools'
 import { downloadText } from '@/dataflow'
 import { getDesktopApi } from '@/services/desktop'
 import { useAssistant } from './assistant.store'
+import { bundledExamples } from './example-actions'
 import { desktopAwareFetch } from './export-actions'
 import { getSheet, useDataStore, useUIStore } from './index'
 
@@ -47,6 +48,7 @@ export function appToolHost(): ToolHost {
     confirm: requestConfirmation,
     store: useDataStore,
     getSheet,
+    examples: bundledExamples,
     ...(webhookFetch ? { webhookFetch } : {}),
     // Journal du nœud Atelier : tenu par le processus principal (app de bureau seulement).
     ...(atelierEvents ? { readEvents: atelierEvents } : {}),

@@ -60,6 +60,11 @@ export interface DataActions {
 
   /** Crée un projet avec une première table. */
   createProject(workspaceId: string, name: string): { projectId: string; tableId: string }
+  /**
+   * Installe un projet complet (exemples de la suite) : l'espace `workspace` est créé s'il n'existe pas, le projet
+   * et ses tables sont remplacés s'ils existent déjà (identifiants stables : un rechargement ne duplique rien).
+   */
+  installProject(workspace: { id: string; name: string }, project: { id: string; name: string }, tables: Table[]): void
   renameProject(projectId: string, name: string): void
   duplicateProject(projectId: string): string | null
   deleteProject(projectId: string): void
@@ -267,6 +272,19 @@ export function createDataStore(options: { adapter?: StorageAdapter; initialData
           })
           return { projectId, tableId: table.id }
         },
+
+        installProject: (workspace, project, tables) =>
+          set((s) => {
+            if (!s.workspaces[workspace.id]) {
+              s.workspaces[workspace.id] = { id: workspace.id, name: workspace.name, projectIds: [] }
+              s.workspaceOrder.push(workspace.id)
+            }
+            const ws = s.workspaces[workspace.id]!
+            for (const tableId of s.projects[project.id]?.tableIds ?? []) delete s.tables[tableId]
+            for (const table of tables) s.tables[table.id] = { ...table, projectId: project.id }
+            s.projects[project.id] = { id: project.id, workspaceId: workspace.id, name: project.name, tableIds: tables.map((t) => t.id) }
+            if (!ws.projectIds.includes(project.id)) ws.projectIds.push(project.id)
+          }),
 
         renameProject: (projectId, name) =>
           set((s) => {

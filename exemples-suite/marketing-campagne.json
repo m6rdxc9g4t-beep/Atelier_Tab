@@ -1,0 +1,371 @@
+{
+ "format": "atelier-exemples/1",
+ "histoire": {
+  "id": "marketing-campagne",
+  "titre": "Campagne Brume",
+  "sous_titre": "Lancement d'une marque de cosmétiques par une agence",
+  "secteur": "Marketing",
+  "resume": "L'agence Orbe lance la gamme d'automne de Brume Cosmétiques : plan média, performances par canal, factures des régies ; le budget Meta explose au lancement et le coût d'acquisition grimpe."
+ },
+ "espace": {
+  "id": "ws_ex_marketing-campagne",
+  "nom": "Agence Orbe"
+ },
+ "projet": {
+  "id": "prj_ex_marketing-campagne",
+  "nom": "Brume — lancement automne"
+ },
+ "tables": [
+  {
+   "nom": "Opérations août-oct. 2026",
+   "colonnes": [
+    {
+     "label": "Date",
+     "type": "date"
+    },
+    {
+     "label": "Libellé",
+     "type": "text",
+     "mapping": "entity_title"
+    },
+    {
+     "label": "Débit",
+     "type": "currency"
+    },
+    {
+     "label": "Crédit",
+     "type": "currency"
+    },
+    {
+     "label": "Montant",
+     "type": "currency"
+    },
+    {
+     "label": "Catégorie",
+     "type": "select",
+     "choices": [
+      "Banque",
+      "Budget client",
+      "Google Ads",
+      "Influence",
+      "Meta",
+      "Outils",
+      "Production",
+      "TikTok"
+     ]
+    },
+    {
+     "label": "Mois",
+     "type": "text"
+    }
+   ],
+   "lignes": [
+    {
+     "Date": "2026-08-01",
+     "Libellé": "VIR SEPA RECU BRUME COSMETIQUES BUDGET MEDIA AOUT",
+     "Débit": null,
+     "Crédit": 4000,
+     "Montant": 4000.0,
+     "Catégorie": "Budget client",
+     "Mois": "2026-08"
+    },
+    {
+     "Date": "2026-08-06",
+     "Libellé": "PRLV SEPA CANVA HUBSPOT SEMRUSH",
+     "Débit": 318,
+     "Crédit": null,
+     "Montant": -318.0,
+     "Catégorie": "Outils",
+     "Mois": "2026-08"
+    },
+    {
+     "Date": "2026-08-20",
+     "Libellé": "VIR SEPA EMIS STUDIO LUMEN SHOOTING PRODUIT",
+     "Débit": 1600,
+     "Crédit": null,
+     "Montant": -1600.0,
+     "Catégorie": "Production",
+     "Mois": "2026-08"
+    },
+    {
+     "Date": "2026-08-28",
+     "Libellé": "FRAIS TENUE DE COMPTE",
+     "Débit": 15,
+     "Crédit": null,
+     "Montant": -15.0,
+     "Catégorie": "Banque",
+     "Mois": "2026-08"
+    },
+    {
+     "Date": "2026-08-31",
+     "Libellé": "PRLV SEPA META PLATFORMS IRELAND AOUT",
+     "Débit": 1250,
+     "Crédit": null,
+     "Montant": -1250.0,
+     "Catégorie": "Meta",
+     "Mois": "2026-08"
+    },
+    {
+     "Date": "2026-08-31",
+     "Libellé": "PRLV SEPA GOOGLE IRELAND ADS AOUT",
+     "Débit": 940,
+     "Crédit": null,
+     "Montant": -940.0,
+     "Catégorie": "Google Ads",
+     "Mois": "2026-08"
+    },
+    {
+     "Date": "2026-08-31",
+     "Libellé": "PRLV SEPA TIKTOK ADS AOUT",
+     "Débit": 690,
+     "Crédit": null,
+     "Montant": -690.0,
+     "Catégorie": "TikTok",
+     "Mois": "2026-08"
+    },
+    {
+     "Date": "2026-09-01",
+     "Libellé": "VIR SEPA RECU BRUME COSMETIQUES BUDGET MEDIA SEPTEMBRE",
+     "Débit": null,
+     "Crédit": 4000,
+     "Montant": 4000.0,
+     "Catégorie": "Budget client",
+     "Mois": "2026-09"
+    },
+    {
+     "Date": "2026-09-06",
+     "Libellé": "PRLV SEPA CANVA HUBSPOT SEMRUSH",
+     "Débit": 318,
+     "Crédit": null,
+     "Montant": -318.0,
+     "Catégorie": "Outils",
+     "Mois": "2026-09"
+    },
+    {
+     "Date": "2026-09-14",
+     "Libellé": "VIR SEPA EMIS COLLECTIF CREATEURS INFLUENCE",
+     "Débit": 1200,
+     "Crédit": null,
+     "Montant": -1200.0,
+     "Catégorie": "Influence",
+     "Mois": "2026-09"
+    },
+    {
+     "Date": "2026-09-28",
+     "Libellé": "FRAIS TENUE DE COMPTE",
+     "Débit": 15,
+     "Crédit": null,
+     "Montant": -15.0,
+     "Catégorie": "Banque",
+     "Mois": "2026-09"
+    },
+    {
+     "Date": "2026-09-30",
+     "Libellé": "PRLV SEPA META PLATFORMS IRELAND SEPTEMBRE",
+     "Débit": 1180,
+     "Crédit": null,
+     "Montant": -1180.0,
+     "Catégorie": "Meta",
+     "Mois": "2026-09"
+    },
+    {
+     "Date": "2026-09-30",
+     "Libellé": "PRLV SEPA GOOGLE IRELAND ADS SEPTEMBRE",
+     "Débit": 910,
+     "Crédit": null,
+     "Montant": -910.0,
+     "Catégorie": "Google Ads",
+     "Mois": "2026-09"
+    },
+    {
+     "Date": "2026-09-30",
+     "Libellé": "PRLV SEPA TIKTOK ADS SEPTEMBRE",
+     "Débit": 660,
+     "Crédit": null,
+     "Montant": -660.0,
+     "Catégorie": "TikTok",
+     "Mois": "2026-09"
+    },
+    {
+     "Date": "2026-10-01",
+     "Libellé": "VIR SEPA RECU BRUME COSMETIQUES BUDGET MEDIA LANCEMENT",
+     "Débit": null,
+     "Crédit": 9000,
+     "Montant": 9000.0,
+     "Catégorie": "Budget client",
+     "Mois": "2026-10"
+    },
+    {
+     "Date": "2026-10-06",
+     "Libellé": "PRLV SEPA CANVA HUBSPOT SEMRUSH",
+     "Débit": 318,
+     "Crédit": null,
+     "Montant": -318.0,
+     "Catégorie": "Outils",
+     "Mois": "2026-10"
+    },
+    {
+     "Date": "2026-10-08",
+     "Libellé": "VIR SEPA EMIS COLLECTIF CREATEURS INFLUENCE LANCEMENT",
+     "Débit": 2500,
+     "Crédit": null,
+     "Montant": -2500.0,
+     "Catégorie": "Influence",
+     "Mois": "2026-10"
+    },
+    {
+     "Date": "2026-10-28",
+     "Libellé": "FRAIS TENUE DE COMPTE",
+     "Débit": 15,
+     "Crédit": null,
+     "Montant": -15.0,
+     "Catégorie": "Banque",
+     "Mois": "2026-10"
+    },
+    {
+     "Date": "2026-10-31",
+     "Libellé": "PRLV SEPA META PLATFORMS IRELAND OCTOBRE",
+     "Débit": 4320,
+     "Crédit": null,
+     "Montant": -4320.0,
+     "Catégorie": "Meta",
+     "Mois": "2026-10"
+    },
+    {
+     "Date": "2026-10-31",
+     "Libellé": "PRLV SEPA GOOGLE IRELAND ADS OCTOBRE",
+     "Débit": 1490,
+     "Crédit": null,
+     "Montant": -1490.0,
+     "Catégorie": "Google Ads",
+     "Mois": "2026-10"
+    },
+    {
+     "Date": "2026-10-31",
+     "Libellé": "PRLV SEPA TIKTOK ADS OCTOBRE",
+     "Débit": 2210,
+     "Crédit": null,
+     "Montant": -2210.0,
+     "Catégorie": "TikTok",
+     "Mois": "2026-10"
+    }
+   ]
+  },
+  {
+   "nom": "Plan média",
+   "colonnes": [
+    {
+     "label": "Action",
+     "type": "text",
+     "mapping": "entity_title"
+    },
+    {
+     "label": "Canal",
+     "type": "select",
+     "choices": [
+      "Meta",
+      "Google Ads",
+      "TikTok",
+      "Influence"
+     ]
+    },
+    {
+     "label": "Budget",
+     "type": "currency",
+     "mapping": "financial_ht"
+    },
+    {
+     "label": "Début",
+     "type": "date",
+     "mapping": "start_date"
+    },
+    {
+     "label": "Fin",
+     "type": "date",
+     "mapping": "due_date"
+    },
+    {
+     "label": "CPA cible",
+     "type": "currency"
+    },
+    {
+     "label": "Statut",
+     "type": "select",
+     "choices": [
+      "À faire",
+      "En cours",
+      "Terminée"
+     ],
+     "mapping": "workflow_state"
+    },
+    {
+     "label": "Responsable",
+     "type": "text",
+     "mapping": "assignee"
+    }
+   ],
+   "lignes": [
+    {
+     "Action": "Teasing gamme automne",
+     "Canal": "Meta",
+     "Budget": 2400,
+     "Début": "2026-08-15",
+     "Fin": "2026-09-30",
+     "CPA cible": 18,
+     "Statut": "Terminée",
+     "Responsable": "Clara Vasseur"
+    },
+    {
+     "Action": "Recherche marque et produits",
+     "Canal": "Google Ads",
+     "Budget": 3000,
+     "Début": "2026-08-01",
+     "Fin": "2026-12-31",
+     "CPA cible": 15,
+     "Statut": "En cours",
+     "Responsable": "Théo Lambert"
+    },
+    {
+     "Action": "Lancement : vidéos courtes",
+     "Canal": "TikTok",
+     "Budget": 2200,
+     "Début": "2026-10-01",
+     "Fin": "2026-10-31",
+     "CPA cible": 20,
+     "Statut": "Terminée",
+     "Responsable": "Clara Vasseur"
+    },
+    {
+     "Action": "Lancement : carrousels et stories",
+     "Canal": "Meta",
+     "Budget": 2500,
+     "Début": "2026-10-01",
+     "Fin": "2026-10-31",
+     "CPA cible": 18,
+     "Statut": "Terminée",
+     "Responsable": "Clara Vasseur"
+    },
+    {
+     "Action": "Créateurs beauté (12 contenus)",
+     "Canal": "Influence",
+     "Budget": 3700,
+     "Début": "2026-09-10",
+     "Fin": "2026-10-20",
+     "CPA cible": 25,
+     "Statut": "Terminée",
+     "Responsable": "Nora Belkacem"
+    },
+    {
+     "Action": "Retargeting fêtes de fin d'année",
+     "Canal": "Meta",
+     "Budget": 1800,
+     "Début": "2026-11-15",
+     "Fin": "2026-12-24",
+     "CPA cible": 12,
+     "Statut": "À faire",
+     "Responsable": "Théo Lambert"
+    }
+   ]
+  }
+ ]
+}
