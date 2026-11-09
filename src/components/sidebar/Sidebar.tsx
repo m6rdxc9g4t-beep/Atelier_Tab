@@ -89,6 +89,7 @@ export function Sidebar() {
             />
           )
         })}
+        <NewWorkspace />
       </nav>
 
       <PipelineStatus />
@@ -107,9 +108,12 @@ function WorkspaceSection({
 }) {
   const projects = useDataStore((s) => s.projects)
   const createProject = useDataStore((s) => s.createProject)
+  const renameWorkspace = useDataStore((s) => s.renameWorkspace)
   const openTable = useUIStore((s) => s.openTable)
   const toggleProject = useUIStore((s) => s.toggleProject)
   const [naming, setNaming] = useState(false)
+  const [renaming, setRenaming] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   const create = (raw: string) => {
     setNaming(false)
@@ -122,8 +126,34 @@ function WorkspaceSection({
 
   return (
     <section className="mb-3">
-      <div className="group flex h-7 items-center pr-1 pl-2">
-        <h2 className="flex-1 truncate text-[11.5px] font-medium text-faint">{name}</h2>
+      <div className="group flex h-7 items-center gap-px pr-1 pl-2">
+        {renaming ? (
+          <RenameInput
+            value={name}
+            label="Nom de l’espace"
+            onDone={(next) => {
+              if (next && next !== name) renameWorkspace(workspaceId, next)
+              setRenaming(false)
+            }}
+          />
+        ) : (
+          <h2
+            onDoubleClick={() => setRenaming(true)}
+            title="Double-cliquez pour renommer"
+            className="flex-1 truncate text-[11.5px] font-medium text-faint select-none"
+          >
+            {name}
+          </h2>
+        )}
+        <button
+          type="button"
+          onClick={() => setDeleting(true)}
+          aria-label={`Supprimer l’espace ${name}`}
+          title="Supprimer l’espace"
+          className={cn(ROW_ACTION, 'hover:text-down')}
+        >
+          <Trash2 size={13} />
+        </button>
         <button
           type="button"
           onClick={() => setNaming(true)}
@@ -139,6 +169,18 @@ function WorkspaceSection({
           const project = projects[id]
           return project ? <ProjectItem key={id} project={project} /> : null
         })}
+        {projectIds.length === 0 && !naming && (
+          <li>
+            <button
+              type="button"
+              onClick={() => setNaming(true)}
+              className="flex h-[30px] w-full items-center gap-1.5 rounded-lg px-1.5 text-left text-faint hover:bg-surface-hover hover:text-ink"
+            >
+              <Plus size={14} className="shrink-0" />
+              Nouveau projet
+            </button>
+          </li>
+        )}
         {naming && (
           <li className="px-1 py-0.5">
             <NameInput
@@ -149,7 +191,45 @@ function WorkspaceSection({
           </li>
         )}
       </ul>
+      {deleting && (
+        <DeleteDialog
+          target={{ kind: 'workspace', id: workspaceId }}
+          onClose={() => setDeleting(false)}
+        />
+      )}
     </section>
+  )
+}
+
+/** « Nouvel espace » en bas de la navigation : le nom saisi, l'espace vide apparaît. */
+function NewWorkspace() {
+  const createWorkspace = useDataStore((s) => s.createWorkspace)
+  const [naming, setNaming] = useState(false)
+
+  if (naming) {
+    return (
+      <div className="px-1 py-0.5">
+        <NameInput
+          placeholder="Nom de l’espace"
+          onSubmit={(raw) => {
+            setNaming(false)
+            const name = raw.trim()
+            if (name) createWorkspace(name)
+          }}
+          onCancel={() => setNaming(false)}
+        />
+      </div>
+    )
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => setNaming(true)}
+      className="flex h-7 w-full items-center gap-1.5 rounded-lg px-2 text-left text-[11.5px] font-medium text-faint hover:bg-surface-hover hover:text-ink"
+    >
+      <Plus size={13} className="shrink-0" />
+      Nouvel espace
+    </button>
   )
 }
 
