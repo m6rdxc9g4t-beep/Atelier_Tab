@@ -7,9 +7,16 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { isExamplePart, storiesFromIndex, type ExampleSource } from '@/examples/suite'
 
-/** Dossier par défaut : `exemples-suite/` à la racine du dépôt (à côté de `dist-desktop/`). */
+/**
+ * Dossier par défaut : `exemples-suite/` à la racine du dépôt (à côté de `dist-desktop/`), ou à côté
+ * du serveur MCP quand il est copié seul (image Docker d'Atelier Nexus).
+ */
 export function defaultExamplesDir(here: string): string {
-  return process.env.ATELIER_TAB_EXEMPLES_DIR || path.join(here, '..', 'exemples-suite')
+  if (process.env.ATELIER_TAB_EXEMPLES_DIR) return process.env.ATELIER_TAB_EXEMPLES_DIR
+  const beside = path.join(here, 'exemples-suite')
+  return fs.existsSync(path.join(beside, 'index.json'))
+    ? beside
+    : path.join(here, '..', 'exemples-suite')
 }
 
 function readJson(file: string): unknown {

@@ -6,7 +6,10 @@ import { createDataStore } from '@/store/data.store'
 import { buildExampleTables, isExamplePart, type ExamplePart } from '../suite'
 
 // Les fichiers livrés avec l'app, lus comme l'app les lit.
-const FILES = import.meta.glob<unknown>('../../../exemples-suite/*.json', { eager: true, import: 'default' })
+const FILES = import.meta.glob<unknown>('../../../exemples-suite/*.json', {
+  eager: true,
+  import: 'default',
+})
 const read = (file: string): unknown => FILES[`../../../exemples-suite/${file}`]
 const index = read('index.json') as { format: string; histoires: { id: string }[] }
 const parts = index.histoires.map((h) => read(`${h.id}.json`) as ExamplePart)
@@ -66,11 +69,13 @@ describe('exemples de la suite', () => {
     engine = connectComputed(data)
     const tables = buildExampleTables(renovation)
     const install = () =>
-      data.getState().installProject(
-        { id: renovation.espace.id, name: renovation.espace.nom },
-        { id: renovation.projet.id, name: renovation.projet.nom },
-        buildExampleTables(renovation),
-      )
+      data
+        .getState()
+        .installProject(
+          { id: renovation.espace.id, name: renovation.espace.nom },
+          { id: renovation.projet.id, name: renovation.projet.nom },
+          buildExampleTables(renovation),
+        )
     install()
     install()
     const s = data.getState()
@@ -83,7 +88,9 @@ describe('exemples de la suite', () => {
     const row = planning.rowOrder[0]!
     const htValue = ht ? planning.records[row]!.cells[ht] : undefined
     expect(typeof htValue).toBe('number')
-    expect(selectCellValue(planning.id, row, ttc)(engine.store.getState())).toBeCloseTo((htValue as number) * 1.2)
+    expect(selectCellValue(planning.id, row, ttc)(engine.store.getState())).toBeCloseTo(
+      (htValue as number) * 1.2,
+    )
 
     s.deleteProject(renovation.projet.id)
     expect(data.getState().projects[renovation.projet.id]).toBeUndefined()

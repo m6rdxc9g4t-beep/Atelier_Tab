@@ -23,7 +23,9 @@ const AssistantPanel = lazy(() =>
 
 // Chargé à la première ouverture, comme l'export.
 const SuiteExamplesDialog = lazy(() =>
-  import('@/components/examples/SuiteExamplesDialog').then((m) => ({ default: m.SuiteExamplesDialog })),
+  import('@/components/examples/SuiteExamplesDialog').then((m) => ({
+    default: m.SuiteExamplesDialog,
+  })),
 )
 const ImportDialog = lazy(() =>
   import('@/components/dataflow/ImportDialog').then((m) => ({ default: m.ImportDialog })),

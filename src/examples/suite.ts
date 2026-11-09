@@ -50,13 +50,28 @@ export interface ExamplePart {
   histoire: Omit<ExampleStory, 'parcours'>
   espace: { id: string; nom: string }
   projet: { id: string; nom: string }
-  tables: { nom: string; colonnes: ExampleColumn[]; lignes: Record<string, string | number | boolean | null>[] }[]
+  tables: {
+    nom: string
+    colonnes: ExampleColumn[]
+    lignes: Record<string, string | number | boolean | null>[]
+  }[]
 }
 
 const COLORS: BadgeColor[] = ['blue', 'green', 'amber', 'violet', 'pink', 'teal', 'gray', 'red']
 const MAPPINGS = new Set<string>([
-  'entity_title', 'workflow_state', 'financial_ht', 'financial_ttc', 'assignee', 'due_date', 'start_date',
-  'quantity', 'description', 'flag', 'custom', 'item_type', 'time_spent',
+  'entity_title',
+  'workflow_state',
+  'financial_ht',
+  'financial_ttc',
+  'assignee',
+  'due_date',
+  'start_date',
+  'quantity',
+  'description',
+  'flag',
+  'custom',
+  'item_type',
+  'time_spent',
 ])
 const SAFE = /[^A-Za-z0-9_-]/g
 const isSafeId = (id: string) => /^[A-Za-z0-9_-]+$/.test(id)
@@ -71,14 +86,18 @@ function choicesFor(col: ExampleColumn): SelectChoice[] {
   // Statuts de la suite : couleurs et identifiants officiels (reconnus tels quels par Atelier Projets).
   if (col.mapping === 'workflow_state' && labels.every((l) => workflowStatusCode(l) !== null)) {
     const official = atelierStatusChoices()
-    return labels.map((l) => official.find((c) => workflowStatusCode(c.label) === workflowStatusCode(l)) ?? official[0]!)
+    return labels.map(
+      (l) =>
+        official.find((c) => workflowStatusCode(c.label) === workflowStatusCode(l)) ?? official[0]!,
+    )
   }
   return labels.map((label, i) => ({ id: `opt_${i}`, label, color: COLORS[i % COLORS.length]! }))
 }
 
 function fieldFor(col: ExampleColumn, id: string): Field {
   const type: FieldType = col.type
-  const mapping = col.mapping && MAPPINGS.has(col.mapping) ? (col.mapping as AtelierMapping) : undefined
+  const mapping =
+    col.mapping && MAPPINGS.has(col.mapping) ? (col.mapping as AtelierMapping) : undefined
   return createField({
     id,
     label: col.label,
@@ -87,13 +106,22 @@ function fieldFor(col: ExampleColumn, id: string): Field {
     ...(col.type === 'select' ? { options: { choices: choicesFor(col) } } : {}),
     ...(col.type === 'currency' ? { options: { currency: 'EUR', decimals: 2 } } : {}),
     ...(col.type === 'formula' && col.formula
-      ? { columnFormula: col.formula, options: { resultFormat: col.format ?? 'number', ...(col.format === 'currency' ? { currency: 'EUR' as const } : {}) } }
+      ? {
+          columnFormula: col.formula,
+          options: {
+            resultFormat: col.format ?? 'number',
+            ...(col.format === 'currency' ? { currency: 'EUR' as const } : {}),
+          },
+        }
       : {}),
     ...(mapping === 'entity_title' ? { width: 280 } : {}),
   })
 }
 
-function cellFor(field: Field, value: string | number | boolean | null | undefined): CellInput | undefined {
+function cellFor(
+  field: Field,
+  value: string | number | boolean | null | undefined,
+): CellInput | undefined {
   if (value === null || value === undefined || field.type === 'formula') return undefined
   if (field.type === 'select') {
     return field.options?.choices?.find((c) => c.label === value)?.id ?? null
@@ -117,9 +145,23 @@ export function buildExampleTables(part: ExamplePart): Table[] {
     const status = fields.find((f) => f.atelierMapping === 'workflow_state')
     const views = [
       createView('hybrid', { id: stableId('view_ex', h, ti, 'grille') }),
-      ...(status ? [createView('kanban', { id: stableId('view_ex', h, ti, 'kanban'), groupByFieldId: status.id })] : []),
+      ...(status
+        ? [
+            createView('kanban', {
+              id: stableId('view_ex', h, ti, 'kanban'),
+              groupByFieldId: status.id,
+            }),
+          ]
+        : []),
     ]
-    return buildTable({ id: stableId('tbl_ex', h, ti), projectId: part.projet.id, name: t.nom, fields, records, views })
+    return buildTable({
+      id: stableId('tbl_ex', h, ti),
+      projectId: part.projet.id,
+      name: t.nom,
+      fields,
+      records,
+      views,
+    })
   })
 }
 
@@ -145,9 +187,12 @@ export function isExamplePart(value: unknown): value is ExamplePart {
   const v = value as Partial<ExamplePart>
   return (
     v.format === EXAMPLES_FORMAT &&
-    typeof v.histoire?.id === 'string' && isSafeId(v.histoire.id) &&
-    typeof v.espace?.id === 'string' && isSafeId(v.espace.id) &&
-    typeof v.projet?.id === 'string' && isSafeId(v.projet.id) &&
+    typeof v.histoire?.id === 'string' &&
+    isSafeId(v.histoire.id) &&
+    typeof v.espace?.id === 'string' &&
+    isSafeId(v.espace.id) &&
+    typeof v.projet?.id === 'string' &&
+    isSafeId(v.projet.id) &&
     Array.isArray(v.tables)
   )
 }

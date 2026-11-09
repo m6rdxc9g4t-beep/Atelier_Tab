@@ -58,6 +58,35 @@ afterAll(async () => {
 })
 
 describe('serveur MCP sans données (app jamais ouverte)', () => {
+  it('load_suite_example crée les données d’un dossier vide (serveur sans app)', async () => {
+    const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'atelier-mcp-vide-'))
+    const fresh = new Client({ name: 'test', version: '1.0.0' })
+    await fresh.connect(
+      new StdioClientTransport({
+        command: process.execPath,
+        args: [server],
+        env: {
+          ...process.env,
+          ATELIER_TAB_DATA: empty,
+          ATELIER_TAB_SECRETS: path.join(`${empty}-config`, 'secrets.json'),
+        } as Record<string, string>,
+      }),
+    )
+    try {
+      const res = (await fresh.callTool({
+        name: 'load_suite_example',
+        arguments: { example: 'freelance-data' },
+      })) as TextResult
+      expect(res.isError).toBeFalsy()
+      const data = new FileStore({ dir: empty }).load().data
+      expect(data?.projects['prj_ex_freelance-data']).toBeDefined()
+    } finally {
+      await fresh.close()
+      fs.rmSync(empty, { recursive: true, force: true })
+      fs.rmSync(`${empty}-config`, { recursive: true, force: true })
+    }
+  })
+
   it('atelier_manifest et atelier_events répondent ; les autres outils donnent une erreur claire', async () => {
     const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'atelier-mcp-vide-'))
     const bare = new Client({ name: 'test', version: '1.0.0' })
@@ -296,7 +325,9 @@ describe('serveur MCP : exemples de la suite', () => {
     expect(json.project.id).toBe('prj_ex_studio-garance')
     const reloaded = new FileStore({ dir }).load().data
     expect(reloaded?.projects['prj_ex_studio-garance']?.tableIds).toHaveLength(json.tables.length)
-    expect((await call('remove_suite_example', { example: 'studio-garance' })).json.removed).toBe(true)
+    expect((await call('remove_suite_example', { example: 'studio-garance' })).json.removed).toBe(
+      true,
+    )
     expect(new FileStore({ dir }).load().data?.projects['prj_ex_studio-garance']).toBeUndefined()
   })
 })

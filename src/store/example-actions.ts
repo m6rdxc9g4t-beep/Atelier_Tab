@@ -46,7 +46,13 @@ export function exampleProjectId(part: Pick<ExamplePart, 'projet'>): string | nu
 /** Charge l'histoire (remplace son projet s'il existe déjà) et ouvre sa première table. */
 export function installExample(part: ExamplePart): string | null {
   const tables = buildExampleTables(part)
-  useDataStore.getState().installProject({ id: part.espace.id, name: part.espace.nom }, { id: part.projet.id, name: part.projet.nom }, tables)
+  useDataStore
+    .getState()
+    .installProject(
+      { id: part.espace.id, name: part.espace.nom },
+      { id: part.projet.id, name: part.projet.nom },
+      tables,
+    )
   const first = tables[0]?.id ?? null
   const ui = useUIStore.getState()
   ui.toggleProject(part.projet.id, true)

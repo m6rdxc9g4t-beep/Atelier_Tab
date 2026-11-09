@@ -44,7 +44,11 @@ export function SuiteExamplesDialog() {
   const [stories, setStories] = useState<ExampleStory[]>([])
   const [selected, setSelected] = useState<string | null>(remembered)
   // Partie Tab de l'histoire, rattachée à son identifiant : changer d'histoire n'affiche jamais l'ancienne.
-  const [fetched, setFetched] = useState<{ id: string; part: ExamplePart | null; error: string | null } | null>(null)
+  const [fetched, setFetched] = useState<{
+    id: string
+    part: ExamplePart | null
+    error: string | null
+  } | null>(null)
   // Relu pour savoir si le projet de l'histoire est dans Tab (après chargement ou retrait).
   const projects = useDataStore((s) => s.projects)
 
@@ -59,7 +63,8 @@ export function SuiteExamplesDialog() {
     if (!storyId) return
     loadExamplePart(storyId).then(
       (part) => setFetched({ id: storyId, part, error: null }),
-      (e: unknown) => setFetched({ id: storyId, part: null, error: e instanceof Error ? e.message : String(e) }),
+      (e: unknown) =>
+        setFetched({ id: storyId, part: null, error: e instanceof Error ? e.message : String(e) }),
     )
   }, [storyId])
   const part = fetched?.id === storyId && fetched ? fetched.part : null
@@ -75,7 +80,8 @@ export function SuiteExamplesDialog() {
     }
   }
 
-  const loaded = part !== null && projects[part.projet.id] !== undefined && exampleProjectId(part) !== null
+  const loaded =
+    part !== null && projects[part.projet.id] !== undefined && exampleProjectId(part) !== null
   const index = story ? story.parcours.findIndex((e) => e.app === 'tab') : -1
   const current = story?.parcours[index]
   const next = story?.parcours[index + 1]
@@ -84,14 +90,18 @@ export function SuiteExamplesDialog() {
   const load = () => {
     if (!part) return
     installExample(part)
-    useNotices.getState().push({ tone: 'info', title: `Exemple « ${part.histoire.titre} » chargé` }, 4000)
+    useNotices
+      .getState()
+      .push({ tone: 'info', title: `Exemple « ${part.histoire.titre} » chargé` }, 4000)
     close()
   }
 
   const remove = () => {
     if (!part) return
     removeExample(part)
-    useNotices.getState().push({ tone: 'info', title: `Exemple « ${part.histoire.titre} » retiré` }, 4000)
+    useNotices
+      .getState()
+      .push({ tone: 'info', title: `Exemple « ${part.histoire.titre} » retiré` }, 4000)
   }
 
   return (
@@ -111,8 +121,14 @@ export function SuiteExamplesDialog() {
           <button type="button" className="btn" onClick={close}>
             Fermer
           </button>
-          <button type="button" className="atelier-btn-primary inline-flex h-[30px] items-center gap-1.5 rounded-lg px-3 font-medium disabled:opacity-50" disabled={!part} onClick={load}>
-            <BookOpen size={14} aria-hidden /> {loaded ? 'Recharger l’exemple' : 'Charger l’exemple'}
+          <button
+            type="button"
+            className="atelier-btn-primary inline-flex h-[30px] items-center gap-1.5 rounded-lg px-3 font-medium disabled:opacity-50"
+            disabled={!part}
+            onClick={load}
+          >
+            <BookOpen size={14} aria-hidden />{' '}
+            {loaded ? 'Recharger l’exemple' : 'Charger l’exemple'}
           </button>
         </>
       }
@@ -121,7 +137,11 @@ export function SuiteExamplesDialog() {
         <div className="flex flex-col gap-3">
           <label className="flex flex-col gap-1 text-[12px] text-muted">
             Histoire
-            <select className="field-input" value={story.id} onChange={(e) => choose(e.target.value)}>
+            <select
+              className="field-input"
+              value={story.id}
+              onChange={(e) => choose(e.target.value)}
+            >
               {stories.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.secteur} · {s.titre}
@@ -143,7 +163,9 @@ export function SuiteExamplesDialog() {
                 aria-current={e.app === 'tab' ? 'step' : undefined}
                 className={cn(
                   'inline-flex h-[22px] items-center gap-1.5 rounded-md border px-2 text-[12px]',
-                  e.app === 'tab' ? 'border-focus bg-selection text-accent-fg' : 'border-line text-muted',
+                  e.app === 'tab'
+                    ? 'border-focus bg-selection text-accent-fg'
+                    : 'border-line text-muted',
                 )}
               >
                 <span className="tabular-nums text-faint">{i + 1}</span>
@@ -154,7 +176,8 @@ export function SuiteExamplesDialog() {
           {current && <p className="text-[13px] text-ink">{current.texte}</p>}
           {part && (
             <p className="text-[12px] text-muted">
-              Projet « {part.projet.nom} » dans l’espace « {part.espace.nom} » : {part.tables.map((t) => t.nom).join(', ')}.
+              Projet « {part.projet.nom} » dans l’espace « {part.espace.nom} » :{' '}
+              {part.tables.map((t) => t.nom).join(', ')}.
               {loaded && ' Déjà chargé : recharger remet les tables dans leur état d’origine.'}
             </p>
           )}
@@ -162,7 +185,8 @@ export function SuiteExamplesDialog() {
           {next && (
             <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3 text-[12.5px] text-muted">
               <p className="min-w-0">
-                <span className="font-medium text-ink">Ensuite, {APPS[next.app] ?? next.app}</span> — {next.texte}
+                <span className="font-medium text-ink">Ensuite, {APPS[next.app] ?? next.app}</span>{' '}
+                — {next.texte}
               </p>
               {nextApp && (
                 <button type="button" className="btn-ghost" onClick={() => openSuiteApp(nextApp)}>

@@ -5,7 +5,10 @@ import { createHeadlessSession, type HeadlessOptions, type HeadlessSession } fro
 import { runTool, type ConfirmRequest } from '../tools'
 
 // Les fichiers livrés avec l'app, servis comme le ferait l'app ou le serveur MCP.
-const FILES = import.meta.glob<unknown>('../../../exemples-suite/*.json', { eager: true, import: 'default' })
+const FILES = import.meta.glob<unknown>('../../../exemples-suite/*.json', {
+  eager: true,
+  import: 'default',
+})
 const file = (name: string) => FILES[`../../../exemples-suite/${name}.json`]
 const source: ExampleSource = {
   list: async () => storiesFromIndex(file('index')),
@@ -20,7 +23,11 @@ let session: HeadlessSession | null = null
 afterEach(() => session?.dispose())
 
 function open(options: Partial<HeadlessOptions> = {}) {
-  session = createHeadlessSession(createDemoData(), async (name) => name, { caller: 'mcp', examples: source, ...options })
+  session = createHeadlessSession(createDemoData(), async (name) => name, {
+    caller: 'mcp',
+    examples: source,
+    ...options,
+  })
   return session
 }
 
@@ -39,7 +46,9 @@ describe('outils des exemples de la suite', () => {
 
     await call('load_suite_example', { example: 'studio-garance' })
     const after = await call('list_suite_examples')
-    expect(after.json.examples.find((e: { id: string }) => e.id === 'studio-garance').loaded).toBe(true)
+    expect(after.json.examples.find((e: { id: string }) => e.id === 'studio-garance').loaded).toBe(
+      true,
+    )
   })
 
   it('charge le projet de l’histoire sans toucher aux autres données, puis le retire', async () => {
@@ -51,7 +60,10 @@ describe('outils des exemples de la suite', () => {
       reloaded: false,
       project: { id: 'prj_ex_studio-garance' },
     })
-    expect(loaded.json.tables[0]).toMatchObject({ id: 'tbl_ex_studio-garance_0', rows: expect.any(Number) })
+    expect(loaded.json.tables[0]).toMatchObject({
+      id: 'tbl_ex_studio-garance_0',
+      rows: expect.any(Number),
+    })
     const data = session!.snapshot()
     for (const id of Object.keys(before.tables)) expect(data.tables[id]).toEqual(before.tables[id])
 
@@ -62,7 +74,9 @@ describe('outils des exemples de la suite', () => {
     const removed = await call('remove_suite_example', { example: 'studio-garance' })
     expect(removed.json).toEqual({ example: 'studio-garance', removed: true })
     expect(session!.snapshot()).toEqual(before)
-    expect((await call('remove_suite_example', { example: 'studio-garance' })).json.removed).toBe(false)
+    expect((await call('remove_suite_example', { example: 'studio-garance' })).json.removed).toBe(
+      false,
+    )
   })
 
   it('assistant : recharger ou retirer demande une confirmation', async () => {

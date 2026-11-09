@@ -251,7 +251,10 @@ const statusPreset = z
 
 function examplesOf(host: ToolHost): ExampleSource {
   if (!host.examples) {
-    throw new CodedToolError('UNAVAILABLE', 'Aucun exemple de la suite livré avec cette installation.')
+    throw new CodedToolError(
+      'UNAVAILABLE',
+      'Aucun exemple de la suite livré avec cette installation.',
+    )
   }
   return host.examples
 }
@@ -261,7 +264,10 @@ async function loadExample(host: ToolHost, id: string) {
     return await examplesOf(host).load(id)
   } catch (e) {
     if (e instanceof ToolError) throw e
-    throw new CodedToolError('NOT_FOUND', `Exemple « ${id} » introuvable (voir list_suite_examples).`)
+    throw new CodedToolError(
+      'NOT_FOUND',
+      `Exemple « ${id} » introuvable (voir list_suite_examples).`,
+    )
   }
 }
 
@@ -1608,7 +1614,9 @@ export const TOOLS = [
     name: 'load_suite_example',
     description:
       'Charge dans Tab le projet d’une histoire des exemples de la suite (list_suite_examples) : son espace, son projet et ses tables (opérations des relevés catégorisées, tables métier). Recharger remet ces tables dans leur état d’origine ; rien d’autre n’est touché.',
-    input: z.object({ example: z.string().min(1).describe('id de l’histoire, ex. studio-garance') }),
+    input: z.object({
+      example: z.string().min(1).describe('id de l’histoire, ex. studio-garance'),
+    }),
     async run({ example }, host) {
       const part = await loadExample(host, example)
       const existing = data(host).projects[part.projet.id]
@@ -1620,11 +1628,13 @@ export const TOOLS = [
         })
       }
       const tables = buildExampleTables(part)
-      host.store.getState().installProject(
-        { id: part.espace.id, name: part.espace.nom },
-        { id: part.projet.id, name: part.projet.nom },
-        tables,
-      )
+      host.store
+        .getState()
+        .installProject(
+          { id: part.espace.id, name: part.espace.nom },
+          { id: part.projet.id, name: part.projet.nom },
+          tables,
+        )
       return {
         example: part.histoire.id,
         reloaded: existing !== undefined,
@@ -1639,7 +1649,9 @@ export const TOOLS = [
     name: 'remove_suite_example',
     description:
       'Retire de Tab le projet d’une histoire des exemples de la suite (et son espace s’il ne contient plus rien). Ne touche à aucune autre donnée.',
-    input: z.object({ example: z.string().min(1).describe('id de l’histoire, ex. studio-garance') }),
+    input: z.object({
+      example: z.string().min(1).describe('id de l’histoire, ex. studio-garance'),
+    }),
     async run({ example }, host) {
       const part = await loadExample(host, example)
       const project = data(host).projects[part.projet.id]
