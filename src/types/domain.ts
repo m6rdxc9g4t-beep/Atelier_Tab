@@ -114,7 +114,9 @@ export interface View {
   groupByFieldId?: string
   /**
    * Kanban : champ dont chaque valeur forme une ligne commune à toutes les colonnes (les cartes
-   * d'une même date côte à côte, par exemple). Absent : chaque colonne empile ses cartes.
+   * d'une même date côte à côte, par exemple). Chaîne vide : cartes empilées (choisi exprès).
+   * Absent : lignes proposées d'office par une colonne date dont les valeurs se répètent
+   * (`kanbanDefaultLaneField`), sinon cartes empilées.
    */
   laneByFieldId?: string
   hiddenFieldIds: string[]

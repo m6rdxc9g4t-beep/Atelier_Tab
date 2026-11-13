@@ -7,6 +7,7 @@ import {
   isBlankOnCard,
   kanbanCardLayout,
   kanbanCells,
+  kanbanDefaultLaneField,
   kanbanLaneField,
   kanbanLanes,
 } from '..'
@@ -81,6 +82,37 @@ describe('kanbanLaneField', () => {
     expect(kanbanLaneField(table, view('status'), status)).toBeUndefined()
     expect(kanbanLaneField(table, view('fld_absent'), status)).toBeUndefined()
   })
+
+  it('sans réglage, propose une colonne date répétée ; chaîne vide = cartes empilées', () => {
+    // Comme le relevé de l'utilisateur : une recette et deux agences par date.
+    const { table } = setup((t) => {
+      t.records.rec_01!.cells.due_date = '2026-11-30'
+      t.records.rec_02!.cells.due_date = '2026-11-30'
+      t.records.rec_03!.cells.due_date = '2026-12-31'
+      t.records.rec_04 = { id: 'rec_04', kind: 'data', cells: { due_date: '2026-12-31' } }
+      t.rowOrder.splice(3, 0, 'rec_04')
+    })
+    const status = table.fields.status
+    const kanban = table.views[1] as View
+    expect(kanbanDefaultLaneField(table, status)?.id).toBe('due_date')
+    expect(kanbanLaneField(table, { ...kanban }, status)?.id).toBe('due_date')
+    expect(kanbanLaneField(table, { ...kanban, laneByFieldId: '' }, status)).toBeUndefined()
+    // Colonne choisie puis supprimée : retour aux lignes proposées.
+    expect(kanbanLaneField(table, { ...kanban, laneByFieldId: 'fld_absent' }, status)?.id).toBe(
+      'due_date',
+    )
+    // La colonne des colonnes n'est jamais proposée.
+    expect(kanbanDefaultLaneField(table, table.fields.due_date)).toBeUndefined()
+  })
+
+  it('des dates toutes différentes ne forment pas de lignes d’office', () => {
+    const { table } = setup()
+    expect(kanbanDefaultLaneField(table, table.fields.status)).toBeUndefined()
+    const empty = setup((t) => {
+      for (const id of dataRows(t)) delete t.records[id]?.cells.due_date
+    })
+    expect(kanbanDefaultLaneField(empty.table, empty.table.fields.status)).toBeUndefined()
+  })
 })
 
 describe('kanbanLanes et kanbanCells', () => {
@@ -113,6 +145,27 @@ describe('kanbanLanes et kanbanCells', () => {
     expect(kanbanCells(lanes, ['rec_01', 'rec_03'], 1).across).toBe(1)
     // Colonne vide : une carte de large, une case vide par ligne.
     expect(kanbanCells(lanes, [])).toEqual({ cells: [[], [], []], across: 1 })
+  })
+
+  it('une seule case chargée n’élargit pas sa colonne pour toutes les lignes', () => {
+    const lane = (key: string, recordIds: string[]) => ({
+      key,
+      label: key || KANBAN_NO_LANE,
+      recordIds,
+    })
+    const lanes = [
+      lane('01/01', ['a1', 'b1']),
+      lane('02/01', ['a2', 'b2']),
+      lane('03/01', ['a3', 'b3', 'c3', 'd3']),
+      lane('', ['x', 'y', 'z', 'w']),
+    ]
+    const all = lanes.flatMap((l) => l.recordIds)
+    // Deux cartes par date le plus souvent : deux de large ; la date à quatre passe à la ligne.
+    expect(kanbanCells(lanes, all).across).toBe(2)
+    // Une carte par date, quatre sans date : la ligne « Sans valeur » ne compte pas.
+    expect(kanbanCells(lanes, ['a1', 'a2', 'a3', 'x', 'y', 'z', 'w']).across).toBe(1)
+    // Seulement des cartes sans valeur : elles comptent (plafonnées).
+    expect(kanbanCells(lanes, ['x', 'y', 'z']).across).toBe(3)
   })
 
   it('case à cocher : deux lignes, dans l’ordre du tri (Non coché puis Coché)', () => {

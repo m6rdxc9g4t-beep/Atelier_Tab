@@ -331,7 +331,7 @@ describe('modification', () => {
     const kanbanView = session!
       .snapshot()
       .tables.tbl_planning_lots?.views.find((v) => v.mode === 'kanban')
-    expect(kanbanView).not.toHaveProperty('laneByFieldId')
+    expect(kanbanView?.laneByFieldId).toBe('')
     const bad = await call('configure_view', {
       table: 'Planning & Lots',
       filters: [{ column: 'Statut', op: 'gt', value: 'x' }],

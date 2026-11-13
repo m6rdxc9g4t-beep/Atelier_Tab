@@ -141,8 +141,11 @@ export function setGroupBy(tableId: string, fieldId: string): void {
   if (current) patchView(current.table, { groupByFieldId: fieldId })
 }
 
-/** Lignes du Kanban : les cartes d'une même valeur de la colonne s'alignent ; `null` les retire. */
+/**
+ * Lignes du Kanban : les cartes d'une même valeur de la colonne s'alignent ; `null` les retire
+ * (cartes empilées, retenu par une chaîne vide : les lignes proposées d'office ne reviennent pas).
+ */
 export function setLaneBy(tableId: string, fieldId: string | null): void {
   const current = freshView(tableId)
-  if (current) patchView(current.table, { laneByFieldId: fieldId ?? undefined })
+  if (current) patchView(current.table, { laneByFieldId: fieldId ?? '' })
 }

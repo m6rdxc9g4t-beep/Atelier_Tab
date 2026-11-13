@@ -60,7 +60,12 @@ import {
   WORKFLOW_STATUSES,
 } from '@/engine/field-types'
 import { isError, isFormula, parseFormula, serializeValue, type CellInput } from '@/engine/formula'
-import { operatorsFor, valuesReplacedByFormula, type TableSheet } from '@/engine/table'
+import {
+  kanbanLaneField,
+  operatorsFor,
+  valuesReplacedByFormula,
+  type TableSheet,
+} from '@/engine/table'
 import { newId } from '@/lib/ids'
 import type { DataStore } from '@/store/data.store'
 import { DEFAULT_STATUS_CHOICES } from '@/store/factories'
@@ -944,7 +949,7 @@ export const TOOLS = [
         .nullable()
         .optional()
         .describe(
-          'Kanban : colonne dont chaque valeur forme une ligne commune à toutes les colonnes (cartes d’une même date côte à côte) ; null pour empiler les cartes',
+          'Kanban : colonne dont chaque valeur forme une ligne commune à toutes les colonnes (cartes d’une même date côte à côte) ; null pour empiler les cartes. Sans réglage, une colonne date dont les valeurs se répètent forme les lignes',
         ),
     }),
     run(args, host) {
@@ -994,7 +999,7 @@ export const TOOLS = [
         }
         patch.groupByFieldId = field.id
       }
-      if (args.lane_by === null) patch.laneByFieldId = undefined
+      if (args.lane_by === null) patch.laneByFieldId = ''
       else if (args.lane_by) {
         const field = resolveColumn(table, args.lane_by)
         const group = patch.groupByFieldId ?? activeGroupId(table)
@@ -1014,6 +1019,8 @@ export const TOOLS = [
       const now = freshTable(host, table.id)
       const v = now.views.find((x) => x.id === view.id) as View
       const label = (id: string) => now.fields[id]?.label ?? id
+      const groupId = activeGroupId(now)
+      const lane = kanbanLaneField(now, v, groupId ? now.fields[groupId] : undefined)
       return {
         view: v.mode === 'hybrid' ? 'grid' : v.mode,
         filters: v.filters.map((f) => ({
@@ -1026,7 +1033,8 @@ export const TOOLS = [
         hidden_columns: v.hiddenFieldIds.filter((id) => id !== now.fieldOrder[0]).map(label),
         ...(v.rowHeight ? { row_height: v.rowHeight } : {}),
         ...(v.groupByFieldId ? { group_by: label(v.groupByFieldId) } : {}),
-        ...(v.laneByFieldId ? { lane_by: label(v.laneByFieldId) } : {}),
+        // Lignes en vigueur : celles choisies, ou celles proposées d'office (colonne date répétée).
+        ...(lane ? { lane_by: lane.label } : {}),
       }
     },
   }),

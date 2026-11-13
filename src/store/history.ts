@@ -131,7 +131,7 @@ function fitView(view: View, table: Table, was: Table): View {
   const hiddenFieldIds = view.hiddenFieldIds.filter((id) => table.fields[id])
   const group = view.groupByFieldId
   const keepGroup = group === undefined || table.fields[group]?.type === 'select'
-  const keepLane = view.laneByFieldId === undefined || table.fields[view.laneByFieldId]
+  const keepLane = !view.laneByFieldId || table.fields[view.laneByFieldId]
   if (
     keepGroup &&
     keepLane &&

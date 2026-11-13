@@ -116,6 +116,9 @@ describe('tolérance aux éditions externes', () => {
     expect(read()).not.toHaveProperty('laneByFieldId')
     t.views[0].laneByFieldId = 'due_date'
     expect(read()?.laneByFieldId).toBe('due_date')
+    // Cartes empilées choisies exprès : la chaîne vide est gardée.
+    t.views[0].laneByFieldId = ''
+    expect(read()?.laneByFieldId).toBe('')
     t.views[0].laneByFieldId = 42
     const view = read()
     expect(view?.laneByFieldId).toBeUndefined()

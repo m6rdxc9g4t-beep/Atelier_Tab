@@ -561,6 +561,31 @@ describe('fonctions Airtable', () => {
     expect(screen.getByRole('dialog', { name: 'Fiche de la ligne 1' })).toBeTruthy()
   })
 
+  it('Kanban : des dates répétées forment les lignes d’office ; « Aucune » empile et le reste', () => {
+    act(() => {
+      const store = useDataStore.getState()
+      // Une même date sur trois lignes, comme une recette et ses agences le même jour.
+      for (const id of ['rec_02', 'rec_03']) {
+        store.setCell('tbl_planning_lots', id, 'due_date', '2026-11-30')
+      }
+    })
+    render(<App />)
+    fireEvent.click(screen.getByRole('tab', { name: /Kanban/ }))
+    const board = screen.getByRole('region', { name: 'Kanban de Planning & Lots' })
+    expect(board.getAttribute('data-lanes')).toBe('due_date')
+    expect(screen.getByRole('button', { name: /Par Statut · Échéance/ })).toBeTruthy()
+    const doing = within(board).getByRole('region', { name: 'En cours' })
+    expect(within(doing).getByRole('group', { name: '30/11/2026' })).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: /Par Statut/ }))
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Aucune (cartes empilées)' }))
+    expect(board.hasAttribute('data-lanes')).toBe(false)
+    const view = useDataStore
+      .getState()
+      .tables.tbl_planning_lots?.views.find((v) => v.mode === 'kanban')
+    expect(view?.laneByFieldId).toBe('')
+  })
+
   it('palette de commandes (⌘K) : ouvrir une table', () => {
     render(<App />)
     fireEvent.keyDown(window, { key: 'k', metaKey: true })

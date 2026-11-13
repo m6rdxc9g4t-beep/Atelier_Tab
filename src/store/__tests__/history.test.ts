@@ -132,6 +132,12 @@ describe('vues et annulation', () => {
     // Retirées à la main : la clé disparaît, rien d'indéfini n'est écrit.
     useDataStore.getState().updateView(T, 'view_planning_kanban', { laneByFieldId: undefined })
     expect(view('view_planning_kanban')).not.toHaveProperty('laneByFieldId')
+    // Cartes empilées choisies exprès : la chaîne vide survit à une annulation qui ajuste la vue.
+    deleteField(T, 'owner')
+    useDataStore.getState().updateView(T, 'view_planning_kanban', { laneByFieldId: '' })
+    undo()
+    expect(table().fields.owner).toBeDefined()
+    expect(view('view_planning_kanban').laneByFieldId).toBe('')
   })
 
   it('une vue retouchée depuis garde ses réglages, sans ceux qui ne valent plus', () => {

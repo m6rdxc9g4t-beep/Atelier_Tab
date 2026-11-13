@@ -40,6 +40,7 @@ export {
   isBlankOnCard,
   kanbanCardLayout,
   kanbanCells,
+  kanbanDefaultLaneField,
   kanbanLaneField,
   kanbanLanes,
   type KanbanCardLayout,

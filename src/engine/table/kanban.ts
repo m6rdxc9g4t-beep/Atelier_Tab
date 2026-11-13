@@ -57,14 +57,43 @@ export function kanbanCardLayout(
   return { primary, badge, fields: shown.filter((f) => f !== badge) }
 }
 
-/** Colonne qui peut former les lignes du Kanban : toute colonne, sauf celle des colonnes. */
+/**
+ * Lignes proposées d'office : la première colonne date (hors colonne des colonnes) dont les
+ * valeurs se répètent vraiment — au moins deux lignes par date en moyenne, comme une recette et
+ * ses agences le même jour. Des échéances toutes différentes ne forment pas de lignes : une carte
+ * par ligne ne s'aligne sur rien.
+ */
+export function kanbanDefaultLaneField(
+  table: Table,
+  groupField: Field | undefined,
+): Field | undefined {
+  const data = table.rowOrder.map((id) => table.records[id]).filter((r) => r?.kind === 'data')
+  for (const id of table.fieldOrder) {
+    const field = table.fields[id]
+    if (field?.type !== 'date' || field.id === groupField?.id) continue
+    const dated = data
+      .map((r) => r?.cells[field.id])
+      .filter((v) => v !== null && v !== undefined && String(v).trim() !== '')
+    if (dated.length >= 2 && new Set(dated.map(String)).size * 2 <= dated.length) return field
+  }
+  return undefined
+}
+
+/**
+ * Colonne qui forme les lignes du Kanban : celle choisie pour la vue (toute colonne, sauf celle
+ * des colonnes) ; chaîne vide = cartes empilées, choisi exprès ; sans choix enregistré, les
+ * lignes proposées d'office (`kanbanDefaultLaneField`).
+ */
 export function kanbanLaneField(
   table: Table,
   view: View | undefined,
   groupField: Field | undefined,
 ): Field | undefined {
-  const field = view?.laneByFieldId ? table.fields[view.laneByFieldId] : undefined
-  return field && field.id !== groupField?.id ? field : undefined
+  const chosen = view?.laneByFieldId
+  if (chosen === '') return undefined
+  const field = chosen ? table.fields[chosen] : undefined
+  if (!field) return kanbanDefaultLaneField(table, groupField)
+  return field.id !== groupField?.id ? field : undefined
 }
 
 /** Une ligne du Kanban : les cartes d'une même valeur, toutes colonnes confondues. */
@@ -118,8 +147,10 @@ export function kanbanLanes(
 
 /**
  * Cartes d'une colonne rangées par ligne : `cells[i]` répond à `lanes[i]`. `across` est le
- * nombre de cartes côte à côte de la case la plus remplie (plafonné), donc la largeur utile
- * de la colonne.
+ * nombre de cartes côte à côte, donc la largeur utile de la colonne : celui de la case remplie
+ * la plus courante (à égalité, la plus large), plafonné. Une case plus remplie passe à la ligne
+ * dans sa propre rangée plutôt que d'élargir la colonne pour toutes les dates ; la ligne des
+ * cartes sans valeur ne compte que si elle est seule.
  */
 export function kanbanCells(
   lanes: readonly KanbanLane[],
@@ -128,6 +159,21 @@ export function kanbanCells(
 ): { cells: string[][]; across: number } {
   const inColumn = new Set(columnRecordIds)
   const cells = lanes.map((lane) => lane.recordIds.filter((id) => inColumn.has(id)))
-  const widest = cells.reduce((n, cell) => Math.max(n, cell.length), 1)
-  return { cells, across: Math.min(maxAcross, widest) }
+  const sizes = new Map<number, number>()
+  const count = (cell: string[]) => {
+    if (cell.length) sizes.set(cell.length, (sizes.get(cell.length) ?? 0) + 1)
+  }
+  cells.forEach((cell, i) => {
+    if (lanes[i]?.key !== '') count(cell)
+  })
+  if (sizes.size === 0) cells.forEach(count)
+  let across = 1
+  let best = 0
+  for (const [size, n] of sizes) {
+    if (n > best || (n === best && size > across)) {
+      across = size
+      best = n
+    }
+  }
+  return { cells, across: Math.max(1, Math.min(maxAcross, across)) }
 }
