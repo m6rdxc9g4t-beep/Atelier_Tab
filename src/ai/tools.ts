@@ -287,6 +287,14 @@ function freshTable(host: ToolHost, tableId: string): Table {
   return t
 }
 
+/** Colonne Statut qui forme les colonnes du Kanban de la vue active (la première par défaut). */
+function activeGroupId(table: Table): string | undefined {
+  const view = table.views.find((v) => v.id === table.activeViewId)
+  const chosen = view?.groupByFieldId
+  if (chosen && table.fields[chosen]) return chosen
+  return table.fieldOrder.find((id) => table.fields[id]?.type === 'select')
+}
+
 const NUMERIC: FieldType[] = ['number', 'currency', 'percent', 'formula']
 
 /** Champ `idempotency_key` des outils d'écriture qui créent quelque chose (§7.4). */
@@ -932,6 +940,12 @@ export const TOOLS = [
       group_by: columnRef
         .optional()
         .describe('Kanban : colonne de type select qui forme les colonnes'),
+      lane_by: columnRef
+        .nullable()
+        .optional()
+        .describe(
+          'Kanban : colonne dont chaque valeur forme une ligne commune à toutes les colonnes (cartes d’une même date côte à côte) ; null pour empiler les cartes',
+        ),
     }),
     run(args, host) {
       const table = resolveTable(data(host), args.table)
@@ -980,6 +994,15 @@ export const TOOLS = [
         }
         patch.groupByFieldId = field.id
       }
+      if (args.lane_by === null) patch.laneByFieldId = undefined
+      else if (args.lane_by) {
+        const field = resolveColumn(table, args.lane_by)
+        const group = patch.groupByFieldId ?? activeGroupId(table)
+        if (field.id === group) {
+          throw new ToolError(`« ${field.label} » forme déjà les colonnes du Kanban`)
+        }
+        patch.laneByFieldId = field.id
+      }
       const store = host.store.getState()
       if (mode && table.views.find((v) => v.id === table.activeViewId)?.mode !== mode) {
         store.setViewMode(table.id, mode)
@@ -1003,6 +1026,7 @@ export const TOOLS = [
         hidden_columns: v.hiddenFieldIds.filter((id) => id !== now.fieldOrder[0]).map(label),
         ...(v.rowHeight ? { row_height: v.rowHeight } : {}),
         ...(v.groupByFieldId ? { group_by: label(v.groupByFieldId) } : {}),
+        ...(v.laneByFieldId ? { lane_by: label(v.laneByFieldId) } : {}),
       }
     },
   }),

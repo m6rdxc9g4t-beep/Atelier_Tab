@@ -317,6 +317,21 @@ describe('modification', () => {
       group_by: 'Statut',
     })
     expect(kanban.json).toMatchObject({ view: 'kanban', group_by: 'Statut', filters: [] })
+    // Lignes du Kanban : les cartes d'une même échéance s'alignent ; null les retire.
+    const lanes = await call('configure_view', { table: 'Planning & Lots', lane_by: 'Échéance' })
+    expect(lanes.json).toMatchObject({ view: 'kanban', group_by: 'Statut', lane_by: 'Échéance' })
+    const sameAsColumns = await call('configure_view', {
+      table: 'Planning & Lots',
+      lane_by: 'Statut',
+    })
+    expect(sameAsColumns.ok).toBe(false)
+    expect(sameAsColumns.content).toMatch(/forme déjà les colonnes/)
+    const stacked = await call('configure_view', { table: 'Planning & Lots', lane_by: null })
+    expect(stacked.json).not.toHaveProperty('lane_by')
+    const kanbanView = session!
+      .snapshot()
+      .tables.tbl_planning_lots?.views.find((v) => v.mode === 'kanban')
+    expect(kanbanView).not.toHaveProperty('laneByFieldId')
     const bad = await call('configure_view', {
       table: 'Planning & Lots',
       filters: [{ column: 'Statut', op: 'gt', value: 'x' }],
