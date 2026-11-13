@@ -11,14 +11,14 @@ import {
   Upload,
   X,
 } from 'lucide-react'
-import { activeFilters, activeSorts } from '@/engine/table'
+import { activeFilters, activeSorts, kanbanLaneField } from '@/engine/table'
 import { useDataStore, useUIStore } from '@/store'
 import { redo, undo, useHistory } from '@/store/history'
 import { activeView, hiddenFieldSet } from '@/store/view-rows'
-import { setGroupBy, setRowHeight } from '@/store/view-actions'
+import { setGroupBy, setLaneBy, setRowHeight } from '@/store/view-actions'
 import type { RowHeight, Table, ViewMode } from '@/types/domain'
 import { Floating } from '@/components/ui/Floating'
-import { MenuItem, MenuLabel } from '@/components/ui/Popover'
+import { MenuItem, MenuLabel, MenuSeparator } from '@/components/ui/Popover'
 import { cn } from '@/lib/cn'
 import { shortcut } from '@/lib/keys'
 import { OPEN_VIEW_PANEL } from '@/components/grid/GridHeader'
@@ -80,7 +80,14 @@ export function ViewBar({ table, mode }: { table: Table; mode: ViewMode }) {
     window.addEventListener(OPEN_VIEW_PANEL, onOpen)
     return () => window.removeEventListener(OPEN_VIEW_PANEL, onOpen)
   }, [])
-  const groupField = view?.groupByFieldId ? table.fields[view.groupByFieldId] : undefined
+  // Comme la vue Kanban : sans choix enregistré, la première colonne Statut forme les colonnes.
+  const groupField =
+    (view?.groupByFieldId ? table.fields[view.groupByFieldId] : undefined) ?? selectFields[0]
+  const laneField = kanbanLaneField(table, view, groupField)
+  // Lignes possibles : toute colonne sauf celle des colonnes, dans l'ordre de la table.
+  const laneFields = table.fieldOrder
+    .map((id) => table.fields[id])
+    .filter((f): f is NonNullable<typeof f> => f !== undefined && f.id !== groupField?.id)
 
   return (
     <div
@@ -140,11 +147,12 @@ export function ViewBar({ table, mode }: { table: Table; mode: ViewMode }) {
         onToggle={toggle('sort')}
       />
       {mode === 'kanban' ? (
-        selectFields.length > 1 && (
+        groupField && (
           <Tool
             kind="group"
             icon={<Columns3 size={14} />}
-            label={groupField ? `Par ${groupField.label}` : 'Grouper'}
+            label={`Par ${groupField.label}${laneField ? ` · ${laneField.label}` : ''}`}
+            active={laneField !== undefined}
             panel={panel}
             onToggle={toggle('group')}
           />
@@ -227,19 +235,48 @@ export function ViewBar({ table, mode }: { table: Table; mode: ViewMode }) {
         )}
         {panel?.kind === 'group' && (
           <>
-            <MenuLabel>Colonnes du Kanban</MenuLabel>
-            {selectFields.map((f) => (
+            {selectFields.length > 1 && (
+              <>
+                <MenuLabel>Colonnes du Kanban</MenuLabel>
+                {selectFields.map((f) => (
+                  <MenuItem
+                    key={f.id}
+                    checked={groupField?.id === f.id}
+                    onSelect={() => {
+                      setGroupBy(table.id, f.id)
+                      closePanel()
+                    }}
+                  >
+                    {f.label}
+                  </MenuItem>
+                ))}
+                <MenuSeparator />
+              </>
+            )}
+            <MenuLabel>Lignes du Kanban</MenuLabel>
+            <div className="max-h-64 overflow-y-auto">
               <MenuItem
-                key={f.id}
-                checked={view?.groupByFieldId === f.id}
+                checked={laneField === undefined}
                 onSelect={() => {
-                  setGroupBy(table.id, f.id)
+                  setLaneBy(table.id, null)
                   closePanel()
                 }}
               >
-                {f.label}
+                Aucune (cartes empilées)
               </MenuItem>
-            ))}
+              {laneFields.map((f) => (
+                <MenuItem
+                  key={f.id}
+                  checked={laneField?.id === f.id}
+                  onSelect={() => {
+                    setLaneBy(table.id, f.id)
+                    closePanel()
+                  }}
+                >
+                  {f.label}
+                </MenuItem>
+              ))}
+            </div>
           </>
         )}
       </Floating>

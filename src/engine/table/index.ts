@@ -33,6 +33,19 @@ export {
   type ValueOf,
   type ViewOptions,
 } from './view'
+export {
+  KANBAN_CARD_FIELDS,
+  KANBAN_MAX_ACROSS,
+  KANBAN_NO_LANE,
+  isBlankOnCard,
+  kanbanCardLayout,
+  kanbanCells,
+  kanbanDefaultLaneField,
+  kanbanLaneField,
+  kanbanLanes,
+  type KanbanCardLayout,
+  type KanbanLane,
+} from './kanban'
 export { parseTsv, tileToSelection, toTsv } from './clipboard'
 export { fillPlan, fillValues, type FillOptions, type FillStep } from './fill'
 export {

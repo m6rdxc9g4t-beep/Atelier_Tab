@@ -60,7 +60,12 @@ import {
   WORKFLOW_STATUSES,
 } from '@/engine/field-types'
 import { isError, isFormula, parseFormula, serializeValue, type CellInput } from '@/engine/formula'
-import { operatorsFor, valuesReplacedByFormula, type TableSheet } from '@/engine/table'
+import {
+  kanbanLaneField,
+  operatorsFor,
+  valuesReplacedByFormula,
+  type TableSheet,
+} from '@/engine/table'
 import { newId } from '@/lib/ids'
 import type { DataStore } from '@/store/data.store'
 import { DEFAULT_STATUS_CHOICES } from '@/store/factories'
@@ -285,6 +290,14 @@ function freshTable(host: ToolHost, tableId: string): Table {
   const t = data(host).tables[tableId]
   if (!t) throw new ToolError('La table a été supprimée pendant l’opération')
   return t
+}
+
+/** Colonne Statut qui forme les colonnes du Kanban de la vue active (la première par défaut). */
+function activeGroupId(table: Table): string | undefined {
+  const view = table.views.find((v) => v.id === table.activeViewId)
+  const chosen = view?.groupByFieldId
+  if (chosen && table.fields[chosen]) return chosen
+  return table.fieldOrder.find((id) => table.fields[id]?.type === 'select')
 }
 
 const NUMERIC: FieldType[] = ['number', 'currency', 'percent', 'formula']
@@ -932,6 +945,12 @@ export const TOOLS = [
       group_by: columnRef
         .optional()
         .describe('Kanban : colonne de type select qui forme les colonnes'),
+      lane_by: columnRef
+        .nullable()
+        .optional()
+        .describe(
+          'Kanban : colonne dont chaque valeur forme une ligne commune à toutes les colonnes (cartes d’une même date côte à côte) ; null pour empiler les cartes. Sans réglage, une colonne date dont les valeurs se répètent forme les lignes',
+        ),
     }),
     run(args, host) {
       const table = resolveTable(data(host), args.table)
@@ -980,6 +999,15 @@ export const TOOLS = [
         }
         patch.groupByFieldId = field.id
       }
+      if (args.lane_by === null) patch.laneByFieldId = ''
+      else if (args.lane_by) {
+        const field = resolveColumn(table, args.lane_by)
+        const group = patch.groupByFieldId ?? activeGroupId(table)
+        if (field.id === group) {
+          throw new ToolError(`« ${field.label} » forme déjà les colonnes du Kanban`)
+        }
+        patch.laneByFieldId = field.id
+      }
       const store = host.store.getState()
       if (mode && table.views.find((v) => v.id === table.activeViewId)?.mode !== mode) {
         store.setViewMode(table.id, mode)
@@ -991,6 +1019,8 @@ export const TOOLS = [
       const now = freshTable(host, table.id)
       const v = now.views.find((x) => x.id === view.id) as View
       const label = (id: string) => now.fields[id]?.label ?? id
+      const groupId = activeGroupId(now)
+      const lane = kanbanLaneField(now, v, groupId ? now.fields[groupId] : undefined)
       return {
         view: v.mode === 'hybrid' ? 'grid' : v.mode,
         filters: v.filters.map((f) => ({
@@ -1003,6 +1033,8 @@ export const TOOLS = [
         hidden_columns: v.hiddenFieldIds.filter((id) => id !== now.fieldOrder[0]).map(label),
         ...(v.rowHeight ? { row_height: v.rowHeight } : {}),
         ...(v.groupByFieldId ? { group_by: label(v.groupByFieldId) } : {}),
+        // Lignes en vigueur : celles choisies, ou celles proposées d'office (colonne date répétée).
+        ...(lane ? { lane_by: lane.label } : {}),
       }
     },
   }),
