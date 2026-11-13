@@ -529,6 +529,38 @@ describe('fonctions Airtable', () => {
     expect(screen.getByRole('dialog', { name: 'Fiche de la ligne 1' })).toBeTruthy()
   })
 
+  it('Kanban : titre et pastille sur une ligne, une rangée par champ, lignes par échéance', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('tab', { name: /Kanban/ }))
+    const board = screen.getByRole('region', { name: 'Kanban de Planning & Lots' })
+    const card = within(board).getByRole('button', { name: 'Ouvrir Gros œuvre' })
+    // Statut en colonnes : pas de pastille ; Échéance a sa rangée, à la même place partout.
+    expect(card.querySelector('[data-card-head]')?.textContent).toBe('Gros œuvre')
+    const rows = (el: Element) =>
+      [...el.querySelectorAll('[data-card-field]')].map((f) => f.getAttribute('data-card-field'))
+    const other = within(board).getByRole('button', { name: 'Ouvrir Charpente bois' })
+    expect(rows(card)).toEqual(rows(other))
+    expect(rows(card)).toContain('due_date')
+
+    // Lignes par Échéance : une ligne par date, commune aux colonnes ; la date quitte la carte.
+    fireEvent.click(screen.getByRole('button', { name: /Par Statut/ }))
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Échéance' }))
+    expect(screen.getByRole('button', { name: /Par Statut · Échéance/ })).toBeTruthy()
+    const doing = within(board).getByRole('region', { name: 'En cours' })
+    const lane = within(doing).getByRole('group', { name: '30/11/2026' })
+    expect(within(lane).getByRole('button', { name: 'Ouvrir Gros œuvre' })).toBeTruthy()
+    expect(
+      within(doing)
+        .getAllByRole('group')
+        .map((g) => g.getAttribute('aria-label')),
+    ).toEqual(['30/11/2026', '15/12/2026', '20/01/2027'])
+    expect(rows(within(lane).getByRole('button', { name: 'Ouvrir Gros œuvre' }))).not.toContain(
+      'due_date',
+    )
+    fireEvent.click(within(lane).getByRole('button', { name: 'Ouvrir Gros œuvre' }))
+    expect(screen.getByRole('dialog', { name: 'Fiche de la ligne 1' })).toBeTruthy()
+  })
+
   it('palette de commandes (⌘K) : ouvrir une table', () => {
     render(<App />)
     fireEvent.keyDown(window, { key: 'k', metaKey: true })

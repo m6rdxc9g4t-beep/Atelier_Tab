@@ -633,7 +633,10 @@ export function createDataStore(options: { adapter?: StorageAdapter; initialData
         updateView: (tableId, viewId, patch) =>
           set((s) => {
             const view = s.tables[tableId]?.views.find((v) => v.id === viewId)
-            if (view) Object.assign(view, patch)
+            if (!view) return
+            Object.assign(view, patch)
+            // Lignes du Kanban retirées : la clé disparaît (rien d'indéfini dans le fichier).
+            if (view.laneByFieldId === undefined) delete view.laneByFieldId
           }),
 
         setViewMode: (tableId, mode) =>

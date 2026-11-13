@@ -113,7 +113,7 @@ useDataStore.subscribe((state, prev) => {
  * Réglages d'une vue retouchée depuis l'action, sans ceux qui ne valent plus pour les colonnes
  * rendues (`table`), comme après une suppression ou un changement de type : colonne absente,
  * type différent de celui de `was` (la table que l'on quitte), statut retiré, regroupement
- * Kanban hors d'une colonne Statut.
+ * Kanban hors d'une colonne Statut, lignes du Kanban sur une colonne absente.
  */
 function fitView(view: View, table: Table, was: Table): View {
   const filters = view.filters.filter((f) => {
@@ -131,8 +131,10 @@ function fitView(view: View, table: Table, was: Table): View {
   const hiddenFieldIds = view.hiddenFieldIds.filter((id) => table.fields[id])
   const group = view.groupByFieldId
   const keepGroup = group === undefined || table.fields[group]?.type === 'select'
+  const keepLane = view.laneByFieldId === undefined || table.fields[view.laneByFieldId]
   if (
     keepGroup &&
+    keepLane &&
     filters.length === view.filters.length &&
     sorts.length === view.sorts.length &&
     hiddenFieldIds.length === view.hiddenFieldIds.length
@@ -141,6 +143,7 @@ function fitView(view: View, table: Table, was: Table): View {
   }
   const fitted: View = { ...view, filters, sorts, hiddenFieldIds }
   if (!keepGroup) delete fitted.groupByFieldId
+  if (!keepLane) delete fitted.laneByFieldId
   return fitted
 }
 

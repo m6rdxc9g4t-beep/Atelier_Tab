@@ -160,6 +160,7 @@ export function removeField(table: Table, fieldId: string): void {
     view.filters = view.filters.filter((f) => f.fieldId !== fieldId)
     view.sorts = view.sorts.filter((s) => s.fieldId !== fieldId)
     if (view.groupByFieldId === fieldId) delete view.groupByFieldId
+    if (view.laneByFieldId === fieldId) delete view.laneByFieldId
   }
 }
 

@@ -112,6 +112,11 @@ export interface View {
   sorts: Sort[]
   /** Kanban : champ `select` qui définit les colonnes. */
   groupByFieldId?: string
+  /**
+   * Kanban : champ dont chaque valeur forme une ligne commune à toutes les colonnes (les cartes
+   * d'une même date côte à côte, par exemple). Absent : chaque colonne empile ses cartes.
+   */
+  laneByFieldId?: string
   hiddenFieldIds: string[]
   /** Grille : hauteur des lignes (défaut `standard`). */
   rowHeight?: RowHeight

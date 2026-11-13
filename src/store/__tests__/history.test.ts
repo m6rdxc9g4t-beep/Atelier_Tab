@@ -121,6 +121,19 @@ describe('vues et annulation', () => {
     expect(view('view_planning_kanban').hiddenFieldIds).toEqual(['owner'])
   })
 
+  it('lignes du Kanban : retirées avec leur colonne, rendues par l’annulation', () => {
+    const data = useDataStore.getState()
+    data.updateView(T, 'view_planning_kanban', { laneByFieldId: 'due_date' })
+    expect(view('view_planning_kanban').laneByFieldId).toBe('due_date')
+    deleteField(T, 'due_date')
+    expect(view('view_planning_kanban')).not.toHaveProperty('laneByFieldId')
+    undo()
+    expect(view('view_planning_kanban').laneByFieldId).toBe('due_date')
+    // Retirées à la main : la clé disparaît, rien d'indéfini n'est écrit.
+    useDataStore.getState().updateView(T, 'view_planning_kanban', { laneByFieldId: undefined })
+    expect(view('view_planning_kanban')).not.toHaveProperty('laneByFieldId')
+  })
+
   it('une vue retouchée depuis garde ses réglages, sans ceux qui ne valent plus', () => {
     saveField(T, 'status', { label: 'Statut', type: 'text' })
     undo()

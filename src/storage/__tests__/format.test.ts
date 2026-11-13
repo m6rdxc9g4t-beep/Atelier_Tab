@@ -110,6 +110,18 @@ describe('tolérance aux éditions externes', () => {
     expect(table.activeViewId).toBe('view_planning_grid')
   })
 
+  it('lignes du Kanban : lues si présentes, absentes d’un ancien fichier, ignorées si illisibles', () => {
+    const t = base()
+    const read = () => parseTableFile('tables/tbl_planning_lots.json', JSON.stringify(t)).views[0]
+    expect(read()).not.toHaveProperty('laneByFieldId')
+    t.views[0].laneByFieldId = 'due_date'
+    expect(read()?.laneByFieldId).toBe('due_date')
+    t.views[0].laneByFieldId = 42
+    const view = read()
+    expect(view?.laneByFieldId).toBeUndefined()
+    expect(view?.filters).toBeDefined()
+  })
+
   it('agrégats du pied de grille : une valeur inconnue est ignorée seule', () => {
     const t = base()
     t.views[0].summaries = { cost_ht: 'average', cost_ttc: 'median', status: 'filled' }

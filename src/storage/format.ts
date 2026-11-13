@@ -124,6 +124,8 @@ const viewSchema = z.object({
     .default([]),
   sorts: z.array(z.object({ fieldId: id, direction: z.enum(['asc', 'desc']) })).default([]),
   groupByFieldId: z.string().optional(),
+  // Lignes du Kanban : une valeur illisible (fichier édité à la main) est ignorée.
+  laneByFieldId: z.string().optional().catch(undefined),
   hiddenFieldIds: z.array(z.string()).default([]),
   // Réglages d'affichage : une valeur inconnue (fichier édité à la main) est ignorée.
   rowHeight: z.enum(['compact', 'standard', 'tall']).optional().catch(undefined),
