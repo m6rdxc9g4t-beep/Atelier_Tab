@@ -410,7 +410,9 @@ const Card = memo(function Card({
         <p
           title={titleText || undefined}
           className={cn(
-            'line-clamp-2 min-w-0 flex-1 leading-5 font-medium break-words',
+            // Une seule ligne, abrégée (titre complet en info-bulle) : un titre long ne décale
+            // pas la date et les montants de la carte d'à côté.
+            'min-w-0 flex-1 truncate leading-5 font-medium',
             titleText ? 'text-ink' : 'text-faint',
           )}
         >
